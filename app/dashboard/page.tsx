@@ -865,7 +865,7 @@ export default function DashboardPage() {
                                                 title: item.title,
                                                 body: slide.content,
                                                 meta: item.meta?.author,
-                                                background: typeof item.meta?.background === 'object' ? item.meta.background.value : item.meta?.background
+                                                background: typeof item.meta?.background === 'object' ? (item.meta?.background as any)?.value : item.meta?.background
                                             }
                                         });
                                     } else if (item.type === 'scripture') {
@@ -1395,7 +1395,7 @@ export default function DashboardPage() {
                                         title: item.title,
                                         body: slide.content,
                                         meta: item.type === 'media' ? 'Image' : item.meta?.author,
-                                        background: typeof item.meta?.background === 'object' ? item.meta.background.value : item.meta?.background,
+                                        background: typeof item.meta?.background === 'object' ? (item.meta?.background as any)?.value : item.meta?.background,
                                         options: item.type === 'media' ? { imageMode: item.meta?.imageMode } : undefined
                                     }
                                 });
