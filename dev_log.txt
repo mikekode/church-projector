@@ -1,0 +1,55 @@
+
+> church-projector@0.1.0 dev
+> next dev
+
+   ▲ Next.js 14.1.0
+   - Local:        http://localhost:3000
+   - Environments: .env.local
+
+ ✓ Ready in 2.6s
+ ○ Compiling /projector ...
+ ✓ Compiled / in 4.3s (499 modules)
+ ✓ Compiled (485 modules)
+ ⚠ Fast Refresh had to perform a full reload due to a runtime error.
+ ⚠ Fast Refresh had to perform a full reload due to a runtime error.
+ ✓ Compiled in 606ms (480 modules)
+ ⚠ Fast Refresh had to perform a full reload due to a runtime error.
+ ⚠ Fast Refresh had to perform a full reload due to a runtime error.
+ ⚠ Fast Refresh had to perform a full reload due to a runtime error.
+ ⨯ hooks\useBroadcast.ts (7:26) @ useRef
+ ⨯ ReferenceError: useRef is not defined
+    at useBroadcastChannel (./hooks/useBroadcast.ts:9:27)
+    at DashboardPage (./app/dashboard/page.tsx:27:95)
+[0m [90m  5 |[39m[0m
+[0m [90m  6 |[39m [36mexport[39m [36mfunction[39m useBroadcastChannel[33m<[39m[33mT[39m[33m>[39m(channelName[33m:[39m string[33m,[39m onMessage[33m:[39m (msg[33m:[39m [33mT[39m) [33m=>[39m [36mvoid[39m) {[0m
+[0m[31m[1m>[22m[39m[90m  7 |[39m     [36mconst[39m savedCallback [33m=[39m useRef(onMessage)[33m;[39m[0m
+[0m [90m    |[39m                          [31m[1m^[22m[39m[0m
+[0m [90m  8 |[39m[0m
+[0m [90m  9 |[39m     useEffect(() [33m=>[39m {[0m
+[0m [90m 10 |[39m         savedCallback[33m.[39mcurrent [33m=[39m onMessage[33m;[39m[0m
+ ⨯ hooks\useBroadcast.ts (7:26) @ useRef
+ ⨯ ReferenceError: useRef is not defined
+    at useBroadcastChannel (./hooks/useBroadcast.ts:9:27)
+    at ProjectorPage (./app/projector/page.tsx:32:77)
+[0m [90m  5 |[39m[0m
+[0m [90m  6 |[39m [36mexport[39m [36mfunction[39m useBroadcastChannel[33m<[39m[33mT[39m[33m>[39m(channelName[33m:[39m string[33m,[39m onMessage[33m:[39m (msg[33m:[39m [33mT[39m) [33m=>[39m [36mvoid[39m) {[0m
+[0m[31m[1m>[22m[39m[90m  7 |[39m     [36mconst[39m savedCallback [33m=[39m useRef(onMessage)[33m;[39m[0m
+[0m [90m    |[39m                          [31m[1m^[22m[39m[0m
+[0m [90m  8 |[39m[0m
+[0m [90m  9 |[39m     useEffect(() [33m=>[39m {[0m
+[0m [90m 10 |[39m         savedCallback[33m.[39mcurrent [33m=[39m onMessage[33m;[39m[0m
+ ⨯ hooks\useBroadcast.ts (7:26) @ useRef
+ ⨯ ReferenceError: useRef is not defined
+    at useBroadcastChannel (./hooks/useBroadcast.ts:9:27)
+    at DashboardPage (./app/dashboard/page.tsx:27:95)
+[0m [90m  5 |[39m[0m
+[0m [90m  6 |[39m [36mexport[39m [36mfunction[39m useBroadcastChannel[33m<[39m[33mT[39m[33m>[39m(channelName[33m:[39m string[33m,[39m onMessage[33m:[39m (msg[33m:[39m [33mT[39m) [33m=>[39m [36mvoid[39m) {[0m
+[0m[31m[1m>[22m[39m[90m  7 |[39m     [36mconst[39m savedCallback [33m=[39m useRef(onMessage)[33m;[39m[0m
+[0m [90m    |[39m                          [31m[1m^[22m[39m[0m
+[0m [90m  8 |[39m[0m
+[0m [90m  9 |[39m     useEffect(() [33m=>[39m {[0m
+[0m [90m 10 |[39m         savedCallback[33m.[39mcurrent [33m=[39m onMessage[33m;[39m[0m
+ ⚠ Fast Refresh had to perform a full reload due to a runtime error.
+ ⚠ Fast Refresh had to perform a full reload due to a runtime error.
+ ⚠ Fast Refresh had to perform a full reload due to a runtime error.
+ ✓ Compiled in 249ms (480 modules)

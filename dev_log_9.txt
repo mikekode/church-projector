@@ -1,0 +1,22 @@
+
+> church-projector@0.1.0 dev
+> next dev
+
+   ▲ Next.js 14.1.0
+   - Local:        http://localhost:3000
+   - Environments: .env.local
+
+ ✓ Ready in 5s
+ ○ Compiling /dashboard ...
+ ✓ Compiled /dashboard in 18.2s (489 modules)
+ ✓ Compiled in 485ms (252 modules)
+ ○ Compiling /api/intent ...
+ ✓ Compiled /api/intent in 663ms (369 modules)
+Intent API Error: SyntaxError: Expected property name or '}' in JSON at position 1 (line 1 column 2)
+    at JSON.parse (<anonymous>)
+    at parseJSONFromBytes (node:internal/deps/undici/undici:4259:19)
+    at successSteps (node:internal/deps/undici/undici:6882:27)
+    at readAllBytes (node:internal/deps/undici/undici:5807:13)
+    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+ ○ Compiling /projector ...
+ ✓ Compiled /projector in 18.8s (481 modules)

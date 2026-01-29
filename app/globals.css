@@ -1,0 +1,35 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --foreground-rgb: 255, 255, 255;
+  --background-start-rgb: 0, 0, 0;
+  --background-end-rgb: 10, 10, 10;
+}
+
+@layer base {
+  body {
+    @apply bg-black text-white selection:bg-indigo-500/30;
+  }
+}
+
+/* Custom Scrollbar for "Enterprise" feel */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  @apply bg-zinc-900/50 rounded;
+}
+
+::-webkit-scrollbar-thumb {
+  @apply bg-zinc-600 rounded hover:bg-zinc-500 transition-colors;
+  min-height: 40px;
+}
+
+/* Ensure transcript area scrollbar is always visible */
+.transcript-scroll::-webkit-scrollbar-thumb {
+  @apply bg-zinc-500;
+}

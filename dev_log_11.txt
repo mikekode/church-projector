@@ -1,0 +1,54 @@
+
+> church-projector@0.1.0 dev
+> next dev
+
+   ▲ Next.js 14.1.0
+   - Local:        http://localhost:3000
+   - Environments: .env.local
+
+ ✓ Ready in 4.4s
+ ○ Compiling /dashboard ...
+ ✓ Compiled /dashboard in 7.7s (489 modules)
+ ✓ Compiled in 1084ms (252 modules)
+ ○ Compiling /projector ...
+ ✓ Compiled /api/intent in 34.5s (613 modules)
+ ⨯ ./app/api/intent/route.ts
+Error: 
+  [31mx[0m Expected a semicolon
+    ,-[[36;1;4mC:\Users\MICHAEL\Scale AX W.Space1 (DOE)\webapp\church-projector\app\api\intent\route.ts[0m:31:1]
+ [2m31[0m | 5. **Navigation**: "Next", "Back", "Clear".
+ [2m32[0m | 6. **SEMANTIC QUOTE DETECTION** (CRITICAL): 
+ [2m33[0m |    - If the preacher QUOTES or PARAPHRASES a bible verse *without* saying the reference (e.g. "For God so loved the world that he gave his only begotten son"), you MUST identify the scripture (John 3:16).
+ [2m34[0m |    - Return it as a normal `VERSE` intent.
+    : [31;1m                            ^^^^^[0m
+ [2m35[0m |    - Use your knowledge to pick the most likely/famous match for the paraphrase.
+ [2m36[0m |    - Example" "The Lord is my shepherd, I shall not want" -> **Psalm 23:1**
+ [2m36[0m |    - Example: "I can do all things through Christ" -> **Philippians 4:13**
+    `----
+
+Caused by:
+    Syntax Error
+
+Import trace for requested module:
+./app/api/intent/route.ts
+ ○ Compiling /_error ...
+ ⨯ ./app/api/intent/route.ts
+Error: 
+  [31mx[0m Expected a semicolon
+    ,-[[36;1;4mC:\Users\MICHAEL\Scale AX W.Space1 (DOE)\webapp\church-projector\app\api\intent\route.ts[0m:31:1]
+ [2m31[0m | 5. **Navigation**: "Next", "Back", "Clear".
+ [2m32[0m | 6. **SEMANTIC QUOTE DETECTION** (CRITICAL): 
+ [2m33[0m |    - If the preacher QUOTES or PARAPHRASES a bible verse *without* saying the reference (e.g. "For God so loved the world that he gave his only begotten son"), you MUST identify the scripture (John 3:16).
+ [2m34[0m |    - Return it as a normal `VERSE` intent.
+    : [31;1m                            ^^^^^[0m
+ [2m35[0m |    - Use your knowledge to pick the most likely/famous match for the paraphrase.
+ [2m36[0m |    - Example" "The Lord is my shepherd, I shall not want" -> **Psalm 23:1**
+ [2m36[0m |    - Example: "I can do all things through Christ" -> **Philippians 4:13**
+    `----
+
+Caused by:
+    Syntax Error
+
+Import trace for requested module:
+./app/api/intent/route.ts
+<w> [webpack.cache.PackFileCacheStrategy] Caching failed for pack: Error: ENOENT: no such file or directory, rename 'C:\Users\MICHAEL\Scale AX W.Space1 (DOE)\webapp\church-projector\.next\cache\webpack\client-development-fallback\0.pack.gz_' -> 'C:\Users\MICHAEL\Scale AX W.Space1 (DOE)\webapp\church-projector\.next\cache\webpack\client-development-fallback\0.pack.gz'

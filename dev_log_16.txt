@@ -1,0 +1,74 @@
+
+> church-projector@0.1.0 dev
+> next dev
+
+   ▲ Next.js 14.1.0
+   - Local:        http://localhost:3000
+   - Environments: .env.local
+
+ ✓ Ready in 3.8s
+ ○ Compiling /dashboard ...
+ ✓ Compiled /dashboard in 2s (489 modules)
+ ✓ Compiled in 185ms (252 modules)
+ ✓ Compiled in 163ms (252 modules)
+ ⨯ ./app/dashboard/page.tsx
+Error: 
+  [31mx[0m Expression expected
+     ,-[[36;1;4mC:\Users\MICHAEL\Scale AX W.Space1 (DOE)\webapp\church-projector\app\dashboard\page.tsx[0m:298:1]
+ [2m298[0m |         }
+ [2m299[0m |     }
+ [2m300[0m | }
+ [2m301[0m |             }
+     : [31;1m            ^[0m
+ [2m302[0m |         } catch (error) {
+ [2m303[0m |     console.error("Intent API Error", error);
+ [2m303[0m | }
+     `----
+
+Caused by:
+    Syntax Error
+
+Import trace for requested module:
+./app/dashboard/page.tsx
+ ⨯ ./app/dashboard/page.tsx
+Error: 
+  [31mx[0m Expression expected
+     ,-[[36;1;4mC:\Users\MICHAEL\Scale AX W.Space1 (DOE)\webapp\church-projector\app\dashboard\page.tsx[0m:298:1]
+ [2m298[0m |         }
+ [2m299[0m |     }
+ [2m300[0m | }
+ [2m301[0m |             }
+     : [31;1m            ^[0m
+ [2m302[0m |         } catch (error) {
+ [2m303[0m |     console.error("Intent API Error", error);
+ [2m303[0m | }
+     `----
+
+Caused by:
+    Syntax Error
+
+Import trace for requested module:
+./app/dashboard/page.tsx
+ ○ Compiling /_error ...
+ ⨯ ./app/dashboard/page.tsx
+Error: 
+  [31mx[0m Expected ',', got '}'
+     ,-[[36;1;4mC:\Users\MICHAEL\Scale AX W.Space1 (DOE)\webapp\church-projector\app\dashboard\page.tsx[0m:293:1]
+ [2m293[0m |             }
+ [2m294[0m |         }
+ [2m295[0m |     }
+ [2m296[0m |             }
+     : [31;1m            ^[0m
+ [2m297[0m |         } catch (error) {
+ [2m298[0m |     console.error("Intent API Error", error);
+ [2m298[0m | }
+     `----
+
+Caused by:
+    Syntax Error
+
+Import trace for requested module:
+./app/dashboard/page.tsx
+ ⚠ Fast Refresh had to perform a full reload due to a runtime error.
+Terminate batch job (Y/N)? [?25h
+^C

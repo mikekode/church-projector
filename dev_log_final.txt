@@ -1,0 +1,16 @@
+
+> church-projector@0.1.0 dev
+> next dev
+
+ ⚠ Port 3000 is in use, trying 3001 instead.
+   ▲ Next.js 14.1.0
+   - Local:        http://localhost:3001
+   - Environments: .env.local
+
+ ✓ Ready in 4.9s
+ ○ Compiling /dashboard ...
+ ✓ Compiled /dashboard in 4.8s (489 modules)
+ ✓ Compiled in 677ms (252 modules)
+ ○ Compiling /api/intent ...
+ ✓ Compiled /api/intent in 569ms (369 modules)
+Terminate batch job (Y/N)? [?25h

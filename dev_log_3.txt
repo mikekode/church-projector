@@ -1,0 +1,19 @@
+
+> church-projector@0.1.0 dev
+> next dev
+
+   ▲ Next.js 14.1.0
+   - Local:        http://localhost:3000
+   - Environments: .env.local
+
+ ✓ Ready in 4.6s
+ ○ Compiling /dashboard ...
+ ✓ Compiled /dashboard in 6.8s (489 modules)
+ ✓ Compiled in 890ms (252 modules)
+ ○ Compiling /projector ...
+ ✓ Compiled /projector in 524ms (481 modules)
+ ✓ Compiled /api/intent in 426ms (373 modules)
+ ✓ Compiled in 1362ms (495 modules)
+ ○ Compiling /api/intent ...
+ ✓ Compiled /api/intent in 708ms (373 modules)
+ ✓ Compiled in 1287ms (627 modules)

@@ -1,0 +1,9 @@
+﻿
+> church-projector@0.1.0 dev
+> next dev -p 3334
+
+   Ôû▓ Next.js 14.1.0
+   - Local:        http://localhost:3334
+   - Environments: .env.local
+
+ Ô£ô Ready in 6.6s

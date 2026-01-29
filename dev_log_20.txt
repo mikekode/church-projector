@@ -1,0 +1,54 @@
+
+> church-projector@0.1.0 dev
+> next dev
+
+   ▲ Next.js 14.1.0
+   - Local:        http://localhost:3000
+   - Environments: .env.local
+
+ ✓ Ready in 2.6s
+ ○ Compiling / ...
+ ✓ Compiled / in 5.5s (470 modules)
+ ✓ Compiled in 480ms (241 modules)
+ ○ Compiling /dashboard ...
+ ✓ Compiled /dashboard in 1420ms (481 modules)
+ ○ Compiling /projector ...
+ ✓ Compiled /projector in 1365ms (487 modules)
+ ○ Compiling /api/intent ...
+ ✓ Compiled /api/intent in 963ms (378 modules)
+ ✓ Compiled in 1262ms (501 modules)
+ ✓ Compiled in 239ms (501 modules)
+ ✓ Compiled in 276ms (501 modules)
+ ✓ Compiled in 442ms (501 modules)
+ ○ Compiling /api/intent ...
+ ✓ Compiled /api/intent in 5.9s (378 modules)
+ ⨯ TypeError: Response body object should not be disturbed or locked
+    at extractBody (node:internal/deps/undici/undici:6741:17)
+    at new Request (node:internal/deps/undici/undici:11184:48)
+    at new NextRequest (C:\Users\MICHAEL\Scale AX W.Space1 (DOE)\webapp\church-projector\node_modules\next\dist\server\web\spec-extension\request.js:33:14)
+    at NextRequestAdapter.fromNodeNextRequest (C:\Users\MICHAEL\Scale AX W.Space1 (DOE)\webapp\church-projector\node_modules\next\dist\server\web\spec-extension\adapters\next-request.js:94:16)
+    at NextRequestAdapter.fromBaseNextRequest (C:\Users\MICHAEL\Scale AX W.Space1 (DOE)\webapp\church-projector\node_modules\next\dist\server\web\spec-extension\adapters\next-request.js:70:35)
+    at doRender (C:\Users\MICHAEL\Scale AX W.Space1 (DOE)\webapp\church-projector\node_modules\next\dist\server\base-server.js:1332:73)
+    at cacheEntry.responseCache.get.routeKind (C:\Users\MICHAEL\Scale AX W.Space1 (DOE)\webapp\church-projector\node_modules\next\dist\server\base-server.js:1555:34)
+    at ResponseCache.get (C:\Users\MICHAEL\Scale AX W.Space1 (DOE)\webapp\church-projector\node_modules\next\dist\server\response-cache\index.js:49:26)
+    at DevServer.renderToResponseWithComponentsImpl (C:\Users\MICHAEL\Scale AX W.Space1 (DOE)\webapp\church-projector\node_modules\next\dist\server\base-server.js:1463:53)
+    at C:\Users\MICHAEL\Scale AX W.Space1 (DOE)\webapp\church-projector\node_modules\next\dist\server\base-server.js:992:121
+    at NextTracerImpl.trace (C:\Users\MICHAEL\Scale AX W.Space1 (DOE)\webapp\church-projector\node_modules\next\dist\server\lib\trace\tracer.js:104:20)
+    at DevServer.renderToResponseWithComponents (C:\Users\MICHAEL\Scale AX W.Space1 (DOE)\webapp\church-projector\node_modules\next\dist\server\base-server.js:992:41)
+    at DevServer.renderPageComponent (C:\Users\MICHAEL\Scale AX W.Space1 (DOE)\webapp\church-projector\node_modules\next\dist\server\base-server.js:1856:35)
+    at async DevServer.renderToResponseImpl (C:\Users\MICHAEL\Scale AX W.Space1 (DOE)\webapp\church-projector\node_modules\next\dist\server\base-server.js:1894:32)
+    at async DevServer.pipeImpl (C:\Users\MICHAEL\Scale AX W.Space1 (DOE)\webapp\church-projector\node_modules\next\dist\server\base-server.js:911:25)
+    at async NextNodeServer.handleCatchallRenderRequest (C:\Users\MICHAEL\Scale AX W.Space1 (DOE)\webapp\church-projector\node_modules\next\dist\server\next-server.js:271:17)
+    at async DevServer.handleRequestImpl (C:\Users\MICHAEL\Scale AX W.Space1 (DOE)\webapp\church-projector\node_modules\next\dist\server\base-server.js:807:17)
+    at async C:\Users\MICHAEL\Scale AX W.Space1 (DOE)\webapp\church-projector\node_modules\next\dist\server\dev\next-dev-server.js:331:20
+    at async Span.traceAsyncFn (C:\Users\MICHAEL\Scale AX W.Space1 (DOE)\webapp\church-projector\node_modules\next\dist\trace\trace.js:151:20)
+    at async DevServer.handleRequest (C:\Users\MICHAEL\Scale AX W.Space1 (DOE)\webapp\church-projector\node_modules\next\dist\server\dev\next-dev-server.js:328:24)
+    at async invokeRender (C:\Users\MICHAEL\Scale AX W.Space1 (DOE)\webapp\church-projector\node_modules\next\dist\server\lib\router-server.js:163:21)
+    at async handleRequest (C:\Users\MICHAEL\Scale AX W.Space1 (DOE)\webapp\church-projector\node_modules\next\dist\server\lib\router-server.js:342:24)
+    at async requestHandlerImpl (C:\Users\MICHAEL\Scale AX W.Space1 (DOE)\webapp\church-projector\node_modules\next\dist\server\lib\router-server.js:366:13)
+    at async Server.requestListener (C:\Users\MICHAEL\Scale AX W.Space1 (DOE)\webapp\church-projector\node_modules\next\dist\server\lib\start-server.js:140:13)
+ ○ Compiling /not-found ...
+ ✓ Compiled /not-found in 1475ms (624 modules)
+Terminate batch job (Y/N)? [?25h
+
+^C

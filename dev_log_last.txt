@@ -1,0 +1,11 @@
+
+> church-projector@0.1.0 dev
+> next dev -p 3023
+
+   ▲ Next.js 14.1.0
+   - Local:        http://localhost:3023
+   - Environments: .env.local
+
+ ✓ Ready in 3.2s
+Terminate batch job (Y/N)? [?25h
+Terminate batch job (Y/N)? 

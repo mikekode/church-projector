@@ -1,0 +1,43 @@
+[
+    {
+        "id": "1",
+        "title": "Amazing Grace",
+        "author": "John Newton",
+        "ccli": "12345",
+        "lyrics": [
+            {
+                "type": "verse",
+                "label": "Verse 1",
+                "content": "Amazing grace how sweet the sound\nThat saved a wretch like me\nI once was lost but now am found\nWas blind but now I see"
+            },
+            {
+                "type": "verse",
+                "label": "Verse 2",
+                "content": "'Twas grace that taught my heart to fear\nAnd grace my fears relieved\nHow precious did that grace appear\nThe hour I first believed"
+            },
+            {
+                "type": "chorus",
+                "label": "Chorus",
+                "content": "My chains are gone\nI've been set free\nMy God, my Savior has ransomed me\nAnd like a flood His mercy rains\nUnending love, amazing grace"
+            }
+        ]
+    },
+    {
+        "id": "2",
+        "title": "Way Maker",
+        "author": "Sinach",
+        "ccli": "67890",
+        "lyrics": [
+            {
+                "type": "verse",
+                "label": "Verse 1",
+                "content": "You are here moving in our midst\nI worship You\nI worship You\nYou are here working in this place\nI worship You\nI worship You"
+            },
+            {
+                "type": "chorus",
+                "label": "Chorus",
+                "content": "Way Maker, Miracle Worker, Promise Keeper\nLight in the darkness\nMy God, that is who You are"
+            }
+        ]
+    }
+]
