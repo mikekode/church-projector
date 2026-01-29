@@ -1,0 +1,251 @@
+import { createClient } from '@supabase/supabase-js';
+
+// Supabase Configuration
+const supabaseUrl = 'https://ejqzexdkoqbvgmjtbbwd.supabase.co';
+const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVqcXpleGRrb3FidmdtanRiYndkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njk2ODQ2ODgsImV4cCI6MjA4NTI2MDY4OH0.4YXGoTou1abHjT06zS4a338linJmO7an1X2MKX_bV_Y';
+
+export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+
+// License Types
+export type LicenseStatus = 'active' | 'expired' | 'cancelled' | 'demo';
+
+export type License = {
+    status: LicenseStatus;
+    licenseKey?: string;
+    email?: string;
+    expiresAt?: string;
+    daysRemaining?: number;
+};
+
+// Local Storage Keys
+const LICENSE_KEY_STORAGE = 'creenly_license_key';
+const LICENSE_CACHE_STORAGE = 'creenly_license_cache';
+const CACHE_DURATION_MS = 7 * 24 * 60 * 60 * 1000; // 7 days offline grace period
+
+/**
+ * Generate a unique device fingerprint
+ */
+export function getDeviceId(): string {
+    const stored = localStorage.getItem('creenly_device_id');
+    if (stored) return stored;
+
+    // Generate fingerprint from available browser data
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    ctx?.fillText('CREENLY', 10, 10);
+    const canvasHash = canvas.toDataURL().slice(-50);
+
+    const fingerprint = [
+        navigator.userAgent,
+        navigator.language,
+        screen.width,
+        screen.height,
+        screen.colorDepth,
+        new Date().getTimezoneOffset(),
+        canvasHash
+    ].join('|');
+
+    // Simple hash
+    let hash = 0;
+    for (let i = 0; i < fingerprint.length; i++) {
+        const char = fingerprint.charCodeAt(i);
+        hash = ((hash << 5) - hash) + char;
+        hash = hash & hash;
+    }
+    const deviceId = 'DEV-' + Math.abs(hash).toString(36).toUpperCase();
+
+    localStorage.setItem('creenly_device_id', deviceId);
+    return deviceId;
+}
+
+/**
+ * Activate a license key (first time setup)
+ * Links the key to this device
+ */
+export async function activateLicenseKey(keyCode: string): Promise<{ success: boolean; error?: string }> {
+    const deviceId = getDeviceId();
+
+    // Check if license exists and is valid
+    const { data: license, error: fetchError } = await supabase
+        .from('licenses')
+        .select('*')
+        .eq('license_key', keyCode.toUpperCase())
+        .single();
+
+    if (fetchError || !license) {
+        return { success: false, error: 'Invalid license key' };
+    }
+
+    // Check if already bound to a different device
+    if (license.device_id && license.device_id !== deviceId) {
+        return { success: false, error: 'This key is already activated on another device' };
+    }
+
+    // Check if subscription is active
+    if (license.status !== 'active') {
+        return { success: false, error: `License is ${license.status}. Please renew your subscription.` };
+    }
+
+    // Check if subscription has expired
+    if (license.current_period_end && new Date(license.current_period_end) < new Date()) {
+        return { success: false, error: 'Subscription has expired. Please renew at creenly.com' };
+    }
+
+    // Bind to this device if not already
+    if (!license.device_id) {
+        const { error: updateError } = await supabase
+            .from('licenses')
+            .update({ device_id: deviceId, updated_at: new Date().toISOString() })
+            .eq('license_key', keyCode.toUpperCase());
+
+        if (updateError) {
+            return { success: false, error: 'Failed to activate. Please try again.' };
+        }
+    }
+
+    // Store license key locally
+    localStorage.setItem(LICENSE_KEY_STORAGE, keyCode.toUpperCase());
+
+    // Cache the license info
+    const cacheData = {
+        status: 'active',
+        licenseKey: keyCode.toUpperCase(),
+        email: license.email,
+        expiresAt: license.current_period_end,
+        cachedAt: Date.now()
+    };
+    localStorage.setItem(LICENSE_CACHE_STORAGE, JSON.stringify(cacheData));
+
+    return { success: true };
+}
+
+/**
+ * Validate license online
+ * Checks if subscription is still active
+ */
+export async function validateLicenseOnline(licenseKey: string): Promise<License> {
+    const deviceId = getDeviceId();
+
+    const { data: license, error } = await supabase
+        .from('licenses')
+        .select('*')
+        .eq('license_key', licenseKey)
+        .single();
+
+    if (error || !license) {
+        return { status: 'demo' };
+    }
+
+    // Check if bound to this device
+    if (license.device_id && license.device_id !== deviceId) {
+        return { status: 'demo' }; // Wrong device
+    }
+
+    // Check subscription status
+    if (license.status !== 'active') {
+        return {
+            status: license.status as LicenseStatus,
+            licenseKey,
+            email: license.email
+        };
+    }
+
+    // Check expiry date
+    const expiresAt = license.current_period_end ? new Date(license.current_period_end) : null;
+    const now = new Date();
+
+    if (expiresAt && expiresAt < now) {
+        return {
+            status: 'expired',
+            licenseKey,
+            email: license.email,
+            expiresAt: license.current_period_end
+        };
+    }
+
+    // Calculate days remaining
+    const daysRemaining = expiresAt
+        ? Math.ceil((expiresAt.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
+        : undefined;
+
+    return {
+        status: 'active',
+        licenseKey,
+        email: license.email,
+        expiresAt: license.current_period_end,
+        daysRemaining
+    };
+}
+
+/**
+ * Get current license status
+ * Uses cache for offline support, validates online when possible
+ */
+export async function getCurrentLicense(): Promise<License> {
+    const storedKey = localStorage.getItem(LICENSE_KEY_STORAGE);
+    const cachedData = localStorage.getItem(LICENSE_CACHE_STORAGE);
+
+    // No stored key = demo mode
+    if (!storedKey) {
+        return { status: 'demo' };
+    }
+
+    // Try online validation first
+    try {
+        const onlineResult = await validateLicenseOnline(storedKey);
+
+        // Update cache with fresh data
+        const cacheData = {
+            ...onlineResult,
+            cachedAt: Date.now()
+        };
+        localStorage.setItem(LICENSE_CACHE_STORAGE, JSON.stringify(cacheData));
+
+        return onlineResult;
+    } catch (error) {
+        console.warn('Online license check failed, using cache');
+    }
+
+    // Offline: Use cached data if within grace period
+    if (cachedData) {
+        try {
+            const cached = JSON.parse(cachedData);
+            const cacheAge = Date.now() - cached.cachedAt;
+
+            // Cache still valid (within 7 day grace period)
+            if (cacheAge < CACHE_DURATION_MS) {
+                // Check if cached expiry has passed
+                if (cached.expiresAt && new Date(cached.expiresAt) < new Date()) {
+                    return {
+                        status: 'expired',
+                        licenseKey: cached.licenseKey,
+                        email: cached.email
+                    };
+                }
+                return cached as License;
+            }
+        } catch (e) {
+            console.error('Cache parse error:', e);
+        }
+    }
+
+    // Cache expired or invalid, go to demo mode
+    return { status: 'demo' };
+}
+
+/**
+ * Clear license data (for switching keys)
+ */
+export function clearLicense(): void {
+    localStorage.removeItem(LICENSE_KEY_STORAGE);
+    localStorage.removeItem(LICENSE_CACHE_STORAGE);
+    localStorage.removeItem('creenly_device_id');
+}
+
+/**
+ * Check if currently licensed (helper)
+ */
+export async function isLicensed(): Promise<boolean> {
+    const license = await getCurrentLicense();
+    return license.status === 'active';
+}

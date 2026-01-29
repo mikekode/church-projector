@@ -4,6 +4,8 @@ import { useState, useCallback, useEffect } from 'react';
 import { useBroadcastChannel } from '@/hooks/useBroadcast';
 import VisualStack from '@/components/projector/VisualStack';
 import { ProjectorTheme, DEFAULT_THEMES } from '@/utils/themes';
+import { useLicense } from '@/hooks/useLicense';
+import DemoWatermark from '@/components/DemoWatermark';
 
 // Generic Content Type
 type ProjectorContent = {
@@ -20,6 +22,9 @@ type ProjectorContent = {
 };
 
 export default function ProjectorPage() {
+    // License check
+    const { isDemo, loading } = useLicense();
+
     // Separate State (The "Layers")
     const [activeContent, setActiveContent] = useState<ProjectorContent | null>(null);
     const [activeBackground, setActiveBackground] = useState<string | null>(null);
@@ -188,10 +193,14 @@ export default function ProjectorPage() {
     };
 
     return (
-        <VisualStack
-            background={activeBackground}
-            content={renderContent()}
-            alert={activeAlert}
-        />
+        <>
+            <VisualStack
+                background={activeBackground}
+                content={renderContent()}
+                alert={activeAlert}
+            />
+            {/* Show watermark for demo/unlicensed users */}
+            {isDemo && !loading && <DemoWatermark />}
+        </>
     );
 }

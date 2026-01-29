@@ -1,8 +1,9 @@
 "use client";
 
 import { useState, useRef, useCallback, useEffect } from 'react';
-import { Play, Pause, Square, SkipBack, SkipForward, Maximize2, Maximize, Mic, MicOff, Search, Settings, Monitor, CheckCircle, ChevronDown, ChevronUp, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Play, Pause, Square, SkipBack, SkipForward, Maximize2, Maximize, Mic, MicOff, Search, Settings, Monitor, CheckCircle, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Key } from 'lucide-react';
 import HardwareModal from '@/components/HardwareModal';
+import LicenseModal from '@/components/LicenseModal';
 import { useBroadcastChannel } from '@/hooks/useBroadcast';
 import { useSmartDetection, type DetectionSignal } from '@/hooks/useSmartDetection';
 import DeepgramRecognizer from '@/components/DeepgramRecognizer';
@@ -70,6 +71,7 @@ export default function DashboardPage() {
     const [showBibleBrowser, setShowBibleBrowser] = useState(false);
     const [showVersionMenu, setShowVersionMenu] = useState(false);
     const [isHardwareModalOpen, setIsHardwareModalOpen] = useState(false);
+    const [isLicenseModalOpen, setIsLicenseModalOpen] = useState(false);
     const [isLibraryOpen, setIsLibraryOpen] = useState(true);
 
     // Resizable Layout State
@@ -748,6 +750,14 @@ export default function DashboardPage() {
                         <div className={`w-2 h-2 rounded-full ${isListening ? 'bg-red-500' : 'bg-zinc-600'} `}></div>
                         {isListening ? 'LISTENING ON' : 'MIC OFF'}
                     </div>
+                    {/* License Button */}
+                    <button
+                        onClick={() => setIsLicenseModalOpen(true)}
+                        className="flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium transition-all bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 hover:bg-indigo-500/20"
+                    >
+                        <Key size={12} />
+                        License
+                    </button>
                 </div>
             </header>
 
@@ -1473,6 +1483,11 @@ export default function DashboardPage() {
             <HardwareModal
                 isOpen={isHardwareModalOpen}
                 onClose={() => setIsHardwareModalOpen(false)}
+            />
+            {/* License Modal */}
+            <LicenseModal
+                isOpen={isLicenseModalOpen}
+                onClose={() => setIsLicenseModalOpen(false)}
             />
         </main >
     );
