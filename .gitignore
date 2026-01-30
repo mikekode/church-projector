@@ -7,3 +7,8 @@ resources/app
 *.log
 node_modules
 .vercel
+check_git.txt 
+deploy_log.txt 
+vercel_deploy_out.txt 
+vercel_list.txt 
+"*_out.txt" 
