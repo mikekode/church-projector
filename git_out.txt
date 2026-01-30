@@ -1,5 +1,1 @@
-83eb950 fix: static export disabled
-ebc53f1 fix: disable static export to allow dynamic API routes on Vercel
-68736c7 fix: mark API routes as dynamic to resolve Vercel build error
-271bf2f style: move logo and brand text closer together
-5c7f792 style: nudge logo down for perfect vertical alignment
+ced8700 chore_kick_vercel_build

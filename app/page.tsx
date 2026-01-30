@@ -1,13 +1,34 @@
 // Creenly 2.0 - Optimized Deployment
+'use client';
+
 import Link from 'next/link';
-import { Check, ArrowRight, Zap, Shield, Mic, Monitor, Music, Clock, Users, Cloud, Star } from 'lucide-react';
+import { useState } from 'react';
+import { Check, ArrowRight, Zap, Shield, Mic, Monitor, Music, Clock, Users, Cloud, Star, Download, Laptop, LayoutGrid, Info } from 'lucide-react';
 
 export default function Home() {
+    const [showComingSoon, setShowComingSoon] = useState(false);
+
+    const handleDownloadClick = (e: React.MouseEvent) => {
+        e.preventDefault();
+        setShowComingSoon(true);
+        setTimeout(() => setShowComingSoon(false), 3000);
+    };
+
     return (
-        <div className="min-h-screen bg-black text-white font-sans selection:bg-indigo-500/30">
+        <div className="min-h-screen bg-black text-white font-sans selection:bg-indigo-500/30 overflow-x-hidden">
+            {/* Success Toast for Download */}
+            {showComingSoon && (
+                <div className="fixed top-24 left-1/2 -translate-x-1/2 z-[200] animate-in fade-in slide-in-from-top-4 duration-300">
+                    <div className="bg-indigo-600 px-6 py-3 rounded-2xl shadow-2xl border border-white/20 flex items-center gap-3">
+                        <Info size={18} />
+                        <span className="font-bold text-sm tracking-tight">V2.0 Download links coming soon! Pushing to GitHub...</span>
+                    </div>
+                </div>
+            )}
+
             {/* Top Announcement */}
             <div className="bg-indigo-600 px-4 py-2 text-center text-xs font-bold tracking-widest uppercase animate-pulse">
-                New: AI Voice Detection 2.0 is now live for all users
+                New: AI Voice Detection 2.0 is now live for Windows & Mac
             </div>
 
             {/* Navigation */}
@@ -23,9 +44,10 @@ export default function Home() {
                         <a href="/subscribe" className="hover:text-white transition-colors text-indigo-400">Pricing</a>
                     </div>
                     <div className="flex items-center gap-4">
-                        <Link href="/dashboard" className="px-6 py-3 rounded-full bg-white text-black text-sm font-black hover:bg-indigo-500 hover:text-white transition-all shadow-xl active:scale-95">
-                            LAUNCH APP
-                        </Link>
+                        <button onClick={handleDownloadClick} className="px-6 py-3 rounded-full bg-white text-black text-sm font-black hover:bg-indigo-500 hover:text-white transition-all shadow-xl active:scale-95 flex items-center gap-2">
+                            <Download size={16} />
+                            DOWNLOAD
+                        </button>
                     </div>
                 </div>
             </nav>
@@ -39,7 +61,7 @@ export default function Home() {
                 <div className="max-w-7xl mx-auto text-center">
                     <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 text-[10px] font-black tracking-[0.2em] mb-12 uppercase">
                         <Zap size={14} />
-                        Next-Gen Worship Technology
+                        Native Desktop Software voor Windows & Mac
                     </div>
 
                     <h1 className="text-7xl md:text-[120px] font-black tracking-tighter leading-[0.85] mb-10 bg-clip-text text-transparent bg-gradient-to-b from-white via-white to-zinc-700">
@@ -48,24 +70,33 @@ export default function Home() {
                     </h1>
 
                     <p className="max-w-3xl mx-auto text-xl md:text-2xl text-zinc-400 mb-16 font-medium leading-relaxed">
-                        Creenly is the world's first AI-driven presentation hub for churches.
+                        Creenly is the world's first AI-driven worship software for your computer.
                         It listens to your service and finds scriptures and songs automatically.
-                        No more panic behind the tech booth.
+                        <span className="block mt-4 text-indigo-400 font-bold">Download the Free Demo and see it in action.</span>
                     </p>
 
-                    <div className="flex flex-col sm:flex-row items-center justify-center gap-6">
-                        <Link href="/dashboard" className="w-full sm:w-auto px-12 py-6 rounded-full bg-indigo-600 font-black text-xl hover:bg-indigo-500 transition-all shadow-[0_20px_50px_-12px_rgba(79,70,229,0.5)] flex items-center justify-center gap-3 group">
-                            Start Free Now
-                            <ArrowRight size={24} className="group-hover:translate-x-2 transition-transform" />
-                        </Link>
-                        <Link href="/subscribe" className="w-full sm:w-auto px-12 py-6 rounded-full bg-zinc-900 border border-white/10 font-black text-xl hover:bg-zinc-800 transition-all flex items-center justify-center gap-3">
-                            View Pricing
-                        </Link>
+                    <div className="flex flex-col items-center gap-8">
+                        <div className="flex flex-col sm:flex-row items-center justify-center gap-6 w-full">
+                            <button onClick={handleDownloadClick} className="grow sm:grow-0 w-full sm:w-auto px-10 py-6 rounded-3xl bg-indigo-600 font-black text-xl hover:bg-indigo-500 transition-all shadow-[0_20px_50px_-12px_rgba(79,70,229,0.5)] flex items-center justify-center gap-3 group">
+                                <Monitor size={24} />
+                                Download for Windows
+                            </button>
+                            <button onClick={handleDownloadClick} className="grow sm:grow-0 w-full sm:w-auto px-10 py-6 rounded-3xl bg-zinc-900 border border-white/10 font-black text-xl hover:bg-zinc-800 transition-all flex items-center justify-center gap-3">
+                                <Laptop size={24} />
+                                Download for Mac
+                            </button>
+                        </div>
+
+                        <div className="flex items-center gap-4 text-zinc-500 text-sm font-bold uppercase tracking-widest">
+                            <Link href="/subscribe" className="text-white hover:text-indigo-400 underline decoration-indigo-500/50 underline-offset-8 transition-colors">
+                                Buy License Key to Unlock Full Version
+                            </Link>
+                        </div>
                     </div>
 
                     {/* Social Proof */}
                     <div className="mt-32 pt-12 border-t border-white/5 flex flex-wrap justify-center gap-12 opacity-30 grayscale hover:grayscale-0 transition-all">
-                        <div className="font-bold text-2xl tracking-tighter">GRACE COMMunity</div>
+                        <div className="font-bold text-2xl tracking-tighter">GRACE COMMUNITY</div>
                         <div className="font-bold text-2xl tracking-tighter underline">THE RIVER</div>
                         <div className="font-bold text-2xl tracking-tighter italic">Lighthouse</div>
                         <div className="font-bold text-2xl tracking-tighter uppercase">Zion Church</div>
@@ -84,12 +115,12 @@ export default function Home() {
                             </h2>
                             <p className="text-zinc-500 text-lg mb-12">
                                 Traditional software requires a full-time operator clicking through slides.
-                                Creenly frees your team to focus on the atmosphere.
+                                Creenly is native desktop software that frees your team to focus on the atmosphere.
                             </p>
                             <div className="space-y-6">
                                 {[
                                     { t: "AI Voice Tracking", d: "Instantly detect John 3:16 or 'Amazing Grace' as it is spoken." },
-                                    { t: "Global Sync", d: "One dashboard, infinite outputs. Stage, Stream, and Sanctuary." },
+                                    { t: "Native Performance", d: "Built for Windows & Mac. Zero lag, high-fidelity graphics." },
                                     { t: "Offline Core", d: "Zero reliance on cloud during the service. 100% reliable." }
                                 ].map((item, i) => (
                                     <div key={i} className="flex gap-4">
@@ -117,7 +148,7 @@ export default function Home() {
                                         <div className="w-2 h-2 rounded-full bg-green-500" />
                                         <span className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Live Detection</span>
                                     </div>
-                                    <p className="text-sm font-medium text-white">"For God so loved the world that he gave his only begotten son..."</p>
+                                    <p className="text-sm font-medium text-white text-center italic">"For God so loved the world that he gave his only begotten son..."</p>
                                 </div>
                             </div>
                             {/* Decorative elements */}
@@ -151,7 +182,7 @@ export default function Home() {
                                 {[
                                     { f: "AI Voice Tracking", a: true, b: false, c: false, d: false },
                                     { f: "Smart Verse Lookup", a: true, b: false, c: false, d: false },
-                                    { f: "Cloud Syncing", a: true, b: false, c: true, d: false },
+                                    { f: "Native Desktop App", a: true, b: true, c: true, d: true },
                                     { f: "Stage Display 2.0", a: true, b: true, c: true, d: false },
                                     { f: "Atem/MIDI Bridge", a: true, b: true, c: false, d: false },
                                     { f: "Pricing", a: "$15/mo", b: "$399+", c: "$19+/mo", d: "$180/yr" },
@@ -203,18 +234,19 @@ export default function Home() {
             <section className="py-60 px-6 text-center relative overflow-hidden">
                 <div className="absolute inset-0 bg-indigo-600/5 -z-10" />
                 <h2 className="text-6xl md:text-[140px] font-black tracking-tighter mb-12 bg-clip-text text-transparent bg-gradient-to-b from-white to-zinc-800 leading-[0.8]">
-                    Ready to <br />
-                    go live?
+                    Take the <br />
+                    Stage.
                 </h2>
-                <div className="flex justify-center flex-wrap gap-4">
-                    <Link href="/dashboard" className="px-12 py-6 rounded-full bg-white text-black font-black text-xl hover:bg-zinc-200 transition-all shadow-2xl active:scale-95">
-                        GET STARTED FREE
-                    </Link>
+                <div className="flex justify-center flex-wrap gap-6">
+                    <button onClick={handleDownloadClick} className="px-12 py-6 rounded-full bg-white text-black font-black text-xl hover:bg-zinc-200 transition-all shadow-2xl active:scale-95 flex items-center gap-3">
+                        <Download size={24} />
+                        DOWNLOAD FREE DEMO
+                    </button>
                     <Link href="/subscribe" className="px-12 py-6 rounded-full bg-indigo-600 text-white font-black text-xl hover:bg-indigo-500 transition-all shadow-2xl active:scale-95">
-                        UPGRADE TO PRO
+                        BUY PRO LICENSE
                     </Link>
                 </div>
-                <p className="mt-12 text-zinc-600 font-medium tracking-widest uppercase text-[10px]">Trusted by thousands worldwide.</p>
+                <p className="mt-12 text-zinc-600 font-medium tracking-widest uppercase text-[10px]">Version 2.0 Now Available.</p>
             </section>
 
             {/* Footer */}
@@ -227,16 +259,15 @@ export default function Home() {
                         </div>
                         <p className="text-zinc-500 text-sm max-w-sm mb-6">
                             Next-generation worship software designed for the modern sanctuary.
-                            AI-powered, cloud-synced, and built for reliability.
+                            Available for Windows and Mac.
                         </p>
                     </div>
                     <div>
                         <h5 className="font-black text-xs uppercase tracking-widest mb-6 text-white">Product</h5>
                         <ul className="space-y-4 text-sm text-zinc-500 font-medium">
                             <li><a href="#features" className="hover:text-white transition-colors">Features</a></li>
-                            <li><a href="/dashboard" className="hover:text-white transition-colors">Dashboard</a></li>
-                            <li><a href="/projector" className="hover:text-white transition-colors">Projector</a></li>
-                            <li><a href="/subscribe" className="hover:text-white transition-colors">Pricing</a></li>
+                            <li><button onClick={handleDownloadClick} className="hover:text-white transition-colors">Download</button></li>
+                            <li><a href="/subscribe" className="hover:text-white transition-colors text-indigo-400">Buy License</a></li>
                         </ul>
                     </div>
                     <div>
