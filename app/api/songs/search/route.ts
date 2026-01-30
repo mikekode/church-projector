@@ -1,10 +1,11 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 
 export const dynamic = 'force-dynamic';
 
-export async function GET(request: NextRequest) {
+export async function GET(request: Request) {
     try {
-        const query = request.nextUrl.searchParams.get('q');
+        const { searchParams } = new URL(request.url);
+        const query = searchParams.get('q');
         console.log(`[API] Song Search Query: ${query}`);
 
         if (!query) {
@@ -13,7 +14,6 @@ export async function GET(request: NextRequest) {
 
         const url = `https://itunes.apple.com/search?term=${encodeURIComponent(query)}&media=music&entity=song&limit=300`;
 
-        // Use global fetch
         const res = await fetch(url);
 
         if (!res.ok) {

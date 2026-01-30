@@ -1,7 +1,9 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 
-export async function GET(request: NextRequest) {
-    const searchParams = request.nextUrl.searchParams;
+export const dynamic = 'force-dynamic';
+
+export async function GET(request: Request) {
+    const { searchParams } = new URL(request.url);
     const book = searchParams.get('book');
     const chapter = searchParams.get('chapter');
     const verse = searchParams.get('verse');
@@ -12,12 +14,10 @@ export async function GET(request: NextRequest) {
     }
 
     // Map internal keys to bible-api.com keys
-    // Detailed list of supported free versions on bible-api.com:
-    // kjv, web, asv, ylt, bbe, dby, dra, weymouth, oeb-us, oeb-cw, web-be
     let apiVersion = version.toLowerCase();
 
-    // Map some common variations if needed (e.g. RSV -> ? not supported)
-    if (apiVersion === 'kjv21') apiVersion = 'kjv'; // Fallback closest
+    // Map some common variations if needed
+    if (apiVersion === 'kjv21') apiVersion = 'kjv';
 
     // Construct API URL
     const url = `https://bible-api.com/${encodeURIComponent(book)}+${chapter}:${verse}?translation=${apiVersion}`;
