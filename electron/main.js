@@ -40,13 +40,13 @@ function createWindow() {
     // In production, we would load the startUrl
 
     if (app.isPackaged) {
-        const indexPath = path.join(__dirname, '../out/index.html');
+        const indexPath = path.join(__dirname, '../out/dashboard.html');
         // Ensure the file exists (for debugging)
         // console.log("Loading form:", indexPath);
         mainWindow.loadFile(indexPath);
     } else {
         const startUrl = process.env.ELECTRON_START_URL || 'http://localhost:3000';
-        mainWindow.loadURL(startUrl);
+        mainWindow.loadURL(`${startUrl}/dashboard`);
     }
 
     mainWindow.on('closed', () => {

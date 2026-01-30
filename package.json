@@ -6,12 +6,11 @@
     "scripts": {
         "dev": "next dev",
         "build": "next build",
-        "build:electron": "node scripts/build-electron.js",
         "start": "next start",
         "lint": "next lint",
         "electron": "electron electron/main.js",
-        "pack": "npm run build:electron && electron-builder --dir",
-        "dist": "npm run build:electron && electron-builder"
+        "pack": "electron-builder --dir",
+        "dist": "npm run build && electron-builder"
     },
     "dependencies": {
         "@dnd-kit/core": "^6.3.1",
@@ -33,7 +32,6 @@
         "pdfjs-dist": "^5.4.530",
         "react": "18.2.0",
         "react-dom": "18.2.0",
-        "strip-ansi": "^7.1.2",
         "tailwind-merge": "^2.2.0",
         "ts-interface-checker": "^1.0.2"
     },
@@ -42,7 +40,6 @@
         "@types/react": "^18",
         "@types/react-dom": "^18",
         "autoprefixer": "^10.0.1",
-        "cross-env": "^10.1.0",
         "electron": "^40.0.0",
         "electron-builder": "^26.4.0",
         "eslint": "^8",
@@ -53,9 +50,8 @@
     },
     "main": "electron/main.js",
     "build": {
-        "appId": "com.creenly.app",
-        "productName": "Creenly",
-        "npmRebuild": false,
+        "appId": "com.churchprojector.app",
+        "productName": "Church Projector AI",
         "directories": {
             "output": "dist-build"
         },
@@ -66,11 +62,18 @@
         ],
         "win": {
             "target": "nsis",
+            "icon": "public/icon.png",
             "publish": [
                 "github"
             ]
         },
-        "forceCodeSigning": false,
+        "mac": {
+            "target": "dmg",
+            "icon": "public/icon.png",
+            "publish": [
+                "github"
+            ]
+        },
         "extraResources": [
             {
                 "from": "electron/resources",

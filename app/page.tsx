@@ -1,4 +1,4 @@
-// Creenly 2.0 - Final Deployment V3 - 2026-01-30 16:58
+// Creenly 2.0 - Optimized Deployment
 'use client';
 
 import Link from 'next/link';
