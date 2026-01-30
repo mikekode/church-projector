@@ -872,8 +872,8 @@ export default function DashboardPage() {
         <main className="min-h-screen bg-zinc-950 text-zinc-100 font-sans selection:bg-indigo-500/30">
             {/* TOP BAR */}
             <header className="h-12 border-b border-white/5 bg-black/40 backdrop-blur-md flex items-center justify-between px-4 fixed top-0 w-full z-50">
-                <div className="flex items-center gap-3">
-                    <div className="relative group">
+                <div className="flex items-center gap-2">
+                    <div className="relative group flex items-center">
                         <img
                             src="/logo.png"
                             alt="Creenly Logo"
@@ -881,7 +881,7 @@ export default function DashboardPage() {
                         />
                         <div className="absolute inset-0 bg-indigo-500/20 blur-xl rounded-full -z-10 opacity-0 group-hover:opacity-100 transition-opacity" />
                     </div>
-                    <span className="text-xl font-black tracking-tighter text-white">CREENLY</span>
+                    <span className="text-xl font-black tracking-tighter text-white leading-none">CREENLY</span>
                     <div className="w-px h-6 bg-white/10 mx-2" />
                     {/* License Button */}
                     <button
