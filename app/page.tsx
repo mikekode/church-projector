@@ -1,3 +1,4 @@
+// Creenly 2.0 - Optimized Deployment
 import Link from 'next/link';
 import { Check, ArrowRight, Zap, Shield, Mic, Monitor, Music, Clock, Users, Cloud, Star } from 'lucide-react';
 

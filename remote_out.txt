@@ -1,0 +1,2 @@
+origin	https://github.com/mikekode/church-projector.git (fetch)
+origin	https://github.com/mikekode/church-projector.git (push)
