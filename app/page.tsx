@@ -1,4 +1,4 @@
-// Creenly 2.0 - Optimized Deployment
+// Creenly 2.0 - Final Deployment V3 - 2026-01-30 16:58
 'use client';
 
 import Link from 'next/link';
@@ -61,7 +61,7 @@ export default function Home() {
                 <div className="max-w-7xl mx-auto text-center">
                     <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 text-[10px] font-black tracking-[0.2em] mb-12 uppercase">
                         <Zap size={14} />
-                        Native Desktop Software voor Windows & Mac
+                        Professional Grade Projection • Windows & Mac
                     </div>
 
                     <h1 className="text-7xl md:text-[120px] font-black tracking-tighter leading-[0.85] mb-10 bg-clip-text text-transparent bg-gradient-to-b from-white via-white to-zinc-700">
@@ -213,13 +213,13 @@ export default function Home() {
             <section className="py-32 px-6">
                 <div className="max-w-7xl mx-auto flex flex-col md:flex-row gap-12">
                     {[
-                        { q: "Creenly has completely transformed how our small tech team operates. It's like having another volunteer in the booth.", a: "Pastor Mike G.", c: "Grace Chapel" },
-                        { q: "The AI verse detection is scarily accurate. Our congregation is always amazed how fast we pull up scriptures.", a: "Sarah L.", c: "Creative Director" },
+                        { q: "Creenly has completely transformed how our small tech team operates. It's like having another volunteer in the booth.", a: "Pastor Mike G.", c: "Grace Chapel", i: "/pastor-mike.png" },
+                        { q: "The AI verse detection is scarily accurate. Our congregation is always amazed how fast we pull up scriptures.", a: "Sarah L.", c: "Creative Director", i: "/sarah-creative.png" },
                     ].map((t, i) => (
                         <div key={i} className="flex-1 p-10 rounded-3xl bg-zinc-900/30 border border-white/5 italic text-zinc-400">
                             <p className="text-xl mb-8 leading-relaxed">"{t.q}"</p>
                             <div className="not-italic flex items-center gap-4">
-                                <div className="w-10 h-10 rounded-full bg-zinc-800" />
+                                <img src={t.i} alt={t.a} className="w-12 h-12 rounded-full object-cover border border-indigo-500/20 shadow-lg" />
                                 <div>
                                     <div className="font-bold text-white text-sm">{t.a}</div>
                                     <div className="text-indigo-500 text-[10px] font-black uppercase tracking-widest">{t.c}</div>

@@ -1,5 +1,6 @@
 module.exports = {
-    // output: 'export', // Removed to allow API routes on Vercel
+    // Enable static export for Electron builds, disable for Vercel
+    output: process.env.BUILD_TARGET === 'electron' ? 'export' : undefined,
     images: {
         unoptimized: true
     },
