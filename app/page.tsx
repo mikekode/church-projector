@@ -12,7 +12,7 @@ export default function Home() {
             {/* Navigation */}
             <nav className="sticky top-0 w-full z-[100] border-b border-white/5 bg-black/60 backdrop-blur-2xl">
                 <div className="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between">
-                    <div className="flex items-center gap-2 group cursor-pointer">
+                    <div className="flex items-center gap-1 group cursor-pointer">
                         <img src="/logo.png" alt="Creenly Logo" className="w-12 h-12 object-contain group-hover:rotate-12 transition-transform translate-y-[2px]" />
                         <span className="text-3xl font-black tracking-tighter leading-none">CREENLY</span>
                     </div>
@@ -220,7 +220,7 @@ export default function Home() {
             <footer className="py-20 px-10 border-t border-white/5 bg-black">
                 <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-4 gap-12">
                     <div className="col-span-2">
-                        <div className="flex items-center gap-2 mb-6">
+                        <div className="flex items-center gap-1 mb-6">
                             <img src="/logo.png" alt="Creenly Logo" className="w-10 h-10 object-contain translate-y-[1px]" />
                             <span className="text-2xl font-black tracking-tighter leading-none">CREENLY</span>
                         </div>

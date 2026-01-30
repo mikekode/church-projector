@@ -10,7 +10,7 @@ export default function SubscribePage() {
                     <ArrowLeft size={16} className="group-hover:-translate-x-1 transition-transform" />
                     Back to Home
                 </Link>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1">
                     <img src="/logo.png" alt="Creenly Logo" className="w-10 h-10 object-contain translate-y-[2px]" />
                     <span className="text-xl font-black tracking-tighter text-white leading-none">CREENLY</span>
                 </div>

@@ -872,7 +872,7 @@ export default function DashboardPage() {
         <main className="min-h-screen bg-zinc-950 text-zinc-100 font-sans selection:bg-indigo-500/30">
             {/* TOP BAR */}
             <header className="h-12 border-b border-white/5 bg-black/40 backdrop-blur-md flex items-center justify-between px-4 fixed top-0 w-full z-50">
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1">
                     <div className="relative group flex items-center">
                         <img
                             src="/logo.png"
@@ -1252,7 +1252,7 @@ export default function DashboardPage() {
                                     return (
                                         <div key={item.id} className="p-4 rounded-xl bg-zinc-950 border border-white/5 hover:border-indigo-500/30 transition-all group flex gap-4">
                                             <div className="flex-1">
-                                                <div className="flex items-center gap-2 mb-1 flex-wrap">
+                                                <div className="flex items-center gap-1 mb-1 flex-wrap">
                                                     <span className="font-bold text-indigo-400 text-sm">{item.reference}</span>
                                                     <span className="text-[10px] bg-zinc-900 text-zinc-500 px-1.5 py-0.5 rounded">{item.version}</span>
                                                     {item.confidence && (
