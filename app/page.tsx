@@ -34,7 +34,7 @@ export default function Home() {
                             <a href="/subscribe" className="hover:text-white transition-colors text-indigo-400">Pricing</a>
                         </div>
                         <div className="flex items-center gap-4">
-                            <a href="https://github.com/mikekode/church-projector/releases/download/v1.0.3/Church-Projector-Setup-1.0.3.exe" className="px-6 py-3 rounded-full bg-white text-black text-sm font-black hover:bg-indigo-500 hover:text-white transition-all shadow-xl active:scale-95 flex items-center gap-2">
+                            <a href="https://github.com/mikekode/church-projector/releases/download/v2.0.0/Church-Projector-Setup-2.0.0.exe" className="px-6 py-3 rounded-full bg-white text-black text-sm font-black hover:bg-indigo-500 hover:text-white transition-all shadow-xl active:scale-95 flex items-center gap-2">
                                 <Download size={16} />
                                 DOWNLOAD
                             </a>
@@ -67,11 +67,11 @@ export default function Home() {
 
                         <div className="flex flex-col items-center gap-8">
                             <div className="flex flex-col sm:flex-row items-center justify-center gap-6 w-full">
-                                <a href="https://github.com/mikekode/church-projector/releases/download/v1.0.3/Church-Projector-Setup-1.0.3.exe" className="grow sm:grow-0 w-full sm:w-auto px-10 py-6 rounded-3xl bg-indigo-600 font-black text-xl hover:bg-indigo-500 transition-all shadow-[0_20px_50px_-12px_rgba(79,70,229,0.5)] flex items-center justify-center gap-3 group">
+                                <a href="https://github.com/mikekode/church-projector/releases/download/v2.0.0/Church-Projector-Setup-2.0.0.exe" className="grow sm:grow-0 w-full sm:w-auto px-10 py-6 rounded-3xl bg-indigo-600 font-black text-xl hover:bg-indigo-500 transition-all shadow-[0_20px_50px_-12px_rgba(79,70,229,0.5)] flex items-center justify-center gap-3 group">
                                     <Monitor size={24} />
                                     Download for Windows
                                 </a>
-                                <a href="https://github.com/mikekode/church-projector/releases/download/v1.0.3/Church-Projector-1.0.3.dmg" className="grow sm:grow-0 w-full sm:w-auto px-10 py-6 rounded-3xl bg-zinc-900 border border-white/10 font-black text-xl hover:bg-zinc-800 transition-all flex items-center justify-center gap-3">
+                                <a href="https://github.com/mikekode/church-projector/releases/download/v2.0.0/Church-Projector-2.0.0.dmg" className="grow sm:grow-0 w-full sm:w-auto px-10 py-6 rounded-3xl bg-zinc-900 border border-white/10 font-black text-xl hover:bg-zinc-800 transition-all flex items-center justify-center gap-3">
                                     <Laptop size={24} />
                                     Download for Mac
                                 </a>
@@ -256,7 +256,7 @@ export default function Home() {
                             <h5 className="font-black text-xs uppercase tracking-widest mb-6 text-white">Product</h5>
                             <ul className="space-y-4 text-sm text-zinc-500 font-medium">
                                 <li><a href="#features" className="hover:text-white transition-colors">Features</a></li>
-                                <li><a href="https://github.com/mikekode/church-projector/releases/download/v1.0.3/Church-Projector-Setup-1.0.3.exe" className="hover:text-white transition-colors">Download</a></li>
+                                <li><a href="https://github.com/mikekode/church-projector/releases/download/v2.0.0/Church-Projector-Setup-2.0.0.exe" className="hover:text-white transition-colors">Download</a></li>
                                 <li><a href="/subscribe" className="hover:text-white transition-colors text-indigo-400">Buy License</a></li>
                             </ul>
                         </div>
