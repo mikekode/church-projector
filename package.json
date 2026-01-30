@@ -1,6 +1,6 @@
 {
     "name": "church-projector",
-    "version": "0.1.0",
+    "version": "1.0.1",
     "repository": "mikekode/church-projector",
     "private": true,
     "scripts": {
