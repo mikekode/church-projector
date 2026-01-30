@@ -11,7 +11,7 @@ export default function SubscribePage() {
                     Back to Home
                 </Link>
                 <div className="flex items-center gap-2">
-                    <img src="/logo.png" alt="Creenly Logo" className="w-10 h-10 object-contain" />
+                    <img src="/logo.png" alt="Creenly Logo" className="w-10 h-10 object-contain translate-y-[2px]" />
                     <span className="text-xl font-black tracking-tighter text-white leading-none">CREENLY</span>
                 </div>
             </nav>

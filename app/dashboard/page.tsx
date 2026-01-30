@@ -877,7 +877,7 @@ export default function DashboardPage() {
                         <img
                             src="/logo.png"
                             alt="Creenly Logo"
-                            className="w-10 h-10 object-contain transition-transform group-hover:scale-110 duration-300"
+                            className="w-10 h-10 object-contain transition-transform group-hover:scale-110 duration-300 translate-y-[2px]"
                         />
                         <div className="absolute inset-0 bg-indigo-500/20 blur-xl rounded-full -z-10 opacity-0 group-hover:opacity-100 transition-opacity" />
                     </div>
