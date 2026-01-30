@@ -85,7 +85,7 @@ export default function ProjectorPage() {
         }
     }, []);
 
-    useBroadcastChannel('church-projector', handleMessage);
+    useBroadcastChannel('projector_channel', handleMessage);
 
     // Render the Content Layer components
     const renderContent = () => {
@@ -161,7 +161,7 @@ export default function ProjectorPage() {
                                     ...themeStyle,
                                     // Use em to scale relative to the Container's fontSize (which is now theme size)
                                     // 2 verses: 85% of theme size. 3 verses: 70% of theme size (to fit)
-                                    fontSize: activeContent.verses.length === 2 ? '0.85em' : '0.70em',
+                                    fontSize: activeContent.verses!.length === 2 ? '0.85em' : '0.70em',
                                     textAlign: 'left',
                                     lineHeight: 1.2
                                 }}>

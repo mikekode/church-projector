@@ -143,8 +143,9 @@ export default function LicenseModal({ isOpen, onClose }: LicenseModalProps) {
                                     <p className="text-sm text-zinc-400">Full access, no watermark</p>
                                 </div>
                                 <div className="text-right">
-                                    <p className="text-2xl font-bold text-white">$20</p>
+                                    <p className="text-2xl font-bold text-white">$15</p>
                                     <p className="text-xs text-zinc-500">per month</p>
+                                    <p className="text-[10px] text-indigo-400 mt-1 font-medium">or $150/year</p>
                                 </div>
                             </div>
                             <button

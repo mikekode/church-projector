@@ -18,8 +18,9 @@ export type ScheduleItem = {
     meta?: {
         version?: string;      // For scriptures
         author?: string;       // For songs
+        copyright?: string;    // For songs
         ccli?: string;         // For songs
-        background?: string;   // Custom background for this item
+        background?: string | { type: string; value: string };   // Custom background for this item
         imageMode?: 'contain' | 'cover' | 'stretch'; // For media
     };
 };

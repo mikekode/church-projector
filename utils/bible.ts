@@ -234,6 +234,29 @@ export async function lookupVerseAsync(
         return VERSE_CACHE[version][canonicalBook][c][v];
     }
 
+    // 3.5. Electron Online Scraper (Fallback for NIV, MSG, AMP)
+    if (typeof window !== 'undefined' && (window as any).electronAPI?.getVerseOnline) {
+        try {
+            console.log(`[OnlineScraper] Lookup ${version} ${canonicalBook} ${c}:${v}`);
+            const result = await (window as any).electronAPI.getVerseOnline({
+                book: canonicalBook,
+                chapter: c,
+                verse: v,
+                version
+            });
+            if (result && result.text) {
+                // Update Cache
+                if (!VERSE_CACHE[version]) VERSE_CACHE[version] = {};
+                if (!VERSE_CACHE[version][canonicalBook]) VERSE_CACHE[version][canonicalBook] = {};
+                if (!VERSE_CACHE[version][canonicalBook][c]) VERSE_CACHE[version][canonicalBook][c] = {};
+                VERSE_CACHE[version][canonicalBook][c][v] = result.text;
+                return result.text;
+            }
+        } catch (e) {
+            console.error("[Electron] Online IPC Failed", e);
+        }
+    }
+
     // 4. For other versions, try the API (Online)
     try {
         console.time(`API-${version}-${canonicalBook}-${c}-${v}`);

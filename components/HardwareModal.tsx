@@ -6,6 +6,7 @@ declare global {
         electronAPI?: {
             connectAtem: (ip: string) => Promise<{ success: boolean; error?: string }>;
             performAtemAction: (action: string, input?: number) => Promise<{ success: boolean; error?: string }>;
+            onAtemStatus: (callback: (status: string) => void) => () => void;
         };
     }
 }
@@ -19,6 +20,17 @@ export default function HardwareModal({ isOpen, onClose }: HardwareModalProps) {
     const [atemIp, setAtemIp] = useState('192.168.1.10');
     const [atemStatus, setAtemStatus] = useState<'disconnected' | 'connecting' | 'connected'>('disconnected');
     const [statusMessage, setStatusMessage] = useState('');
+
+    useEffect(() => {
+        if (window.electronAPI?.onAtemStatus) {
+            const cleanup = window.electronAPI.onAtemStatus((status) => {
+                setAtemStatus(status as any);
+                if (status === 'connected') setStatusMessage('Ready to switch');
+                if (status === 'disconnected') setStatusMessage('Lost connection');
+            });
+            return () => cleanup();
+        }
+    }, []);
 
     const handleConnectAtem = async () => {
         if (!window.electronAPI) {
@@ -66,8 +78,8 @@ export default function HardwareModal({ isOpen, onClose }: HardwareModalProps) {
                                 <Monitor size={16} /> ATEM Switcher
                             </h4>
                             <div className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${atemStatus === 'connected' ? 'bg-green-500/20 text-green-400' :
-                                    atemStatus === 'connecting' ? 'bg-yellow-500/20 text-yellow-400' :
-                                        'bg-zinc-800 text-zinc-500'
+                                atemStatus === 'connecting' ? 'bg-yellow-500/20 text-yellow-400' :
+                                    'bg-zinc-800 text-zinc-500'
                                 }`}>
                                 {atemStatus}
                             </div>
@@ -84,8 +96,8 @@ export default function HardwareModal({ isOpen, onClose }: HardwareModalProps) {
                                 onClick={handleConnectAtem}
                                 disabled={atemStatus === 'connecting' || atemStatus === 'connected'}
                                 className={`px-4 py-2 rounded text-sm font-bold transition-all ${atemStatus === 'connected'
-                                        ? 'bg-green-600 text-white opacity-50 cursor-not-allowed'
-                                        : 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-lg shadow-indigo-500/20'
+                                    ? 'bg-green-600 text-white opacity-50 cursor-not-allowed'
+                                    : 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-lg shadow-indigo-500/20'
                                     }`}
                             >
                                 {atemStatus === 'connected' ? 'Connected' : 'Connect'}

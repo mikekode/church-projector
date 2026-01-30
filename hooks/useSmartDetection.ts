@@ -1,5 +1,6 @@
 import { useRef, useCallback, useEffect } from 'react';
 import { lookupVerse, lookupVerseAsync, detectVersesInText } from '@/utils/bible';
+import { getResources, ResourceItem } from '@/utils/resourceLibrary';
 import {
     loadPastorProfile,
     savePastorProfile,
@@ -17,6 +18,8 @@ export type DetectedScripture = {
     reference: string;
     confidence: number;
     matchType: 'exact' | 'partial' | 'paraphrase';
+    version?: string; // Allow overriding version (e.g. 'SONG')
+    songData?: any;
 };
 
 export type NavigationCommand = {
@@ -75,6 +78,7 @@ export function useSmartDetection(
     const chapterContextRef = useRef<string | null>(null);
     const pendingRetryRef = useRef<boolean>(false);
     const processWindowRef = useRef<() => Promise<void>>();
+    const songLibraryRef = useRef<ResourceItem[]>([]);
 
     // Keep currentVerse ref in sync and update chapter anchor
     useEffect(() => {
@@ -92,9 +96,14 @@ export function useSmartDetection(
         }
     }, [currentVerse]);
 
-    // Load pastor profile on mount
+    // Load pastor profile and Songs on mount
     useEffect(() => {
         pastorProfileRef.current = loadPastorProfile();
+        getResources().then(resources => {
+            // Filter only songs
+            songLibraryRef.current = resources.filter(r => r.category === 'song');
+            console.log(`[SmartDetect] Loaded ${songLibraryRef.current.length} songs for detection.`);
+        });
     }, []);
 
     const processWindow = useCallback(async () => {
@@ -111,9 +120,64 @@ export function useSmartDetection(
         const textWindow = wordBufferRef.current.slice(-windowSize).join(' ');
         const context = contextRef.current;
 
+
         try {
+            // 0. CHECK SONGS (Lyric Matching)
+            // Strategy: Check if the textWindow matches any substring in the song library slides
+            // 1. Normalized Substring (ignores spaces/punctuation)
+            // 2. Token Overlap (Jaccard) for phrases (tolerates word errors)
+
+            const normalize = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '');
+            const tokenize = (s: string) => s.toLowerCase().split(/[^a-z0-9]+/).filter(w => w.length > 2); // Words > 2 chars
+
+            const reportMatch = (song: any, text: string, type: 'exact' | 'partial') => {
+                console.log(`[SmartDetect] SONG MATCH (${type}):`, song.title);
+                const songMatch: DetectedScripture = {
+                    book: 'Song',
+                    chapter: 0,
+                    verse: 0,
+                    text: text,
+                    reference: song.title,
+                    confidence: type === 'exact' ? 95 : 80,
+                    matchType: type,
+                    version: 'SONG',
+                    songData: song
+                };
+                onDetect([songMatch], [], 'SWITCH', 1);
+                wordBufferRef.current = [];
+                processingRef.current = false;
+            };
+
+            const rawInput = textWindow;
+            const normInput = normalize(rawInput);
+            const inputTokens = tokenize(rawInput);
+
+            if (rawInput.length > 3) {
+                const getBigrams = (s: string) => { const b = new Set<string>(); for (let i = 0; i < s.length - 1; i++)b.add(s.substring(i, i + 2)); return b; };
+                const dice = (s1: string, s2: string) => { if (!s1 || !s2) return 0; const a = s1.toLowerCase().replace(/[^a-z0-9]/g, ''), b = s2.toLowerCase().replace(/[^a-z0-9]/g, ''); if (a === b) return 1; const ba = getBigrams(a), bb = getBigrams(b); if (!ba.size || !bb.size) return 0; let i = 0; ba.forEach(x => { if (bb.has(x)) i++ }); return (2 * i) / (ba.size + bb.size); };
+
+                let bestMatch = { song: null as any, slide: '', score: 0 };
+                for (const song of songLibraryRef.current) {
+                    for (const slide of song.slides) {
+                        const score = dice(rawInput, slide.content);
+                        const normSlide = normalize(slide.content);
+                        // Boost exact substring
+                        const exact = normSlide.length > 5 && (normSlide.includes(normInput) || normInput.includes(normSlide));
+                        const finalScore = exact ? 1 : score;
+
+                        if (finalScore > bestMatch.score) {
+                            bestMatch = { song, slide: slide.content, score: finalScore };
+                        }
+                    }
+                }
+
+                if (bestMatch.score > 0.45 && bestMatch.song) {
+                    reportMatch(bestMatch.song, bestMatch.slide, bestMatch.score >= 0.9 ? 'exact' : 'partial');
+                    return;
+                }
+            }
+
             // FAST PATH: Check for explicit scripture references locally using Regex
-            // This avoids the 2-3s roundtrip to OpenAI for simple cases like "John 3:16"
             const localDetections = detectVersesInText(textWindow);
 
             if (localDetections.length > 0) {
@@ -209,6 +273,45 @@ export function useSmartDetection(
                             }
                         }
                     }
+                }
+            }
+
+            // FAST PATH: Translation Switching ("in NIV", "use Amplified")
+            const VERSION_ALIASES: Record<string, string> = {
+                "new international version": "NIV", "new international": "NIV", "niv": "NIV",
+                "king james version": "KJV", "king james": "KJV", "kjv": "KJV",
+                "new king james version": "NKJV", "new king james": "NKJV", "nkjv": "NKJV",
+                "english standard version": "ESV", "english standard": "ESV", "esv": "ESV",
+                "new american standard bible": "NASB", "new american standard": "NASB", "nasb": "NASB",
+                "amplified classic": "AMPC", "classic amplified": "AMPC", "ampc": "AMPC",
+                "amplified bible": "AMP", "amplified": "AMP", "amp": "AMP",
+                "the message": "MSG", "message": "MSG", "msg": "MSG",
+                "christian standard bible": "CSB", "christian standard": "CSB", "csb": "CSB",
+                "new living translation": "NLT", "new living": "NLT", "nlt": "NLT",
+                "god's word": "GW", "gw": "GW",
+                "21st century king james": "KJV21", "21st century": "KJV21", "kjv21": "KJV21"
+            };
+
+            // Generate regex from keys, sorted by length descending to catch specific phrases first ("Amplified Classic" before "Amplified")
+            const sortedAliases = Object.keys(VERSION_ALIASES).sort((a, b) => b.length - a.length);
+            const aliasPattern = sortedAliases.map(k => k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|'); // Escape regex chars just in case
+
+            // Regex: Trigger words -> Optional "the" -> Alias
+            const versionRegex = new RegExp(`(?:in|to|use|read|version|give me)\\s+(?:the\\s+)?(${aliasPattern})`, 'i');
+
+            const versionMatch = textWindow.toLowerCase().match(versionRegex);
+
+            if (versionMatch) {
+                const matchedTerm = versionMatch[1].toLowerCase();
+                // Direct lookup (since we matched the alias exactly)
+                const targetCode = VERSION_ALIASES[matchedTerm];
+
+                if (targetCode) {
+                    console.log('[SmartDetect] FAST TRANSLATION SWITCH:', targetCode);
+                    onDetect([], [{ type: 'switch_translation', version: targetCode }], 'SWITCH', undefined);
+                    wordBufferRef.current = []; // Clear buffer
+                    processingRef.current = false;
+                    return;
                 }
             }
 

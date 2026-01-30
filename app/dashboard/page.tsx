@@ -1,9 +1,12 @@
 "use client";
 
-import { useState, useRef, useCallback, useEffect } from 'react';
-import { Play, Pause, Square, SkipBack, SkipForward, Maximize2, Maximize, Mic, MicOff, Search, Settings, Monitor, CheckCircle, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Key } from 'lucide-react';
-import HardwareModal from '@/components/HardwareModal';
+import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
+import { Play, Pause, Square, SkipBack, SkipForward, Maximize2, Maximize, Mic, MicOff, Search, Settings, Monitor, CheckCircle, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Key, Download, X, Tv2, Music, Clock } from 'lucide-react';
+import Fuse from 'fuse.js';
+
 import LicenseModal from '@/components/LicenseModal';
+import MIDISettingsModal from '@/components/MIDISettingsModal';
+import { useMIDI, MidiAction } from '@/hooks/useMIDI';
 import { useBroadcastChannel } from '@/hooks/useBroadcast';
 import { useSmartDetection, type DetectionSignal } from '@/hooks/useSmartDetection';
 import DeepgramRecognizer from '@/components/DeepgramRecognizer';
@@ -28,6 +31,7 @@ type DetectedItem = {
     timestamp: Date;
     confidence?: number;
     matchType?: 'exact' | 'partial' | 'paraphrase';
+    songData?: any; // Full song object for slide navigation
     // Multi-verse support
     additionalVerses?: { verseNum: number; text: string; reference: string }[];
 };
@@ -62,22 +66,82 @@ export default function DashboardPage() {
     const [detectedQueue, setDetectedQueue] = useState<DetectedItem[]>([]);
     const [activeItem, setActiveItem] = useState<DetectedItem | null>(null);
     const [autoMode, setAutoMode] = useState(true);
-    const [aiStatus, setAiStatus] = useState<'idle' | 'processing'>('idle');
+    const [aiStatus, setAiStatus] = useState<'idle' | 'processing' | 'loading'>('idle');
     const [lastSignal, setLastSignal] = useState<DetectionSignal>('WAIT');
     const [confidenceThreshold, setConfidenceThreshold] = useState(85);
+
+
+    // WebSocket (Deepgram) Status Management
     const [deepgramStatus, setDeepgramStatus] = useState<{ status: string; error?: string | null }>({ status: 'idle' });
     const [selectedVersion, setSelectedVersion] = useState<string>('KJV');
     const [verseCount, setVerseCount] = useState<1 | 2 | 3>(1);
     const [showBibleBrowser, setShowBibleBrowser] = useState(false);
     const [showVersionMenu, setShowVersionMenu] = useState(false);
-    const [isHardwareModalOpen, setIsHardwareModalOpen] = useState(false);
+
     const [isLicenseModalOpen, setIsLicenseModalOpen] = useState(false);
     const [isLibraryOpen, setIsLibraryOpen] = useState(true);
+    const [isMidiSettingsOpen, setIsMidiSettingsOpen] = useState(false);
+    const [showTimerSettings, setShowTimerSettings] = useState(false);
+    const [timerDuration, setTimerDuration] = useState(30); // Minutes
+    const [timerState, setTimerState] = useState({ isRunning: false, isPaused: false });
+    const [resetFlash, setResetFlash] = useState(false);
+    const [libraryResources, setLibraryResources] = useState<ResourceItem[]>([]);
+
+    // Initialize Fuse for Song Detection
+    const fuseRef = useRef<Fuse<any> | null>(null);
+
+    const { broadcast, subscribe } = useBroadcastChannel('projector_channel', (msg: any) => {
+        // Handle incoming messages if needed
+    });
+
+    // Sync Timer Status
+    useEffect(() => {
+        const unsubscribe = subscribe((msg: any) => {
+            if (msg.type === 'TIMER_STATUS') {
+                setTimerState({
+                    isRunning: msg.payload.isRunning,
+                    isPaused: msg.payload.isPaused
+                });
+            }
+        });
+        return unsubscribe;
+    }, [subscribe]);
+
+    // Re-initialize Fuse when libraryResources changes
+    useEffect(() => {
+        fuseRef.current = new Fuse(libraryResources.filter(r => r.type === 'song'), {
+            keys: ['title', 'slides.content'],
+            threshold: 0.4,
+            ignoreLocation: true,
+            includeScore: true
+        });
+    }, [libraryResources]);
 
     // Resizable Layout State
     const [topPanelHeight, setTopPanelHeight] = useState(65);
     const containerRef = useRef<HTMLDivElement>(null);
     const isDraggingRef = useRef(false);
+    const isNavigatingRef = useRef(false); // Prevents race condition with version sync
+
+    // Auto Update State
+    const [updateStatus, setUpdateStatus] = useState<{ type: 'idle' | 'available' | 'downloading' | 'ready' | 'error', version?: string, error?: string }>({ type: 'idle' });
+
+    useEffect(() => {
+        if ((window as any).electronAPI?.onUpdateAvailable) {
+            (window as any).electronAPI.onUpdateAvailable((info: any) => {
+                console.log("Update Available:", info);
+                setUpdateStatus({ type: 'available', version: info.version });
+            });
+            (window as any).electronAPI.onUpdateDownloaded((info: any) => {
+                console.log("Update Ready:", info);
+                setUpdateStatus({ type: 'ready', version: info.version });
+            });
+            (window as any).electronAPI.onUpdateError((err: any) => {
+                console.error(err);
+                if (updateStatus.type !== 'idle') setUpdateStatus({ type: 'error', error: String(err) });
+            });
+        }
+    }, []);
 
     const handleMouseDown = useCallback((e: React.MouseEvent) => {
         e.preventDefault(); // Prevent text selection
@@ -182,10 +246,6 @@ export default function DashboardPage() {
         verseCountRef.current = verseCount;
     }, [transcript, detectedQueue, autoMode, activeItem, selectedVersion, verseCount]);
 
-    const broadcast = useBroadcastChannel('church-projector', (msg: any) => {
-        // Handle incoming messages if needed
-    });
-
     // Broadcast Theme Changes
     useEffect(() => {
         broadcast({ type: 'APPLY_THEME', payload: currentTheme });
@@ -257,6 +317,13 @@ export default function DashboardPage() {
         const current = activeItem;
         if (!current) return;
 
+        // CRITICAL: Skip if navigation is in progress to prevent race condition
+        // where this effect overwrites the navigated verse with the old verse text
+        if (isNavigatingRef.current) {
+            console.log('[SYNC] Skipped: Navigation in progress');
+            return;
+        }
+
         // Skip if already in the correct version and count (prevents loops)
         const currentCount = (current.additionalVerses?.length || 0) + 1;
         if (current.version === selectedVersion && currentCount === verseCount) {
@@ -323,6 +390,27 @@ export default function DashboardPage() {
     }, [selectedVersion, verseCount, activeItem?.id, fetchMultipleVerses, broadcast]);
 
     const goLive = useCallback(async (item: DetectedItem) => {
+        // Handle Songs with Navigation Controls
+        if (item.version === 'SONG' && item.songData) {
+            const slideIndex = item.songData.slides.findIndex((s: any) => s.content === item.text);
+            setLivePresentation({
+                item: item.songData,
+                slideIndex: slideIndex >= 0 ? slideIndex : 0
+            });
+
+            setActiveItem(item);
+            broadcast({
+                type: 'SHOW_VERSE',
+                payload: {
+                    reference: item.reference,
+                    text: item.text,
+                    version: 'SONG',
+                    verses: []
+                }
+            });
+            return;
+        }
+
         const currentVerseCount = verseCountRef.current;
         const currentVersion = selectedVersionRef.current;
 
@@ -373,8 +461,8 @@ export default function DashboardPage() {
         broadcast({ type: 'CLEAR' });
     }, [broadcast]);
 
-    // Helper to add detected scripture to queue
-    const addToQueue = useCallback((scripture: {
+    // Helper to add detected scripture/song to queue
+    const addToQueue = useCallback((data: {
         book: string;
         chapter: number;
         verse: number;
@@ -383,87 +471,100 @@ export default function DashboardPage() {
         reference: string;
         confidence?: number;
         matchType?: 'exact' | 'partial' | 'paraphrase';
-    }, source: 'regex' | 'ai') => {
+        version?: string;
+        songData?: any;
+    }, source: 'regex' | 'ai' | 'song') => {
         const isDuplicate = detectedQueueRef.current.some(q =>
-            q.reference === scripture.reference &&
+            q.reference === data.reference &&
             (new Date().getTime() - q.timestamp.getTime() < 5000)
         );
 
         if (!isDuplicate) {
             const newItem: DetectedItem = {
                 id: Date.now().toString() + Math.random(),
-                reference: scripture.reference,
-                text: scripture.text,
-                version: selectedVersionRef.current,
-                book: scripture.book,
-                chapter: scripture.chapter,
-                verseNum: scripture.verse,
-                verseEnd: scripture.verseEnd,
+                reference: data.reference,
+                text: data.text,
+                version: data.version || selectedVersionRef.current,
+                book: data.book,
+                chapter: data.chapter,
+                verseNum: data.verse,
+                verseEnd: data.verseEnd,
                 timestamp: new Date(),
-                confidence: scripture.confidence,
-                matchType: scripture.matchType,
+                confidence: data.confidence,
+                matchType: data.matchType,
+                songData: data.songData
             };
 
-            console.log(`[${source.toUpperCase()}]Detected: `, scripture.reference, scripture.confidence ? `(${scripture.confidence} %)` : '');
+            console.log(`[${source.toUpperCase()}] Detected: `, data.reference, data.confidence ? `(${data.confidence} %)` : '');
             setDetectedQueue(prev => [newItem, ...prev].slice(0, 50));
 
-            if (autoModeRef.current) {
+            // Auto-push logic: Only Bible verses go live automatically
+            const isSong = newItem.version === 'SONG';
+            if (autoModeRef.current && !isSong) {
                 goLive(newItem);
             }
         }
     }, [goLive]);
 
+    // Navigation lock is now declared at top of component
+
     // Navigate to next/previous verse (accounts for multi-verse display)
     const navigateVerse = useCallback(async (direction: 'next' | 'prev' | 'jump', targetVerse?: number, overrideCount?: number) => {
+        if (isNavigatingRef.current) return;
+
         const current = activeItemRef.current;
-        if (!current) {
-            console.log('[NAV] No active item to navigate from');
-            return;
-        }
+        if (!current) return;
 
-        const currentVerseCount = overrideCount || verseCountRef.current;
+        isNavigatingRef.current = true;
+        setAiStatus('loading'); // Show loading indicator
 
-        // For 'next': jump to verse after the last displayed verse
-        // For 'prev': go back by verseCount from the first displayed verse
-        // For 'jump': go to specific targetVerse
-        let newVerse: number;
+        try {
+            const currentVerseCount = overrideCount || verseCountRef.current;
+            let newVerse: number;
 
-        if (direction === 'next') {
-            // If we're showing verses 5-7 (verseCount=3), next should start at 8
-            const lastDisplayedVerse = current.additionalVerses?.length
-                ? current.additionalVerses[current.additionalVerses.length - 1].verseNum
-                : current.verseNum;
-            newVerse = lastDisplayedVerse + 1;
-        } else if (direction === 'prev') {
-            // If we're showing verses 5-7 (verseCount=3), prev should start at 2 (5-3=2)
-            newVerse = current.verseNum - currentVerseCount;
-        } else {
-            // Jump
-            newVerse = targetVerse || current.verseNum;
-        }
+            if (direction === 'next') {
+                const lastDisplayedVerse = current.additionalVerses?.length
+                    ? current.additionalVerses[current.additionalVerses.length - 1].verseNum
+                    : current.verseNum;
+                newVerse = lastDisplayedVerse + 1;
+            } else if (direction === 'prev') {
+                newVerse = current.verseNum - currentVerseCount;
+            } else {
+                newVerse = targetVerse || current.verseNum;
+            }
 
-        if (newVerse < 1) newVerse = 1;
+            if (newVerse < 1) newVerse = 1;
 
-        const currentVersion = selectedVersionRef.current;
-        const verseText = await lookupVerseAsync(current.book, current.chapter, newVerse, currentVersion);
+            const currentVersion = selectedVersionRef.current;
+            const verseText = await lookupVerseAsync(current.book, current.chapter, newVerse, currentVersion);
 
-        if (verseText) {
-            const newItem: DetectedItem = {
-                id: Date.now().toString() + Math.random(),
-                reference: `${current.book} ${current.chapter}:${newVerse} `,
-                text: verseText,
-                version: currentVersion,
-                book: current.book,
-                chapter: current.chapter,
-                verseNum: newVerse,
-                timestamp: new Date()
-            };
-            console.log(`[NAV] ${direction === 'next' ? 'Next' : 'Previous'} verse: `, newItem.reference, `(verseCount: ${currentVerseCount})`);
-            setDetectedQueue(prev => [newItem, ...prev].slice(0, 50));
-            goLive(newItem);
-        } else if (direction === 'next') {
-            // End of chapter reached
-            console.log('[NAV] End of chapter reached');
+            if (verseText) {
+                // Sanity Check: If text is identical to previous, and it's not a common repetition, warning
+                if (verseText === current.text && verseText.length > 20) {
+                    console.warn("Duplicate text detected for next verse. API might be returning same verse.");
+                }
+
+                const newItem: DetectedItem = {
+                    id: Date.now().toString() + Math.random(),
+                    reference: `${current.book} ${current.chapter}:${newVerse}`,
+                    text: verseText,
+                    version: currentVersion,
+                    book: current.book,
+                    chapter: current.chapter,
+                    verseNum: newVerse,
+                    timestamp: new Date()
+                };
+                console.log(`[NAV] ${direction === 'next' ? 'Next' : 'Previous'} verse: `, newItem.reference);
+                setDetectedQueue(prev => [newItem, ...prev].slice(0, 50));
+                goLive(newItem);
+            } else if (direction === 'next') {
+                console.log('[NAV] End of chapter or lookup failed');
+            }
+        } catch (e) {
+            console.error("Navigation Error:", e);
+        } finally {
+            isNavigatingRef.current = false;
+            setAiStatus('idle');
         }
     }, [goLive]);
 
@@ -497,6 +598,36 @@ export default function DashboardPage() {
             goLive(newItem);
         }
     }, [goLive]);
+
+    // MIDI Control Handler
+    const handleMidiAction = useCallback((action: MidiAction) => {
+        switch (action) {
+            case 'next':
+                navigateVerse('next');
+                break;
+            case 'prev':
+                navigateVerse('prev');
+                break;
+            case 'clear':
+                // Clear active item (keep background)
+                setActiveItem(null);
+                broadcast({ type: 'CLEAR' });
+                break;
+            case 'black':
+                // Basic blackout implementation
+                setActiveItem(null);
+                broadcast({ type: 'CLEAR' });
+                // TODO: Add true blackout overlay
+                break;
+            case 'stage_toggle':
+                setIsListening(prev => !prev);
+                break;
+            default:
+                break;
+        }
+    }, [navigateVerse, broadcast]);
+
+    const midi = useMIDI(handleMidiAction);
 
     // Smart AI-based scripture detection (PersonaPlex-style)
     const { addText: addToSmartDetection, reset: resetSmartDetection, updateSermonContext } = useSmartDetection(
@@ -551,7 +682,7 @@ export default function DashboardPage() {
                     id: Date.now().toString() + Math.random(),
                     reference: topScripture.reference,
                     text: topScripture.text,
-                    version: selectedVersionRef.current,
+                    version: topScripture.version || selectedVersionRef.current,
                     book: topScripture.book,
                     chapter: topScripture.chapter,
                     verseNum: topScripture.verse,
@@ -559,14 +690,16 @@ export default function DashboardPage() {
                     timestamp: new Date(),
                     confidence: topScripture.confidence,
                     matchType: topScripture.matchType,
+                    songData: topScripture.songData,
                 };
 
                 // Add to queue
                 setDetectedQueue(prev => [newItem, ...prev].slice(0, 50));
                 console.log('[AI] Detected:', topScripture.reference, `(${topScripture.confidence} %) - Signal: ${signal} `);
 
-                // Auto-push to live if SWITCH signal or auto mode on
-                if (signal === 'SWITCH' || autoModeRef.current) {
+                // Auto-push to live if SWITCH signal or auto mode on (SCRIPTURES ONLY)
+                const isSong = newItem.version === 'SONG';
+                if ((signal === 'SWITCH' || autoModeRef.current) && !isSong) {
                     console.log('[AUTO-LIVE] Pushing to projector:', topScripture.reference);
                     goLive(newItem);
                 }
@@ -610,7 +743,52 @@ export default function DashboardPage() {
             }, 'regex');
         }
 
-        // 2. Smart AI detection (debounced, catches natural language + paraphrases)
+        // 2. Song Detection (Fuzzy Match) - Requires Context (10+ words)
+        // Combine history with new text to get context
+        const fullHistory = transcriptRef.current + " " + text;
+        const recentWords = fullHistory.trim().split(/\s+/).slice(-20); // Look at last 20 words
+        const searchPhrase = recentWords.join(" ");
+
+        if (recentWords.length >= 10 && fuseRef.current) {
+            const songMatches = fuseRef.current.search(searchPhrase);
+            if (songMatches.length > 0) {
+                const best = songMatches[0];
+                if (best.score && best.score < 0.4) { // Lower is better
+                    const song = best.item;
+
+                    // PREVENT DUPLICATES: Check if already active or at top of queue
+                    // Use refs because this callback might have stale state
+                    const isAlreadyActive = activeItemRef.current?.reference === song.title;
+                    const isLastDetected = detectedQueueRef.current[0]?.reference === song.title;
+
+                    if (isAlreadyActive || isLastDetected) {
+                        return;
+                    }
+
+                    // Find matching slide using the search phrase
+                    const matchingSlide = song.slides.find((s: any) =>
+                        s.content.toLowerCase().includes(searchPhrase.toLowerCase()) ||
+                        searchPhrase.toLowerCase().includes(s.content.toLowerCase().substring(0, 20)) // Partial match
+                    ) || song.slides[0];
+
+                    console.log('[AI] Detected Song:', song.title, 'Phrase:', searchPhrase);
+
+                    addToQueue({
+                        book: 'Song',
+                        chapter: 0,
+                        verse: 0,
+                        text: matchingSlide.content,
+                        reference: song.title,
+                        confidence: Math.round((1 - (best.score || 0)) * 100),
+                        matchType: 'partial',
+                        version: 'SONG', // Marker for Songs
+                        songData: song // Pass full data
+                    }, 'song');
+                }
+            }
+        }
+
+        // 3. Smart AI detection (debounced, catches natural language + paraphrases)
         setAiStatus('processing');
         addToSmartDetection(text);
 
@@ -625,42 +803,7 @@ export default function DashboardPage() {
         }
     }, [isListening, resetSmartDetection]);
 
-    // MIDI Controller Support (Native WebMIDI)
-    useEffect(() => {
-        if (!navigator.requestMIDIAccess) return;
 
-        navigator.requestMIDIAccess().then((access) => {
-            console.log('[MIDI] Access granted');
-
-            const handleMidiMessage = (e: any) => {
-                const [status, note, velocity] = e.data;
-                // Simple mapping: Note On (144)
-                if ((status & 0xF0) === 144 && velocity > 0) {
-                    console.log(`[MIDI] Note: ${note} `);
-                    // Map generic keys (Presenter remotes often map to specific keys, but MIDI is notes)
-                    // Example mappings:
-                    // Note 60 (Middle C) -> Next
-                    // Note 59 -> Prev
-                    // Note 62 -> Clear/Blackout
-                    if (note === 60) navigateVerse('next');
-                    if (note === 59) navigateVerse('prev');
-                    if (note === 62) clearProjector();
-                    if (note === 64) setIsListening(prev => !prev);
-                }
-            };
-
-            Array.from(access.inputs.values()).forEach((input: any) => {
-                input.onmidimessage = handleMidiMessage;
-            });
-
-            access.onstatechange = (e: any) => {
-                console.log('[MIDI] State change:', e.port.name, e.port.state);
-                if (e.port.type === 'input' && e.port.state === 'connected') {
-                    e.port.onmidimessage = handleMidiMessage;
-                }
-            };
-        });
-    }, [navigateVerse, clearProjector]);
 
     // UI HELPER: Handle Manual Lookup (Debug / Override)
     const handleManualLookup = async (e: React.FormEvent) => {
@@ -723,13 +866,31 @@ export default function DashboardPage() {
         }
     };
 
+
+
     return (
         <main className="min-h-screen bg-zinc-950 text-zinc-100 font-sans selection:bg-indigo-500/30">
             {/* TOP BAR */}
             <header className="h-12 border-b border-white/5 bg-black/40 backdrop-blur-md flex items-center justify-between px-4 fixed top-0 w-full z-50">
-                <div className="flex items-center gap-4">
-                    <div className="w-8 h-8 rounded bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center font-bold text-white shadow-lg shadow-indigo-500/20">CR</div>
-                    <span className="font-medium tracking-tight text-sm text-zinc-400">CREENLY</span>
+                <div className="flex items-center gap-3">
+                    <div className="relative group">
+                        <img
+                            src="/logo.png"
+                            alt="Creenly Logo"
+                            className="w-10 h-10 object-contain transition-transform group-hover:scale-110 duration-300"
+                        />
+                        <div className="absolute inset-0 bg-indigo-500/20 blur-xl rounded-full -z-10 opacity-0 group-hover:opacity-100 transition-opacity" />
+                    </div>
+                    <span className="text-xl font-black tracking-tighter text-white">CREENLY</span>
+                    <div className="w-px h-6 bg-white/10 mx-2" />
+                    {/* License Button */}
+                    <button
+                        onClick={() => setIsLicenseModalOpen(true)}
+                        className="flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-bold transition-all bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 hover:bg-indigo-500/20 shadow-lg shadow-indigo-500/5"
+                    >
+                        <Key size={12} strokeWidth={3} />
+                        License
+                    </button>
                 </div>
                 <div className="flex items-center gap-3">
                     {/* Signal Indicator */}
@@ -741,23 +902,34 @@ export default function DashboardPage() {
                         {lastSignal}
                     </div>
                     {/* Status */}
-                    <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium transition-all ${aiStatus === 'processing' ? 'bg-purple-500/10 text-purple-400 border border-purple-500/20' : 'bg-zinc-900 text-zinc-600'} `}>
-                        <div className={`w-2 h-2 rounded-full ${aiStatus === 'processing' ? 'bg-purple-500 animate-pulse' : 'bg-zinc-700'} `}></div>
+                    <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium transition-all ${aiStatus === 'processing' ? 'bg-green-500/10 text-green-400 border border-green-500/20' : 'bg-zinc-900 text-zinc-600'} `}>
+                        <div className={`w-2 h-2 rounded-full ${aiStatus === 'processing' ? 'bg-green-500 animate-pulse' : 'bg-zinc-700'} `}></div>
                         {aiStatus === 'processing' ? 'DETECTING' : 'READY'}
                     </div>
                     {/* Mic Status */}
-                    <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium transition-all ${isListening ? 'bg-red-500/10 text-red-500 border border-red-500/20 animate-pulse' : 'bg-zinc-900 text-zinc-500'} `}>
-                        <div className={`w-2 h-2 rounded-full ${isListening ? 'bg-red-500' : 'bg-zinc-600'} `}></div>
+                    <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium transition-all ${isListening ? 'bg-green-500/10 text-green-400 border border-green-500/20 animate-pulse' : 'bg-zinc-900 text-zinc-500'} `}>
+                        <div className={`w-2 h-2 rounded-full ${isListening ? 'bg-green-500' : 'bg-zinc-600'} `}></div>
                         {isListening ? 'LISTENING ON' : 'MIC OFF'}
                     </div>
-                    {/* License Button */}
+                    {/* MIDI Button */}
                     <button
-                        onClick={() => setIsLicenseModalOpen(true)}
-                        className="flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium transition-all bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 hover:bg-indigo-500/20"
+                        onClick={() => setIsMidiSettingsOpen(true)}
+                        className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium transition-all ${midi.isEnabled ? 'bg-purple-600 text-white' : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'}`}
+                        title="MIDI Settings"
                     >
-                        <Key size={12} />
-                        License
+                        <Music size={12} />
+                        MIDI
                     </button>
+                    {/* Stage Display Button */}
+                    <button
+                        onClick={() => window.open('/stage', 'stageDisplay', 'width=1280,height=720')}
+                        className="flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium transition-all bg-purple-500/10 text-purple-400 border border-purple-500/20 hover:bg-purple-500/20"
+                        title="Open Stage Display (Confidence Monitor)"
+                    >
+                        <Tv2 size={12} />
+                        Stage
+                    </button>
+
                 </div>
             </header>
 
@@ -813,7 +985,6 @@ export default function DashboardPage() {
                             onClick={() => {
                                 setVerseCount(count as any);
                                 verseCountRef.current = count as any;
-                                setDetectedQueue([]);
                             }}
                             className={`px-3 py-1 rounded text-[10px] font-bold transition-all ${verseCount === count
                                 ? 'bg-zinc-800 text-white shadow-sm'
@@ -1115,20 +1286,94 @@ export default function DashboardPage() {
                     </section>
 
                     {/* RIGHT: LIVE PREVIEW */}
-                    <section className="col-span-3 flex flex-col gap-4 min-h-0 overflow-hidden">
-                        <div className="bg-zinc-900 border border-white/5 rounded-2xl flex-1 flex flex-col overflow-hidden relative">
-                            <header className="p-4 border-b border-white/5 flex justify-between items-center bg-zinc-950">
+                    <section className="col-span-3 flex flex-col gap-4 min-h-0">
+                        <div className="bg-zinc-900 border border-white/5 rounded-2xl flex-1 flex flex-col relative">
+                            <header className="p-4 border-b border-white/5 flex justify-between items-center bg-zinc-950 rounded-t-2xl">
                                 <h3 className="text-xs font-bold text-green-500 uppercase tracking-wider flex items-center gap-2">
                                     <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" /> Live Output
                                 </h3>
                                 <div className="flex items-center gap-2">
                                     <button
-                                        onClick={() => setIsHardwareModalOpen(true)}
-                                        className="p-2 hover:bg-white/10 rounded-full text-zinc-400 hover:text-white transition-colors"
-                                        title="Hardware Integration"
+                                        onClick={() => setShowTimerSettings(!showTimerSettings)}
+                                        className={`p-2 hover:bg-white/10 rounded-full transition-colors relative ${showTimerSettings ? 'text-white bg-white/10' : 'text-zinc-400'}`}
+                                        title="Service Timer Controls"
                                     >
-                                        <Monitor size={20} />
+                                        <Clock size={20} />
+                                        {showTimerSettings && (
+                                            <div className="absolute top-full right-0 mt-2 bg-zinc-900 border border-white/10 rounded-xl shadow-2xl p-4 w-64 z-[60]" onClick={e => e.stopPropagation()}>
+                                                <h4 className="text-xs font-bold text-zinc-500 uppercase mb-3">Timer Settings</h4>
+
+                                                {/* Mode & Time */}
+                                                <div className="space-y-3 mb-4">
+                                                    <div>
+                                                        <label className="text-xs text-zinc-400 block mb-1">Duration (Minutes)</label>
+                                                        <div className="flex gap-2">
+                                                            <input
+                                                                type="number"
+                                                                value={timerDuration}
+                                                                onChange={e => setTimerDuration(parseInt(e.target.value) || 0)}
+                                                                className="flex-1 bg-black/50 border border-white/10 rounded px-2 py-1 text-sm"
+                                                            />
+                                                            <button
+                                                                onClick={() => broadcast({ type: 'TIMER_ACTION', payload: { action: 'set', mode: 'countdown', value: timerDuration * 60 } })}
+                                                                className="bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold px-3 rounded"
+                                                            >
+                                                                SET
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                    <div className="flex gap-2 text-xs">
+                                                        <button
+                                                            onClick={() => broadcast({ type: 'TIMER_ACTION', payload: { action: 'set', mode: 'countup', value: 0 } })}
+                                                            className="flex-1 py-1.5 bg-zinc-800 hover:bg-zinc-700 rounded border border-white/5"
+                                                        >
+                                                            Mode: Count Up
+                                                        </button>
+                                                    </div>
+                                                </div>
+
+                                                {/* Controls */}
+                                                <div className="grid grid-cols-3 gap-2 border-t border-white/10 pt-3">
+                                                    <button
+                                                        onClick={() => broadcast({ type: 'TIMER_ACTION', payload: { action: 'start' } })}
+                                                        className={`flex flex-col items-center justify-center gap-1 p-2 rounded-lg transition-all ${timerState.isRunning
+                                                            ? 'bg-green-500/20 text-green-400 border border-green-500/30'
+                                                            : 'bg-zinc-800 text-zinc-500 hover:text-zinc-300 hover:bg-zinc-700 border border-white/5'
+                                                            }`}
+                                                    >
+                                                        <Play size={16} fill={timerState.isRunning ? "currentColor" : "none"} />
+                                                        <span className="text-[10px] font-bold">START</span>
+                                                    </button>
+                                                    <button
+                                                        onClick={() => broadcast({ type: 'TIMER_ACTION', payload: { action: 'pause' } })}
+                                                        className={`flex flex-col items-center justify-center gap-1 p-2 rounded-lg transition-all ${timerState.isPaused
+                                                            ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
+                                                            : 'bg-zinc-800 text-zinc-500 hover:text-zinc-300 hover:bg-zinc-700 border border-white/5'
+                                                            }`}
+                                                    >
+                                                        <Pause size={16} fill={timerState.isPaused ? "currentColor" : "none"} />
+                                                        <span className="text-[10px] font-bold">PAUSE</span>
+                                                    </button>
+                                                    <button
+                                                        onClick={() => {
+                                                            setResetFlash(true);
+                                                            broadcast({ type: 'TIMER_ACTION', payload: { action: 'reset' } });
+                                                            setTimeout(() => setResetFlash(false), 300);
+                                                        }}
+                                                        className={`flex flex-col items-center justify-center gap-1 p-2 rounded-lg transition-all ${resetFlash
+                                                            ? 'bg-red-500/20 text-red-500 border border-red-500/50 scale-95'
+                                                            : 'bg-zinc-800 text-zinc-500 hover:text-red-400 hover:bg-zinc-700 border border-white/5'
+                                                            }`}
+                                                    >
+                                                        <Square size={16} />
+                                                        <span className="text-[10px] font-bold">RESET</span>
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        )}
                                     </button>
+
+
 
                                     {/* Electron Multi-Window Trigger */}
                                     <button
@@ -1189,7 +1434,7 @@ export default function DashboardPage() {
 
                             {/* PREVIEW CONTAINER */}
                             <div
-                                className="flex-1 flex items-center justify-center p-8 relative group overflow-y-auto"
+                                className="flex-1 flex items-center justify-center p-8 relative group overflow-y-auto rounded-b-2xl"
                                 style={{
                                     scrollbarWidth: 'thin',
                                     scrollbarColor: '#71717a #000000',
@@ -1313,8 +1558,12 @@ export default function DashboardPage() {
                 )}
 
                 {/* Resource Library (Bottom) */}
-                {/* Resource Library (Bottom) */}
-                <div className={`flex-1 min-h-0 rounded-2xl overflow-hidden border border-white / 10 shadow-2xl transition-all duration-300 ease -in -out relative ${isLibraryOpen ? '' : 'bg-zinc-900 border-dashed border-white/20'} `}>
+                <div
+                    className={`flex-1 min-h-0 rounded-2xl overflow-hidden border border-white/10 shadow-3xl transition-all duration-300 ease-in-out relative z-[60] bg-zinc-900 ${isLibraryOpen ? 'flex-[4]' : 'bg-zinc-900/50 border-dashed border-white/20 h-14'} `}
+                    style={{
+                        boxShadow: isLibraryOpen ? '0 -20px 50px -12px rgba(0, 0, 0, 0.5)' : 'none'
+                    }}
+                >
                     {/* Toggle Button */}
                     <button
                         onClick={() => setIsLibraryOpen(!isLibraryOpen)}
@@ -1338,6 +1587,7 @@ export default function DashboardPage() {
 
                     <div className={`h-full ${!isLibraryOpen ? 'opacity-0 pointer-events-none' : 'opacity-100'} transition-opacity duration-200`}>
                         <ResourceLibraryPanel
+                            onResourcesChanged={setLibraryResources}
                             onAddToSchedule={handleAddToSchedule}
                             onGoLive={(item: ScheduleItem) => {
                                 const slide = item.slides[0];
@@ -1398,17 +1648,29 @@ export default function DashboardPage() {
                                     });
                                 }
 
-                                broadcast({
-                                    type: 'SHOW_CONTENT',
-                                    payload: {
-                                        type: item.type === 'media' ? 'media' : 'song',
-                                        title: item.title,
-                                        body: slide.content,
-                                        meta: item.type === 'media' ? 'Image' : item.meta?.author,
-                                        background: typeof item.meta?.background === 'object' ? (item.meta?.background as any)?.value : item.meta?.background,
-                                        options: item.type === 'media' ? { imageMode: item.meta?.imageMode } : undefined
-                                    }
-                                });
+                                if (item.type === 'scripture') {
+                                    broadcast({
+                                        type: 'SHOW_VERSE',
+                                        payload: {
+                                            reference: item.title,
+                                            text: slide.content,
+                                            version: (item.meta?.version as string) || 'KJV',
+                                            verses: [{ verseNum: 1, text: slide.content }]
+                                        }
+                                    });
+                                } else {
+                                    broadcast({
+                                        type: 'SHOW_CONTENT',
+                                        payload: {
+                                            type: item.type === 'media' ? 'media' : 'song',
+                                            title: item.title,
+                                            body: slide.content,
+                                            meta: item.type === 'media' ? 'Image' : item.meta?.author,
+                                            background: typeof item.meta?.background === 'object' ? (item.meta?.background as any)?.value : item.meta?.background,
+                                            options: item.type === 'media' ? { imageMode: item.meta?.imageMode } : undefined
+                                        }
+                                    });
+                                }
                             }}
                             onApplyTheme={setCurrentTheme}
                             activeThemeId={currentTheme?.id}
@@ -1479,16 +1741,61 @@ export default function DashboardPage() {
                     console.log("Added to schedule:", item);
                 }}
             />
-            {/* Hardware Modal */}
-            <HardwareModal
-                isOpen={isHardwareModalOpen}
-                onClose={() => setIsHardwareModalOpen(false)}
-            />
+
             {/* License Modal */}
             <LicenseModal
                 isOpen={isLicenseModalOpen}
                 onClose={() => setIsLicenseModalOpen(false)}
             />
+            {/* MIDI Settings Modal */}
+            <MIDISettingsModal
+                isOpen={isMidiSettingsOpen}
+                onClose={() => setIsMidiSettingsOpen(false)}
+                midi={midi}
+            />
+            {/* Update Banner */}
+            {updateStatus.type !== 'idle' && updateStatus.type !== 'error' && (
+                <div className="fixed bottom-4 right-4 bg-indigo-600 text-white p-4 rounded-xl shadow-2xl z-50 animate-in slide-in-from-bottom-5 border border-white/10 max-w-sm">
+                    <div className="flex items-start gap-4">
+                        <div className="p-2 bg-white/20 rounded-full">
+                            <Download size={24} className="animate-pulse" />
+                        </div>
+                        <div>
+                            <h4 className="font-bold text-sm">New Update Available</h4>
+                            <p className="text-xs text-indigo-200 mt-1">
+                                {updateStatus.type === 'available' ? `Version ${updateStatus.version} is available.` :
+                                    updateStatus.type === 'downloading' ? 'Downloading update...' : 'Update ready to install!'}
+                            </p>
+
+                            {updateStatus.type === 'available' && (
+                                <button
+                                    onClick={() => {
+                                        setUpdateStatus(prev => ({ ...prev, type: 'downloading' }));
+                                        (window as any).electronAPI.downloadUpdate();
+                                    }}
+                                    className="mt-3 w-full py-1.5 bg-white text-indigo-600 font-bold rounded text-xs hover:bg-indigo-50 transition-colors"
+                                >
+                                    Update Now
+                                </button>
+                            )}
+                            {updateStatus.type === 'ready' && (
+                                <button
+                                    onClick={() => (window as any).electronAPI.installUpdate()}
+                                    className="mt-3 w-full py-1.5 bg-green-500 text-white font-bold rounded text-xs hover:bg-green-600 transition-colors"
+                                >
+                                    Restart & Install
+                                </button>
+                            )}
+                        </div>
+                        <button
+                            onClick={() => setUpdateStatus({ type: 'idle' })}
+                            className="text-white/50 hover:text-white"
+                        >
+                            <X size={16} />
+                        </button>
+                    </div>
+                </div>
+            )}
         </main >
     );
 }

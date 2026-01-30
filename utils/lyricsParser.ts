@@ -381,12 +381,71 @@ async function extractSlidesFromPptx(file: File): Promise<LyricSlide[]> {
 }
 
 /**
+ * Renders PDF pages to Image Slides (DataURL)
+ */
+async function renderPdfToSlides(file: File): Promise<LyricSlide[]> {
+    try {
+        const arrayBuffer = await file.arrayBuffer();
+
+        // Load PDF.js (Dynamic)
+        // Note: In Next.js/Webpack, allow dynamic import
+        const pdfjsModule = await import('pdfjs-dist');
+        const pdfjs = (pdfjsModule as any).default || pdfjsModule;
+
+        // Define Worker Source if needed (CDN Fallback)
+        if (pdfjs.GlobalWorkerOptions && !pdfjs.GlobalWorkerOptions.workerSrc) {
+            const version = pdfjs.version || '5.4.530';
+            pdfjs.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${version}/build/pdf.worker.min.mjs`;
+        }
+
+        const pdf = await pdfjs.getDocument(arrayBuffer).promise;
+        const slides: LyricSlide[] = [];
+
+        for (let i = 1; i <= pdf.numPages; i++) {
+            const page = await pdf.getPage(i);
+            const viewport = page.getViewport({ scale: 1.5 }); // Good Quality
+
+            const canvas = document.createElement('canvas');
+            canvas.width = viewport.width;
+            canvas.height = viewport.height;
+            const context = canvas.getContext('2d');
+
+            if (context) {
+                await page.render({
+                    canvasContext: context,
+                    viewport: viewport
+                }).promise;
+
+                slides.push({
+                    id: `slide-${i}-${Date.now()}`,
+                    content: canvas.toDataURL('image/jpeg', 0.85),
+                    label: `Page ${i}`
+                });
+            }
+        }
+
+        return slides;
+    } catch (e) {
+        console.error("PDF Render Error", e);
+        // Fallback to text extraction if rendering fails
+        return [];
+    }
+}
+
+/**
  * Parses any file into slides.
- * For PPTX: Preserves structure.
+ * For PPTX: Preserves structure (Text).
+ * For PDF: Renders to Images.
  * For Others: Extracts text then chunks it.
  */
 export async function parsePresentationFile(file: File): Promise<LyricSlide[]> {
     const ext = file.name.split('.').pop()?.toLowerCase();
+
+    if (ext === 'pdf') {
+        const slides = await renderPdfToSlides(file);
+        if (slides.length > 0) return slides;
+    }
+
     if (ext === 'pptx') {
         return await extractSlidesFromPptx(file);
     }

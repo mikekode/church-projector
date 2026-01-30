@@ -1,6 +1,7 @@
 {
     "name": "church-projector",
     "version": "0.1.0",
+    "repository": "mikekode/church-projector",
     "private": true,
     "scripts": {
         "dev": "next dev",
@@ -18,7 +19,9 @@
         "@google/generative-ai": "^0.24.1",
         "@supabase/supabase-js": "^2.93.2",
         "atem-connection": "^3.8.0",
+        "cheerio": "^1.2.0",
         "clsx": "^2.1.0",
+        "electron-updater": "^6.7.3",
         "fuse.js": "^7.1.0",
         "jszip": "^3.10.1",
         "lucide-react": "^0.309.0",
@@ -58,7 +61,10 @@
             "package.json"
         ],
         "win": {
-            "target": "nsis"
+            "target": "nsis",
+            "publish": [
+                "github"
+            ]
         },
         "extraResources": [
             {

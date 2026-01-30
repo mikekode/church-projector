@@ -1,7 +1,9 @@
 const { app, BrowserWindow, ipcMain, Menu } = require('electron');
+const { autoUpdater } = require('electron-updater');
 const path = require('path');
 const fs = require('fs');
 const { spawn } = require('child_process');
+const cheerio = require('cheerio');
 // Load environment variables for local dev
 require('dotenv').config({ path: path.join(__dirname, '../.env.local') });
 // If dotenv fails (not installed), it throws. We might need to handle that or install it.
@@ -257,12 +259,90 @@ ipcMain.handle('get-verse', async (event, { book, chapter, verse, version }) => 
     };
 });
 
+// Online Lookup (IPC)
+ipcMain.handle('lookup-verse-online', async (event, { book, chapter, verse, version }) => {
+    try {
+        const v = version.toUpperCase();
+
+        // 1. Try public API for public domain (WEB, ASV, YLT, BBE, KJV, DARBY)
+        const publicVersions = ['WEB', 'ASV', 'YLT', 'BBE', 'KJV', 'DARBY'];
+
+        if (publicVersions.includes(v)) {
+            const url = `https://bible-api.com/${encodeURIComponent(book)}+${chapter}:${verse}?translation=${v.toLowerCase()}`;
+            const res = await fetch(url);
+            if (res.ok) {
+                const data = await res.json();
+                const cleanText = data.text ? data.text.replace(/[\n\r]+/g, ' ').trim() : '';
+                return { text: cleanText };
+            }
+        }
+
+        // 2. BibleGateway Fallback (NIV, MSG, AMP, ESV, NKJV, KJV21, GW, etc)
+        console.log(`Scraping BibleGateway for ${v}...`);
+
+        // Version Mapping (Internal -> BibleGateway)
+        const versionMap = {
+            'KJV21': 'KJ21',
+            'NASB': 'NASB',
+            'CSB': 'CSB',
+            'RSV': 'RSV',
+            'AMPC': 'AMPC',
+            'GW': 'GW'
+        };
+        const searchVersion = versionMap[v] || v;
+
+        // Use searchVersion in URL
+        const bgUrl = `https://www.biblegateway.com/passage/?search=${encodeURIComponent(book)}+${chapter}:${verse}&version=${searchVersion}`;
+
+        const res = await fetch(bgUrl, {
+            headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' }
+        });
+
+        if (!res.ok) throw new Error('Gateway Error');
+
+        const html = await res.text();
+        const $ = cheerio.load(html);
+
+        let text = '';
+
+        // Remove verse numbers and footnotes
+        $('sup.versenum, sup.crossreference, sup.footnote').remove();
+
+        // Extract text
+        // BibleGateway usually puts text in .passage-text p
+        // For MSG, it might be different, but typically still in .passage-text
+        $('.passage-text p').each((i, el) => {
+            text += $(el).text() + ' ';
+        });
+
+        // Fallback selector
+        if (!text.trim()) {
+            text = $('.passage-content').text();
+        }
+
+        text = text.replace(/\s+/g, ' ').trim();
+
+        // Filter out copyright text if it accidentally grabbed footer
+        // (Usually footer is outside .passage-text)
+
+        if (text) {
+            return { text };
+        }
+
+        return { error: 'Text not found in source' };
+
+    } catch (e) {
+        console.error("Online lookup failed:", e);
+        return { error: e.message };
+    }
+});
+
 
 // Song Search & Lyrics (IPC)
 ipcMain.handle('song-search', async (event, query) => {
     try {
         // iTunes API
-        const url = `https://itunes.apple.com/search?term=${encodeURIComponent(query)}&media=music&entity=song&limit=20`;
+        const url = `https://itunes.apple.com/search?term=${encodeURIComponent(query)}&media=music&entity=song&limit=300`;
         const response = await fetch(url);
         if (!response.ok) throw new Error(`iTunes API Error: ${response.statusText}`);
         const data = await response.json();
@@ -545,7 +625,34 @@ ipcMain.handle('ndi-start', async () => {
     return { success: true, warning: 'NDI requires native compilation' };
 });
 
-app.on('ready', createWindow);
+// Auto-Update Logic
+autoUpdater.autoDownload = false;
+autoUpdater.autoInstallOnAppQuit = true;
+
+ipcMain.handle('check-update', () => autoUpdater.checkForUpdates());
+ipcMain.handle('download-update', () => autoUpdater.downloadUpdate());
+ipcMain.handle('install-update', () => autoUpdater.quitAndInstall(false, true));
+
+autoUpdater.on('update-available', (info) => {
+    if (mainWindow) mainWindow.webContents.send('update-available', info);
+});
+
+autoUpdater.on('update-downloaded', (info) => {
+    if (mainWindow) mainWindow.webContents.send('update-downloaded', info);
+});
+
+autoUpdater.on('error', (err) => {
+    console.error("Updater Error:", err);
+    if (mainWindow) mainWindow.webContents.send('update-error', err.toString());
+});
+
+app.on('ready', () => {
+    createWindow();
+    if (app.isPackaged) {
+        // Check for updates shortly after startup
+        setTimeout(() => autoUpdater.checkForUpdates(), 3000);
+    }
+});
 
 app.on('window-all-closed', () => {
     if (nextServer) nextServer.kill();

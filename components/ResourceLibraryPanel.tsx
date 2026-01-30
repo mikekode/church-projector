@@ -3,9 +3,11 @@ import { saveResource, getResources, deleteResource, ResourceItem, saveCollectio
 import { getBibleBooks, getChapterVerseCount, lookupVerseAsync, SUPPORTED_VERSIONS } from '@/utils/bible';
 import { DEFAULT_THEMES, GOOGLE_FONTS, ProjectorTheme } from '@/utils/themes';
 import { ScheduleItem } from '@/utils/scheduleManager';
-import { extractTextFromFile, parseLyrics, isCcliCopy, parseCcliCopy } from '@/utils/lyricsParser';
+import { extractTextFromFile, parseLyrics, isCcliCopy, parseCcliCopy, parsePresentationFile } from '@/utils/lyricsParser';
 import { Search, Music, Monitor, FileText, Image as ImageIcon, Book, Plus, Play, Trash2, Folder, FolderPlus, X, Video, Check, Eye } from 'lucide-react';
 import PreviewModal from './PreviewModal';
+import SongImportModal from './SongImportModal';
+import { MOTION_BACKGROUNDS } from '@/utils/motionBackgrounds';
 
 const VersePreview = ({ book, chapter, verse, version }: { book: string, chapter: number, verse: number, version: string }) => {
     const [text, setText] = useState<string | null>(null);
@@ -26,6 +28,7 @@ interface ResourceLibraryPanelProps {
     onGoLive: (item: ScheduleItem) => void;
     onApplyTheme: (theme: ProjectorTheme) => void;
     activeThemeId?: string;
+    onResourcesChanged?: (items: ResourceItem[]) => void;
 }
 
 type TabType = 'song' | 'media' | 'presentation' | 'scripture' | 'theme';
@@ -34,9 +37,17 @@ export default function ResourceLibraryPanel({
     onAddToSchedule,
     onGoLive,
     onApplyTheme,
-    activeThemeId
+    activeThemeId,
+    onResourcesChanged
 }: ResourceLibraryPanelProps) {
     const [resources, setResources] = useState<ResourceItem[]>([]);
+    // ...
+
+    // ... (keep intervening code if possible, but replace_file_content needs contiguous block)
+    // I can't replace the interface AND loadData in one block unless they are close.
+    // They are lines 26-40 vs 184. Too far.
+    // I will do 2 chunks.
+
     const [collections, setCollections] = useState<ResourceCollection[]>([]);
     const [customThemes, setCustomThemes] = useState<ProjectorTheme[]>([]);
     const [editingTheme, setEditingTheme] = useState<ProjectorTheme | null>(null);
@@ -48,6 +59,7 @@ export default function ResourceLibraryPanel({
     const [isCreateCollectionOpen, setIsCreateCollectionOpen] = useState(false);
     const [newCollectionName, setNewCollectionName] = useState('');
     const [previewItem, setPreviewItem] = useState<ScheduleItem | null>(null);
+    const [isImportModalOpen, setIsImportModalOpen] = useState(false);
 
     // Online Search State (SongSelect-like)
     const [isOnlineMode, setIsOnlineMode] = useState(false);
@@ -79,9 +91,25 @@ export default function ResourceLibraryPanel({
                 console.log("[Electron] Searching Songs:", searchQuery);
                 data = await (window as any).electronAPI.searchSongs(searchQuery);
             } else {
-                // 2. Web Fallback
-                const res = await fetch(`/api/songs/search?q=${encodeURIComponent(searchQuery)}`);
-                data = await res.json();
+                // 2. Web Fallback (Direct iTunes Call)
+                console.log("[Web] Searching iTunes Direct:", searchQuery);
+                const url = `https://itunes.apple.com/search?term=${encodeURIComponent(searchQuery)}&media=music&entity=song&limit=300`;
+                const res = await fetch(url);
+                if (!res.ok) throw new Error(`iTunes Error ${res.status}`);
+
+                const rawData = await res.json();
+
+                // Map iTunes results to our format
+                data = {
+                    results: rawData.results.map((item: any) => ({
+                        id: String(item.trackId),
+                        title: item.trackName,
+                        artist: item.artistName,
+                        album: item.collectionName,
+                        albumArt: item.artworkUrl100?.replace('100x100', '600x600'),
+                        source: 'itunes'
+                    }))
+                };
             }
 
             if (data.results) {
@@ -89,7 +117,7 @@ export default function ResourceLibraryPanel({
             }
         } catch (e) {
             console.error(e);
-            alert('Failed to search online');
+            alert(`Search Failed. Error: ${(e as any).message}. ElectronAPI: ${!!(window as any).electronAPI}`);
         } finally {
             setIsSearchingOnline(false);
         }
@@ -107,9 +135,29 @@ export default function ResourceLibraryPanel({
                 console.log("[Electron] Fetching Lyrics:", song.title);
                 data = await (window as any).electronAPI.getLyrics(song.title, song.artist);
             } else {
-                // 2. Web Fallback
-                const res = await fetch(`/api/songs/lyrics?title=${encodeURIComponent(song.title)}&artist=${encodeURIComponent(song.artist)}`);
-                data = await res.json();
+                // 2. Web Fallback (Direct Lyrics Call)
+                let lyrics = null;
+                try {
+                    // LrcLib
+                    const res1 = await fetch(`https://lrclib.net/api/get?artist_name=${encodeURIComponent(song.artist)}&track_name=${encodeURIComponent(song.title)}`);
+                    if (res1.ok) {
+                        const d1 = await res1.json();
+                        lyrics = d1.plainLyrics;
+                    }
+                } catch (e) { console.warn("LrcLib failed", e); }
+
+                if (!lyrics) {
+                    try {
+                        // Lyrics.ovh
+                        const res2 = await fetch(`https://api.lyrics.ovh/v1/${encodeURIComponent(song.artist)}/${encodeURIComponent(song.title)}`);
+                        if (res2.ok) {
+                            const d2 = await res2.json();
+                            lyrics = d2.lyrics;
+                        }
+                    } catch (e) { console.warn("Lyrics.ovh failed", e); }
+                }
+
+                data = { lyrics };
             }
 
             let lyricsContent = '';
@@ -180,8 +228,9 @@ export default function ResourceLibraryPanel({
 
     const loadData = async () => {
         const [items, cols] = await Promise.all([getResources(), getCollections()]);
-        setResources(items.sort((a, b) => b.dateAdded - a.dateAdded));
-        setCollections(cols.sort((a, b) => b.createdAt - a.createdAt));
+        items.sort((a, b) => b.dateAdded - a.dateAdded);
+        setResources(items);
+        onResourcesChanged?.(items);
         setCollections(cols.sort((a, b) => b.createdAt - a.createdAt));
         const savedThemes = localStorage.getItem('custom_themes');
         if (savedThemes) setCustomThemes(JSON.parse(savedThemes));
@@ -325,7 +374,7 @@ export default function ResourceLibraryPanel({
 
             // Update metadata if found
             if (meta.author) newMeta.author = meta.author;
-            if (meta.ccliNumber) newMeta.ccliNumber = meta.ccliNumber;
+            if (meta.ccliNumber) newMeta.ccli = meta.ccliNumber;
             // Only update title if the current title is placeholder or generic
             if (meta.title && (newTitle.startsWith('New Song') || newTitle.includes('Unknown'))) {
                 newTitle = meta.title;
@@ -369,9 +418,9 @@ export default function ResourceLibraryPanel({
             >
                 {/* Thumbnail / Preview */}
                 <div className="flex-1 bg-zinc-950/50 relative overflow-hidden">
-                    {resource.meta?.background?.type === 'image' ? (
+                    {typeof resource.meta?.background === 'object' && resource.meta.background.type === 'image' ? (
                         <div className="absolute inset-0 opacity-50 bg-cover bg-center" style={{ backgroundImage: `url(${resource.meta.background.value})` }} />
-                    ) : resource.type === 'media' && resource.slides[0]?.content?.startsWith('data:image') ? (
+                    ) : resource.slides[0]?.content?.startsWith('data:image') ? (
                         <div className="absolute inset-0 bg-cover bg-center" style={{ backgroundImage: `url(${resource.slides[0].content})` }} />
                     ) : (
                         <div className="absolute inset-0 p-3 text-[10px] text-zinc-500 opacity-50 select-none overflow-hidden leading-relaxed break-words">
@@ -490,9 +539,33 @@ export default function ResourceLibraryPanel({
     );
 
 
+    const handleAddNew = () => {
+        if (activeTab === 'song') {
+            setEditingResource({
+                id: String(Date.now()),
+                type: 'song',
+                title: 'New Song',
+                slides: [],
+                activeSlideIndex: 0,
+                category: 'song',
+                dateAdded: Date.now(),
+                meta: { author: '', ccli: '' }
+            });
+            setEditText('');
+        } else {
+            fileInputRef.current?.click();
+        }
+    };
+
+    const handleSongImport = (song: ResourceItem) => {
+        saveResource(song);
+        setResources(prev => [song, ...prev]);
+        setIsImportModalOpen(false);
+    };
+
     const renderAddCard = () => (
         <button
-            onClick={() => fileInputRef.current?.click()}
+            onClick={handleAddNew}
             className="group relative aspect-video bg-zinc-900/50 border-2 border-dashed border-white/10 hover:border-indigo-500/50 rounded-xl flex flex-col items-center justify-center gap-2 hover:bg-zinc-800 transition-all"
         >
             <div className="w-8 h-8 rounded-full bg-zinc-800 flex items-center justify-center group-hover:bg-indigo-500 group-hover:text-white text-zinc-500 transition-colors shadow-lg">
@@ -503,9 +576,33 @@ export default function ResourceLibraryPanel({
     );
 
     const renderMediaContent = () => {
-        const videos = filteredResources.filter(r =>
+        // Map Motion Backgrounds
+        const motionRes = MOTION_BACKGROUNDS.map(bg => ({
+            id: bg.id,
+            title: bg.name,
+            type: 'media' as const,
+            category: 'media' as const,
+            activeSlideIndex: 0,
+            slides: [{ id: bg.id, content: bg.videoUrl, label: 'Video', type: 'video' }],
+            dateAdded: 0,
+            meta: {
+                background: { type: 'image', value: bg.thumbnail },
+                imageMode: 'cover' as const
+            }
+        })) as ResourceItem[];
+
+        // Combine (deduplicate by ID just in case)
+        const combined = [...filteredResources];
+        motionRes.forEach(m => {
+            if (!combined.find(r => r.id === m.id)) {
+                combined.push(m);
+            }
+        });
+
+        const videos = combined.filter(r =>
             r.slides[0]?.content?.startsWith('data:video') ||
             r.title.match(/\.(mp4|webm|mov)$/i) ||
+            r.title.match(/background/i) || // Loose match for motion backgrounds
             (r.type === 'media' && !r.slides[0]?.content?.startsWith('data:image'))
         );
         const videoIds = new Set(videos.map(v => v.id));
@@ -1045,20 +1142,23 @@ export default function ResourceLibraryPanel({
                     ))}
                 </div>
                 <div className="flex items-center gap-2">
-                    <div className="relative">
-                        <Search className="absolute left-2 top-1.5 text-zinc-500" size={12} />
-                        <input
-                            value={searchQuery}
-                            onChange={(e) => setSearchQuery(e.target.value)}
-                            onKeyDown={(e) => {
-                                if (e.key === 'Enter' && isOnlineMode) {
-                                    handleOnlineSearch();
-                                }
-                            }}
-                            placeholder={isOnlineMode ? "Search Song/Artist..." : "Search library..."}
-                            className={`bg-zinc-900 border border-white/10 rounded-lg pl-8 pr-3 py-1 text-xs text-zinc-300 focus:outline-none focus:border-indigo-500 w-48 transition-all ${isOnlineMode ? 'w-64 border-indigo-500 ring-1 ring-indigo-500/20' : ''}`}
-                        />
-                    </div>
+                    {activeTab === 'song' && (
+                        <div className="relative z-50">
+                            <Search className="absolute left-2 top-1.5 text-zinc-500 pointer-events-none" size={12} />
+                            <input
+                                id="header-search-input"
+                                value={searchQuery}
+                                onChange={(e) => setSearchQuery(e.target.value)}
+                                onKeyDown={(e) => {
+                                    if (e.key === 'Enter' && isOnlineMode) {
+                                        handleOnlineSearch();
+                                    }
+                                }}
+                                placeholder={isOnlineMode ? "Search Song/Artist..." : "Search library..."}
+                                className={`bg-zinc-900 border border-white/10 rounded-lg pl-8 pr-3 py-1 text-xs text-zinc-300 focus:outline-none focus:border-indigo-500 w-48 transition-all relative z-10 ${isOnlineMode ? 'w-64 border-indigo-500 ring-1 ring-indigo-500/20' : ''}`}
+                            />
+                        </div>
+                    )}
                     <button
                         onClick={() => {
                             setEditingResource({
@@ -1066,6 +1166,8 @@ export default function ResourceLibraryPanel({
                                 type: 'song',
                                 title: 'New Song',
                                 slides: [],
+                                activeSlideIndex: 0,
+                                category: 'song',
                                 dateAdded: Date.now(),
                                 meta: { author: '', ccli: '' }
                             });
@@ -1170,19 +1272,21 @@ export default function ResourceLibraryPanel({
                     <div className="flex items-center justify-between mb-4">
                         <div className="flex items-center gap-4">
                             <h3 className="text-xs font-bold text-zinc-400">
-                                {activeTab === 'song' && isOnlineMode ? 'Online Search (SongSelect Integration)' :
-                                    activeTab === 'media' ? 'Media Library' :
-                                        activeTab === 'scripture' && !searchQuery ? 'Bible Browser' :
-                                            selectedCollectionId
-                                                ? collections.find(c => c.id === selectedCollectionId)?.name
-                                                : `All ${activeTab.charAt(0).toUpperCase() + activeTab.slice(1)}s`
+                                {activeTab === 'song' && isOnlineMode ? 'Online Search' :
+                                    activeTab === 'song' ? 'Song Library' :
+                                        activeTab === 'media' ? 'Media Library' :
+                                            activeTab === 'scripture' && !searchQuery ? 'Bible Browser' :
+                                                selectedCollectionId
+                                                    ? collections.find(c => c.id === selectedCollectionId)?.name
+                                                    : `All ${activeTab.charAt(0).toUpperCase() + activeTab.slice(1)}s`
                                 }
                                 {!isOnlineMode && activeTab !== 'scripture' && <span className="ml-2 font-normal text-zinc-600">({filteredResources.length})</span>}
                             </h3>
 
                             {/* Toggle for Songs Tab */}
+
                             {activeTab === 'song' && (
-                                <div className="flex bg-zinc-900 rounded-lg p-0.5 border border-white/5">
+                                <div className="flex bg-zinc-900 rounded-lg p-0.5 border border-white/5 ml-auto">
                                     <button
                                         onClick={() => setIsOnlineMode(false)}
                                         className={`px-3 py-1 rounded-md text-[10px] font-bold transition-all ${!isOnlineMode ? 'bg-zinc-700 text-white shadow' : 'text-zinc-500 hover:text-white'}`}
@@ -1198,6 +1302,7 @@ export default function ResourceLibraryPanel({
                                 </div>
                             )}
                         </div>
+
 
                         {isOnlineMode && (
                             <div className="text-xs text-zinc-500 italic">
@@ -1233,7 +1338,7 @@ export default function ResourceLibraryPanel({
                                             <h4 className="text-xs font-bold text-white truncate" title={song.title}>{song.title}</h4>
                                             <p className="text-[10px] text-zinc-400 truncate">{song.artist}</p>
                                             <button
-                                                id={`btn -import -${song.id} `}
+                                                id={`btn-import-${song.id}`}
                                                 onClick={() => handleImportSong(song)}
                                                 className="mt-2 w-full py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white text-[10px] font-bold rounded uppercase tracking-wider shadow-lg opacity-0 group-hover:opacity-100 transition-all translate-y-2 group-hover:translate-y-0"
                                             >
@@ -1270,6 +1375,7 @@ export default function ResourceLibraryPanel({
                     }}
                 />
             )}
+
         </div>
     );
 }
