@@ -1,5 +1,5 @@
 module.exports = {
-    output: 'export',
+    // output: 'export', // Removed to allow API routes on Vercel
     images: {
         unoptimized: true
     },
