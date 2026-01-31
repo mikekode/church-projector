@@ -188,7 +188,19 @@ export default function Home() {
                                 <Laptop size={20} /> APPLE MAC DMG
                             </a>
                         </div>
-                        <p className="text-zinc-500 text-xs font-bold uppercase tracking-widest">Version 2.1.2 • 100% Virus Free • Certified Build</p>
+                        <p className="text-zinc-500 text-xs font-bold uppercase tracking-widest italic">
+                            Version 2.1.6 • 100% Virus Free • Certified Open Source Build
+                        </p>
+                        <div className="max-w-md mx-auto p-4 rounded-xl bg-indigo-500/5 border border-indigo-500/10">
+                            <p className="text-[10px] text-indigo-400 font-bold uppercase tracking-widest mb-2 flex items-center justify-center gap-2">
+                                <Shield size={12} /> Browser Warning Info
+                            </p>
+                            <p className="text-[11px] text-zinc-500 leading-relaxed">
+                                Because Creenly is new, your browser may flag it as "uncommon."
+                                <span className="text-zinc-300"> Click 'More Info' then 'Run Anyway'</span> to install.
+                                We are an open-source project and never collect your data.
+                            </p>
+                        </div>
                     </div>
                 </section>
 
