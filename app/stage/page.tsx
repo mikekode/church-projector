@@ -247,7 +247,10 @@ export default function StageDisplayPage() {
                             <p className="text-lg text-indigo-400 font-semibold mb-4 tracking-wide">
                                 {content.reference} • {content.version}
                             </p>
-                            <p className="text-5xl md:text-6xl lg:text-7xl font-bold leading-tight">
+                            <p className={`font-bold leading-tight ${(content.text?.length || 0) > 300 ? 'text-2xl md:text-3xl lg:text-4xl' :
+                                (content.text?.length || 0) > 150 ? 'text-3xl md:text-4xl lg:text-5xl' :
+                                    'text-5xl md:text-6xl lg:text-7xl'
+                                }`}>
                                 {content.text}
                             </p>
                         </div>
@@ -258,7 +261,10 @@ export default function StageDisplayPage() {
                             <p className="text-lg text-purple-400 font-semibold mb-4 tracking-wide">
                                 {content.title} • Slide {(content.slideIndex || 0) + 1}/{content.totalSlides || 1}
                             </p>
-                            <p className="text-5xl md:text-6xl lg:text-7xl font-bold leading-tight whitespace-pre-line">
+                            <p className={`font-bold leading-tight whitespace-pre-line ${(content.currentSlide?.length || 0) > 300 ? 'text-2xl md:text-3xl lg:text-4xl' :
+                                    (content.currentSlide?.length || 0) > 150 ? 'text-3xl md:text-4xl lg:text-5xl' :
+                                        'text-5xl md:text-6xl lg:text-7xl'
+                                }`}>
                                 {content.currentSlide}
                             </p>
 
