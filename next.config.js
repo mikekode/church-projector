@@ -8,5 +8,19 @@ module.exports = {
     },
     eslint: {
         ignoreDuringBuilds: true
+    },
+    async redirects() {
+        return [
+            {
+                source: '/download/windows',
+                destination: 'https://github.com/mikekode/church-projector/releases/download/v2.0.3/Church-Projector-Setup-2.0.3.exe',
+                permanent: false,
+            },
+            {
+                source: '/download/mac',
+                destination: 'https://github.com/mikekode/church-projector/releases/download/v2.0.3/Church-Projector-2.0.3.dmg',
+                permanent: false,
+            },
+        ]
     }
 }
