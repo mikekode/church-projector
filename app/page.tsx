@@ -8,16 +8,13 @@ import { Check, ArrowRight, Zap, Shield, Mic, Monitor, Music, Clock, Users, Clou
 export default function Home() {
     const [showComingSoon, setShowComingSoon] = useState(false);
 
-    const handleDownloadClick = (e: React.MouseEvent) => {
-        e.preventDefault();
-        window.location.href = '/download/windows';
-    };
+
 
     return (
         <div className="min-h-screen bg-black text-white font-sans selection:bg-indigo-500/30 overflow-x-hidden">
             {/* Top Announcement */}
             <div className="bg-indigo-600 px-4 py-2 text-center text-xs font-bold tracking-widest uppercase animate-pulse">
-                New: AI Voice Detection 2.0.3 is now live for Windows & Mac
+                New: AI Voice Detection 2.0.4 is now live for Windows & Mac
             </div>
 
             {/* Navigation */}
@@ -240,15 +237,15 @@ export default function Home() {
                     Stage.
                 </h2>
                 <div className="flex justify-center flex-wrap gap-6">
-                    <button onClick={handleDownloadClick} className="px-12 py-6 rounded-full bg-white text-black font-black text-xl hover:bg-zinc-200 transition-all shadow-2xl active:scale-95 flex items-center gap-3">
+                    <a href="#download-section" className="px-12 py-6 rounded-full bg-white text-black font-black text-xl hover:bg-zinc-200 transition-all shadow-2xl active:scale-95 flex items-center gap-3">
                         <Download size={24} />
                         DOWNLOAD FREE DEMO
-                    </button>
+                    </a>
                     <Link href="/subscribe" className="px-12 py-6 rounded-full bg-indigo-600 text-white font-black text-xl hover:bg-indigo-500 transition-all shadow-2xl active:scale-95">
                         BUY PRO LICENSE
                     </Link>
                 </div>
-                <p className="mt-12 text-zinc-600 font-medium tracking-widest uppercase text-[10px]">Version 2.0.3 Now Available.</p>
+                <p className="mt-12 text-zinc-600 font-medium tracking-widest uppercase text-[10px]">Version 2.0.4 Now Available.</p>
             </section>
 
             {/* Footer */}
@@ -268,7 +265,7 @@ export default function Home() {
                         <h5 className="font-black text-xs uppercase tracking-widest mb-6 text-white">Product</h5>
                         <ul className="space-y-4 text-sm text-zinc-500 font-medium">
                             <li><a href="#features" className="hover:text-white transition-colors">Features</a></li>
-                            <li><a href="/download/windows" className="hover:text-white transition-colors">Download</a></li>
+                            <li><a href="#download-section" className="hover:text-white transition-colors">Download</a></li>
                             <li><a href="/subscribe" className="hover:text-white transition-colors text-indigo-400">Buy License</a></li>
                         </ul>
                     </div>
