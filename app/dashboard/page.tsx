@@ -58,6 +58,11 @@ const VoiceWave = ({ level, active }: { level: number, active: boolean }) => {
     );
 };
 
+export const metadata = {
+    title: "Creenly Dashboard",
+    robots: { index: false }
+};
+
 export default function DashboardPage() {
     const [isListening, setIsListening] = useState(false);
     const [isMicLoading, setIsMicLoading] = useState(false);
@@ -66,7 +71,7 @@ export default function DashboardPage() {
     const [voiceLevel, setVoiceLevel] = useState(0); // Audio RMS level (0-1)
     const [detectedQueue, setDetectedQueue] = useState<DetectedItem[]>([]);
     const [activeItem, setActiveItem] = useState<DetectedItem | null>(null);
-    const [autoMode, setAutoMode] = useState(true);
+    const [autoMode, setAutoMode] = useState(false);
     const [aiStatus, setAiStatus] = useState<'idle' | 'processing' | 'loading'>('idle');
     const [lastSignal, setLastSignal] = useState<DetectionSignal>('WAIT');
     const [confidenceThreshold, setConfidenceThreshold] = useState(85);
@@ -713,9 +718,9 @@ export default function DashboardPage() {
                 setDetectedQueue(prev => [newItem, ...prev].slice(0, 50));
                 console.log('[AI] Detected:', topScripture.reference, `(${topScripture.confidence} %) - Signal: ${signal} `);
 
-                // Auto-push to live if SWITCH signal or auto mode on (SCRIPTURES ONLY)
+                // Auto-push to live ONLY if auto mode is ON (SCRIPTURES ONLY)
                 const isSong = newItem.version === 'SONG';
-                if ((signal === 'SWITCH' || autoModeRef.current) && !isSong) {
+                if (autoModeRef.current && !isSong) {
                     console.log('[AUTO-LIVE] Pushing to projector:', topScripture.reference);
                     goLive(newItem);
                 }
@@ -1259,17 +1264,24 @@ export default function DashboardPage() {
                         <div className="bg-zinc-900/30 border border-white/5 rounded-2xl flex-1 flex flex-col overflow-hidden">
                             <header className="p-4 border-b border-white/5 flex justify-between items-center bg-zinc-900/50">
                                 <h3 className="text-xs font-bold text-zinc-500 uppercase tracking-wider">Detection Queue</h3>
-                                <div className="flex items-center gap-2">
-                                    <span className={`text-[10px] font-bold uppercase transition-colors ${autoMode ? 'text-indigo-400' : 'text-zinc-600'}`}>
-                                        Auto-Push
-                                    </span>
-                                    <button
-                                        onClick={() => setAutoMode(!autoMode)}
-                                        className={`w-9 h-5 rounded-full transition-colors relative focus:outline-none focus:ring-2 ring-indigo-500/50 ${autoMode ? 'bg-indigo-600' : 'bg-zinc-800 border border-zinc-700'}`}
-                                        title={autoMode ? "Auto-Push Enabled" : "Auto-Push Disabled"}
-                                    >
-                                        <div className={`w-3 h-3 bg-white rounded-full absolute top-1 shadow-sm transition-transform duration-200 ${autoMode ? 'translate-x-5' : 'translate-x-1'}`} />
-                                    </button>
+                                <div className="flex flex-col items-end">
+                                    {autoMode && (
+                                        <span className="text-[7px] font-black text-indigo-400 italic tracking-[0.2em] mb-0.5 animate-pulse">
+                                            BETA
+                                        </span>
+                                    )}
+                                    <div className="flex items-center gap-2">
+                                        <span className={`text-[10px] font-bold uppercase transition-colors ${autoMode ? 'text-indigo-400' : 'text-zinc-600'}`}>
+                                            Auto-Push
+                                        </span>
+                                        <button
+                                            onClick={() => setAutoMode(!autoMode)}
+                                            className={`w-9 h-5 rounded-full transition-colors relative focus:outline-none focus:ring-2 ring-indigo-500/50 ${autoMode ? 'bg-indigo-600' : 'bg-zinc-800 border border-zinc-700'}`}
+                                            title={autoMode ? "Auto-Push Enabled" : "Auto-Push Disabled"}
+                                        >
+                                            <div className={`w-3 h-3 bg-white rounded-full absolute top-1 shadow-sm transition-transform duration-200 ${autoMode ? 'translate-x-5' : 'translate-x-1'}`} />
+                                        </button>
+                                    </div>
                                 </div>
                             </header>
                             <div

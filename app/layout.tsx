@@ -21,6 +21,12 @@ export const metadata: Metadata = {
         locale: "en_US",
         type: "website",
     },
+    alternates: {
+        canonical: "https://www.creenly.com",
+    },
+    verification: {
+        google: "google-site-verification-placeholder", // Replace with actual code from GSC
+    },
     icons: {
         icon: [
             { url: "/logo.png" }, // Default
