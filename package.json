@@ -1,6 +1,6 @@
 {
     "name": "church-projector",
-    "version": "2.0.2",
+    "version": "2.0.3",
     "repository": "mikekode/church-projector",
     "private": true,
     "scripts": {
@@ -22,6 +22,7 @@
         "cheerio": "^1.2.0",
         "clsx": "^2.1.0",
         "electron-updater": "^6.7.3",
+        "dotenv": "^16.4.7",
         "fuse.js": "^7.1.0",
         "jszip": "^3.10.1",
         "lucide-react": "^0.309.0",

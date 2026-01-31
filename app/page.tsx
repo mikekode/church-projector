@@ -10,14 +10,14 @@ export default function Home() {
 
     const handleDownloadClick = (e: React.MouseEvent) => {
         e.preventDefault();
-        window.location.href = 'https://github.com/mikekode/church-projector/releases/download/v2.0.2/Church-Projector-Setup-2.0.2.exe';
+        window.location.href = 'https://github.com/mikekode/church-projector/releases/download/v2.0.3/Church-Projector-Setup-2.0.3.exe';
     };
 
     return (
         <div className="min-h-screen bg-black text-white font-sans selection:bg-indigo-500/30 overflow-x-hidden">
             {/* Top Announcement */}
             <div className="bg-indigo-600 px-4 py-2 text-center text-xs font-bold tracking-widest uppercase animate-pulse">
-                New: AI Voice Detection 2.0.2 is now live for Windows & Mac
+                New: AI Voice Detection 2.0.3 is now live for Windows & Mac
             </div>
 
             {/* Navigation */}
@@ -66,11 +66,11 @@ export default function Home() {
 
                     <div id="download-section" className="flex flex-col items-center gap-8">
                         <div className="flex flex-col sm:flex-row items-center justify-center gap-6 w-full">
-                            <a href="https://github.com/mikekode/church-projector/releases/download/v2.0.2/Church-Projector-Setup-2.0.2.exe" className="grow sm:grow-0 w-full sm:w-auto px-10 py-6 rounded-3xl bg-indigo-600 font-black text-xl hover:bg-indigo-500 transition-all shadow-[0_20px_50px_-12px_rgba(79,70,229,0.5)] flex items-center justify-center gap-3 group">
+                            <a href="https://github.com/mikekode/church-projector/releases/download/v2.0.3/Church-Projector-Setup-2.0.3.exe" className="grow sm:grow-0 w-full sm:w-auto px-10 py-6 rounded-3xl bg-indigo-600 font-black text-xl hover:bg-indigo-500 transition-all shadow-[0_20px_50px_-12px_rgba(79,70,229,0.5)] flex items-center justify-center gap-3 group">
                                 <Monitor size={24} />
                                 Download for Windows
                             </a>
-                            <a href="https://github.com/mikekode/church-projector/releases/download/v2.0.2/Church-Projector-2.0.2.dmg" className="grow sm:grow-0 w-full sm:w-auto px-10 py-6 rounded-3xl bg-zinc-900 border border-white/10 font-black text-xl hover:bg-zinc-800 transition-all flex items-center justify-center gap-3">
+                            <a href="https://github.com/mikekode/church-projector/releases/download/v2.0.3/Church-Projector-2.0.3.dmg" className="grow sm:grow-0 w-full sm:w-auto px-10 py-6 rounded-3xl bg-zinc-900 border border-white/10 font-black text-xl hover:bg-zinc-800 transition-all flex items-center justify-center gap-3">
                                 <Laptop size={24} />
                                 Download for Mac
                             </a>
@@ -248,7 +248,7 @@ export default function Home() {
                         BUY PRO LICENSE
                     </Link>
                 </div>
-                <p className="mt-12 text-zinc-600 font-medium tracking-widest uppercase text-[10px]">Version 2.0.2 Now Available.</p>
+                <p className="mt-12 text-zinc-600 font-medium tracking-widest uppercase text-[10px]">Version 2.0.3 Now Available.</p>
             </section>
 
             {/* Footer */}
@@ -268,7 +268,7 @@ export default function Home() {
                         <h5 className="font-black text-xs uppercase tracking-widest mb-6 text-white">Product</h5>
                         <ul className="space-y-4 text-sm text-zinc-500 font-medium">
                             <li><a href="#features" className="hover:text-white transition-colors">Features</a></li>
-                            <li><a href="https://github.com/mikekode/church-projector/releases/download/v2.0.2/Church-Projector-Setup-2.0.2.exe" className="hover:text-white transition-colors">Download</a></li>
+                            <li><a href="https://github.com/mikekode/church-projector/releases/download/v2.0.3/Church-Projector-Setup-2.0.3.exe" className="hover:text-white transition-colors">Download</a></li>
                             <li><a href="/subscribe" className="hover:text-white transition-colors text-indigo-400">Buy License</a></li>
                         </ul>
                     </div>
