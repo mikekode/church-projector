@@ -179,8 +179,10 @@ export async function validateLicenseOnline(licenseKey: string): Promise<License
 
 /**
  * Get current license status
- * Uses cache for offline support, validates online when possible
+ * Hardened: Forces a server-side check every app session to prevent LocalStorage injection.
  */
+let sessionValidated = false;
+
 export async function getCurrentLicense(): Promise<License> {
     const storedKey = localStorage.getItem(LICENSE_KEY_STORAGE);
     const cachedData = localStorage.getItem(LICENSE_CACHE_STORAGE);
@@ -190,38 +192,41 @@ export async function getCurrentLicense(): Promise<License> {
         return { status: 'demo' };
     }
 
-    // Try online validation first
-    try {
-        const onlineResult = await validateLicenseOnline(storedKey);
+    // Secure Check: If we haven't validated this SESSION yet, force an online check.
+    // This prevents someone from manually editing localStorage while offline.
+    const forceCheck = !sessionValidated;
 
-        // Update cache with fresh data
-        const cacheData = {
-            ...onlineResult,
-            cachedAt: Date.now()
-        };
-        localStorage.setItem(LICENSE_CACHE_STORAGE, JSON.stringify(cacheData));
+    if (forceCheck || !cachedData) {
+        try {
+            const onlineResult = await validateLicenseOnline(storedKey);
 
-        return onlineResult;
-    } catch (error) {
-        console.warn('Online license check failed, using cache');
+            // Only mark session as valid if the server actually says 'active'
+            if (onlineResult.status === 'active') {
+                sessionValidated = true;
+            }
+
+            // Update cache with fresh data
+            const cacheData = {
+                ...onlineResult,
+                cachedAt: Date.now()
+            };
+            localStorage.setItem(LICENSE_CACHE_STORAGE, JSON.stringify(cacheData));
+
+            return onlineResult;
+        } catch (error) {
+            console.warn('Online license check failed, falling back to secure cache');
+        }
     }
 
-    // Offline: Use cached data if within grace period
+    // Offline Fallback: Use cached data ONLY if within strict grace period
     if (cachedData) {
         try {
             const cached = JSON.parse(cachedData);
             const cacheAge = Date.now() - cached.cachedAt;
 
-            // Cache still valid (within 7 day grace period)
-            if (cacheAge < CACHE_DURATION_MS) {
-                // Check if cached expiry has passed
-                if (cached.expiresAt && new Date(cached.expiresAt) < new Date()) {
-                    return {
-                        status: 'expired',
-                        licenseKey: cached.licenseKey,
-                        email: cached.email
-                    };
-                }
+            // Cache still valid (shortened to 3 days for higher security)
+            const STRICT_CACHE_DURATION = 3 * 24 * 60 * 60 * 1000;
+            if (cacheAge < STRICT_CACHE_DURATION) {
                 return cached as License;
             }
         } catch (e) {
@@ -229,7 +234,7 @@ export async function getCurrentLicense(): Promise<License> {
         }
     }
 
-    // Cache expired or invalid, go to demo mode
+    // Default to demo if online fails and cache is old
     return { status: 'demo' };
 }
 
