@@ -495,10 +495,8 @@ export default function DashboardPage() {
         version?: string;
         songData?: any;
     }, source: 'regex' | 'ai' | 'song') => {
-        const isDuplicate = detectedQueueRef.current.some(q =>
-            q.reference === data.reference &&
-            (new Date().getTime() - q.timestamp.getTime() < 5000)
-        );
+        const isDuplicate = detectedQueueRef.current.length > 0 &&
+            detectedQueueRef.current[0].reference === data.reference;
 
         if (!isDuplicate) {
             const newItem: DetectedItem = {
