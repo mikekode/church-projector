@@ -116,7 +116,7 @@ export default function Home() {
                         </div>
 
                         <div className="bg-zinc-900/10 border border-white/5 rounded-[40px] overflow-x-auto backdrop-blur-sm">
-                            <table className="w-full text-left min-w-[300px]">
+                            <table className="w-full text-left min-w-[700px]">
                                 <thead>
                                     <tr className="border-b border-white/10">
                                         <th className="py-8 px-6 text-[10px] font-black uppercase tracking-widest text-zinc-600">Feature</th>
