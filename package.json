@@ -1,6 +1,6 @@
 {
-    "name": "church-projector",
-    "version": "2.0.4",
+    "name": "creenly",
+    "version": "2.0.6",
     "repository": "mikekode/church-projector",
     "private": true,
     "scripts": {
@@ -51,8 +51,8 @@
     },
     "main": "electron/main.js",
     "build": {
-        "appId": "com.churchprojector.app",
-        "productName": "Church Projector AI",
+        "appId": "com.creenly.app",
+        "productName": "Creenly",
         "directories": {
             "output": "dist-build"
         },
