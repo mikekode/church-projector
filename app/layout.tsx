@@ -1,14 +1,6 @@
 
 import type { Metadata } from "next";
-import { Inter, Libre_Baskerville } from "next/font/google";
 import "./globals.css";
-
-const inter = Inter({ subsets: ["latin"], variable: '--font-inter' });
-const libre = Libre_Baskerville({
-    weight: ['400', '700'],
-    subsets: ["latin"],
-    variable: '--font-libre'
-});
 
 export const metadata: Metadata = {
     title: "Creenly",
@@ -22,7 +14,12 @@ export default function RootLayout({
 }>) {
     return (
         <html lang="en">
-            <body className={`${inter.variable} ${libre.variable} font-sans bg-black text-white antialiased`}>{children}</body>
+            <head>
+                <link rel="preconnect" href="https://fonts.googleapis.com" />
+                <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+                <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&family=Libre+Baskerville:wght@400;700&display=swap" rel="stylesheet" />
+            </head>
+            <body className={`font-sans bg-black text-white antialiased`}>{children}</body>
         </html>
     );
 }
