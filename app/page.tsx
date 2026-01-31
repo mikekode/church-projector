@@ -14,7 +14,7 @@ export default function Home() {
         <div className="min-h-screen bg-black text-white font-sans selection:bg-indigo-500/30 overflow-x-hidden">
             {/* Top Announcement */}
             <div className="bg-indigo-600 px-4 py-2 text-center text-xs font-bold tracking-widest uppercase animate-pulse">
-                New: AI Voice Detection 2.0.7 is now live for Windows & Mac
+                New: AI Voice Detection 2.0.8 is now live for Windows & Mac
             </div>
 
             {/* Navigation */}
@@ -245,7 +245,7 @@ export default function Home() {
                         BUY PRO LICENSE
                     </Link>
                 </div>
-                <p className="mt-12 text-zinc-600 font-medium tracking-widest uppercase text-[10px]">Version 2.0.7 Now Available.</p>
+                <p className="mt-12 text-zinc-600 font-medium tracking-widest uppercase text-[10px]">Version 2.0.8 Now Available.</p>
             </section>
 
             {/* Footer */}

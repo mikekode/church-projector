@@ -890,7 +890,7 @@ export default function DashboardPage() {
                 <div className="flex items-center gap-1">
                     <div className="relative group flex items-center">
                         <img
-                            src="/logo.png"
+                            src="logo.png"
                             alt="Creenly Logo"
                             className="w-10 h-10 object-contain transition-transform group-hover:scale-110 duration-300 translate-y-[2px]"
                         />
@@ -936,7 +936,13 @@ export default function DashboardPage() {
                     </button>
                     {/* Stage Display Button */}
                     <button
-                        onClick={() => window.open('/stage', 'stageDisplay', 'width=1280,height=720')}
+                        onClick={() => {
+                            if ((window as any).electronAPI?.openStageWindow) {
+                                (window as any).electronAPI.openStageWindow();
+                            } else {
+                                window.open('/stage', 'stageDisplay', 'width=1280,height=720');
+                            }
+                        }}
                         className="flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium transition-all bg-purple-500/10 text-purple-400 border border-purple-500/20 hover:bg-purple-500/20"
                         title="Open Stage Display (Confidence Monitor)"
                     >

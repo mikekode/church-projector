@@ -23,6 +23,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
     // Window Management
     openProjectorWindow: () => ipcRenderer.invoke('open-projector-window'),
+    openStageWindow: () => ipcRenderer.invoke('open-stage-window'),
 
     // Song Data
     searchSongs: (query) => ipcRenderer.invoke('song-search', query),

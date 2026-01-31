@@ -21,8 +21,9 @@ Menu.setApplicationMenu(null);
 
 let mainWindow;
 let nextServer;
-
 function createWindow() {
+    const iconPath = path.join(__dirname, app.isPackaged ? '../out/logo.png' : '../public/logo.png');
+
     mainWindow = new BrowserWindow({
         width: 1280,
         height: 720,
@@ -33,7 +34,7 @@ function createWindow() {
             preload: path.join(__dirname, 'preload.js')
         },
         autoHideMenuBar: true, // Hide default menu bar for premium look
-        icon: path.join(__dirname, app.isPackaged ? '../out/icon.png' : '../public/icon.png')
+        icon: iconPath
     });
 
     // In production, we would load the static build or start a bundled server
@@ -59,6 +60,11 @@ function createWindow() {
 
 // Projector Window Management
 let projectorWindow = null;
+let stageWindow = null;
+
+function getIconPath() {
+    return path.join(__dirname, app.isPackaged ? '../out/logo.png' : '../public/logo.png');
+}
 
 ipcMain.handle('open-projector-window', async () => {
     if (projectorWindow) {
@@ -72,8 +78,6 @@ ipcMain.handle('open-projector-window', async () => {
     // Default to primary, but prefer secondary if available
     let targetDisplay = displays[0];
     if (displays.length > 1) {
-        // Simple logic: pick the last display that isn't the primary one
-        // or just the second one
         targetDisplay = displays.find(d => d.bounds.x !== 0 || d.bounds.y !== 0) || displays[1];
     }
 
@@ -83,10 +87,10 @@ ipcMain.handle('open-projector-window', async () => {
         width: 1280,
         height: 720,
         backgroundColor: '#000000',
-        frame: false, // Frameless for immersion? Or maybe standard for now
-        fullscreen: true, // Start full screen
-        autoHideMenuBar: true, // Absolutely ensure no menu on projector
-        icon: path.join(__dirname, app.isPackaged ? '../out/icon.png' : '../public/icon.png'),
+        frame: false,
+        fullscreen: true,
+        autoHideMenuBar: true,
+        icon: getIconPath(),
         webPreferences: {
             nodeIntegration: false,
             contextIsolation: true,
@@ -95,11 +99,7 @@ ipcMain.handle('open-projector-window', async () => {
     });
 
     if (app.isPackaged) {
-        // We need to load a specific route in the static export.
-        // Next.js export generates 'out/projector.html' if '/projector' is a page.
         const projectorPath = path.join(__dirname, '../out/projector.html');
-        // Fallback: If your page is dynamic or hash routed, you might load index.html#projector
-        // But since we use Next.js file based routing and 'export', it should create projector.html
         projectorWindow.loadFile(projectorPath);
     } else {
         const startUrl = process.env.ELECTRON_START_URL || 'http://localhost:3000';
@@ -108,6 +108,41 @@ ipcMain.handle('open-projector-window', async () => {
 
     projectorWindow.on('closed', () => {
         projectorWindow = null;
+    });
+
+    return { success: true };
+});
+
+ipcMain.handle('open-stage-window', async () => {
+    if (stageWindow) {
+        stageWindow.focus();
+        return { success: true, message: "Window already open" };
+    }
+
+    // Usually Stage is on a different display or windowed
+    stageWindow = new BrowserWindow({
+        width: 1280,
+        height: 720,
+        backgroundColor: '#000000',
+        autoHideMenuBar: true,
+        icon: getIconPath(),
+        webPreferences: {
+            nodeIntegration: false,
+            contextIsolation: true,
+            preload: path.join(__dirname, 'preload.js')
+        }
+    });
+
+    if (app.isPackaged) {
+        const stagePath = path.join(__dirname, '../out/stage.html');
+        stageWindow.loadFile(stagePath);
+    } else {
+        const startUrl = process.env.ELECTRON_START_URL || 'http://localhost:3000';
+        stageWindow.loadURL(`${startUrl}/stage`);
+    }
+
+    stageWindow.on('closed', () => {
+        stageWindow = null;
     });
 
     return { success: true };
