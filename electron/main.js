@@ -144,13 +144,17 @@ ipcMain.handle('open-projector-window', async () => {
 
 
     if (app.isPackaged) {
+        // Use file protocol with absolute path for predictability
         const projectorPath = path.join(__dirname, '../out/projector.html');
-        if (fs.existsSync(projectorPath)) {
-            projectorWindow.loadFile(projectorPath);
-        } else {
-            console.error("Projector HTML missing:", projectorPath);
+        const fileUrl = `file://${projectorPath.replace(/\\/g, '/')}`;
+
+        console.log("Loading Projector from:", fileUrl);
+
+        projectorWindow.loadURL(fileUrl).catch(err => {
+            console.error("Failed to load projector URL:", err);
+            // Emergency fallback
             projectorWindow.loadFile(path.join(__dirname, '../out/dashboard.html'));
-        }
+        });
     } else {
         const startUrl = process.env.ELECTRON_START_URL || 'http://localhost:3000';
         projectorWindow.loadURL(`${startUrl}/projector`);
@@ -184,7 +188,10 @@ ipcMain.handle('open-stage-window', async () => {
 
     if (app.isPackaged) {
         const stagePath = path.join(__dirname, '../out/stage.html');
-        stageWindow.loadFile(stagePath);
+        const fileUrl = `file://${stagePath.replace(/\\/g, '/')}`;
+        stageWindow.loadURL(fileUrl).catch(err => {
+            console.error("Failed to load stage URL:", err);
+        });
     } else {
         const startUrl = process.env.ELECTRON_START_URL || 'http://localhost:3000';
         stageWindow.loadURL(`${startUrl}/stage`);

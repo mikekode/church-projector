@@ -1564,9 +1564,18 @@ export default function DashboardPage() {
                                     /* OVERLAY ACTIONS */
                                 }
                                 <div className="absolute inset-0 z-50 bg-black/80 flex items-center justify-center gap-4 opacity-0 group-hover:opacity-100 transition-opacity backdrop-blur-sm">
-                                    <Link href="/projector" target="_blank" className="px-6 py-2 bg-white text-black font-bold rounded-full hover:scale-105 transition-transform">
+                                    <button
+                                        onClick={() => {
+                                            if ((window as any).electronAPI?.openProjectorWindow) {
+                                                (window as any).electronAPI.openProjectorWindow();
+                                            } else {
+                                                window.open('/projector', '_blank', 'width=1280,height=720');
+                                            }
+                                        }}
+                                        className="px-6 py-2 bg-white text-black font-bold rounded-full hover:scale-105 transition-transform"
+                                    >
                                         Open Projector Window ↗
-                                    </Link>
+                                    </button>
                                 </div>
                             </div>
                         </div>

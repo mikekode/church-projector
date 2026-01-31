@@ -186,7 +186,7 @@ export default function StageDisplayPage() {
 
     return (
         <div
-            className="min-h-screen bg-black text-white font-sans"
+            className="h-screen w-screen bg-black text-white font-sans overflow-hidden select-none"
             onDoubleClick={toggleFullscreen}
         >
             {/* Top Bar - Clock & Timer */}
@@ -239,7 +239,7 @@ export default function StageDisplayPage() {
             </div>
 
             {/* Main Content Area */}
-            <div className="pt-24 pb-8 px-8 min-h-screen flex flex-col">
+            <div className="pt-24 pb-8 px-8 flex-1 h-full flex flex-col overflow-hidden">
                 {/* Current Content - Large Display */}
                 <div className="flex-1 flex items-center justify-center">
                     {content?.type === 'verse' && (

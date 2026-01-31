@@ -3,61 +3,73 @@ const path = require('path');
 
 const outDir = path.join(__dirname, '../out');
 
-function processFile(filePath, dir) {
+function processFile(filePath) {
     let content = fs.readFileSync(filePath, 'utf-8');
-
-    // Calculate relative path depth
     const relativeDepth = path.relative(path.dirname(filePath), outDir);
     const prefix = relativeDepth ? relativeDepth.replace(/\\/g, '/') + '/' : './';
 
-    // 1. Fix absolute paths starting with / in HTML attributes
-    // e.g. href="/_next/..." -> href="./_next/..."
-    content = content.replace(/(href|src|srcset)="\/(_next|logo\.png|icon\.png|pastor-mike\.png|sarah-creative\.png|favicon\.ico|manifest\.json|vercel\.svg|next\.svg)/g, (match, attr, folder) => {
-        return `${attr}="${prefix}${folder}`;
+    console.log(`Processing: ${path.relative(outDir, filePath)} (prefix: ${prefix})`);
+
+    // 1. Fix absolute paths in HTML/JS/CSS
+    // Replace href="/..." with href="./..." or equivalent depth-based relative path
+    // We target common Next.js folders like _next and static assets
+    const absolutePatterns = [
+        '/_next',
+        '/logo.png',
+        '/icon.png',
+        '/favicon.ico',
+        '/pastor-mike.png',
+        '/sarah-creative.png',
+        '/manifest.json'
+    ];
+
+    absolutePatterns.forEach(pattern => {
+        // Match both "pattern and 'pattern
+        const escapedPattern = pattern.replace(/\./g, '\\.');
+        const regexDouble = new RegExp(`="(${escapedPattern})`, 'g');
+        const regexSingle = new RegExp(`='(${escapedPattern})`, 'g');
+
+        content = content.replace(regexDouble, `="${prefix}${pattern.substring(1)}`);
+        content = content.replace(regexSingle, `='${prefix}${pattern.substring(1)}`);
     });
 
-    // 2. Fix JS dynamic imports/paths that use "/_next"
-    // Next.js chunks often have hardcoded "/_next" strings
+    // 2. Fix JS specific strings that don't have =
     if (filePath.endsWith('.js')) {
         content = content.split('"/_next').join('"' + prefix + '_next');
         content = content.split("'/_next").join("'" + prefix + "_next");
     }
 
-    // 3. Fix CSS url() references if any are absolute (though they are usually relative)
-    if (filePath.endsWith('.css')) {
-        content = content.replace(/url\(\//g, `url(${prefix}`);
-    }
+    // 3. Robust fix for double slashes which often cause issues in packaged apps
+    // Replace .// with ./
+    content = content.replace(/\.\/\/+/g, './');
 
-    // 4. Remove potential double slashes created by Next.js assetPrefix: './'
-    content = content.replace(/="\.\/\/+/g, '="./');
-    content = content.replace(/'\.\/\/+/g, "'./");
+    // 4. Special case: Next.js __next_f logic and other internal strings
+    // Sometimes paths are in JSON-like strings
+    content = content.replace(/\\"\/\_next/g, `\\"${prefix}_next`);
 
     fs.writeFileSync(filePath, content);
 }
 
 function walkDir(dir) {
     const files = fs.readdirSync(dir);
-
     files.forEach(file => {
         const filePath = path.join(dir, file);
         const stat = fs.statSync(filePath);
-
         if (stat.isDirectory()) {
             walkDir(filePath);
         } else {
             const ext = path.extname(file);
             if (['.html', '.js', '.css', '.json'].includes(ext)) {
-                processFile(filePath, dir);
+                processFile(filePath);
             }
         }
     });
 }
 
 if (fs.existsSync(outDir)) {
-    console.log('--- Electron Path Hardening ---');
-    console.log(`Processing: ${outDir}`);
+    console.log('--- STARTING ELECTRON PATH HARDENING v2 ---');
     walkDir(outDir);
-    console.log('Path hardening complete.');
+    console.log('--- PATH HARDENING COMPLETE ---');
 } else {
     console.error(`Error: ${outDir} not found.`);
 }
