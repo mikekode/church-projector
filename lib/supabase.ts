@@ -24,12 +24,26 @@ const CACHE_DURATION_MS = 7 * 24 * 60 * 60 * 1000; // 7 days offline grace perio
 
 /**
  * Generate a unique device fingerprint
+ * Hardened: Uses native Hardware ID link when running in Electron.
  */
-export function getDeviceId(): string {
+export async function getDeviceId(): Promise<string> {
     const stored = localStorage.getItem('creenly_device_id');
     if (stored) return stored;
 
-    // Generate fingerprint from available browser data
+    // Try Native Electron Machine ID first (Secure)
+    try {
+        if ((window as any).electronAPI?.getMachineId) {
+            const hwId = await (window as any).electronAPI.getMachineId();
+            if (hwId) {
+                localStorage.setItem('creenly_device_id', hwId);
+                return hwId;
+            }
+        }
+    } catch (e) {
+        console.warn('Native HWID check failed, using fingerprinting');
+    }
+
+    // Fingerprinting fallback (Less secure, but works in browser)
     const canvas = document.createElement('canvas');
     const ctx = canvas.getContext('2d');
     ctx?.fillText('CREENLY', 10, 10);
@@ -52,7 +66,7 @@ export function getDeviceId(): string {
         hash = ((hash << 5) - hash) + char;
         hash = hash & hash;
     }
-    const deviceId = 'DEV-' + Math.abs(hash).toString(36).toUpperCase();
+    const deviceId = 'FPR-' + Math.abs(hash).toString(36).toUpperCase();
 
     localStorage.setItem('creenly_device_id', deviceId);
     return deviceId;
@@ -63,7 +77,7 @@ export function getDeviceId(): string {
  * Links the key to this device
  */
 export async function activateLicenseKey(keyCode: string): Promise<{ success: boolean; error?: string }> {
-    const deviceId = getDeviceId();
+    const deviceId = await getDeviceId();
 
     // Check if license exists and is valid
     const { data: license, error: fetchError } = await supabase
@@ -124,7 +138,7 @@ export async function activateLicenseKey(keyCode: string): Promise<{ success: bo
  * Checks if subscription is still active
  */
 export async function validateLicenseOnline(licenseKey: string): Promise<License> {
-    const deviceId = getDeviceId();
+    const deviceId = await getDeviceId();
 
     const { data: license, error } = await supabase
         .from('licenses')

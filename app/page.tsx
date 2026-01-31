@@ -10,7 +10,7 @@ export default function Home() {
         <div className="min-h-screen bg-black text-white font-sans selection:bg-indigo-500/30 overflow-x-hidden">
             {/* Top Announcement */}
             <div className="bg-indigo-600 px-4 py-2 text-center text-xs font-bold tracking-widest uppercase animate-pulse">
-                New: AI Voice Detection 2.0.9 is now live for Windows & Mac
+                New: Creenly 2.1.0 "Fortress" Security Update is now live 🛡️
             </div>
 
             {/* Navigation */}
@@ -188,7 +188,7 @@ export default function Home() {
                                 <Laptop size={20} /> APPLE MAC DMG
                             </a>
                         </div>
-                        <p className="text-zinc-500 text-xs font-bold uppercase tracking-widest">Version 2.0.8 • 100% Virus Free • Certified Build</p>
+                        <p className="text-zinc-500 text-xs font-bold uppercase tracking-widest">Version 2.1.0 • 100% Virus Free • Certified Build</p>
                     </div>
                 </section>
 

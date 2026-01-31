@@ -9,11 +9,36 @@ require('dotenv').config({ path: path.join(__dirname, '../.env.local') });
 // If dotenv fails (not installed), it throws. We might need to handle that or install it.
 // Ideally usage: const OpenAI = require('openai');
 
+const { exec } = require('child_process');
+const crypto = require('crypto');
+
 let OpenAI;
 try {
     OpenAI = require('openai');
 } catch (e) {
     console.error("OpenAI package not found. Smart Detect will fail.");
+}
+
+// Security: Machine ID for Hardware Binding
+async function getMachineId() {
+    return new Promise((resolve) => {
+        let command = '';
+        if (process.platform === 'win32') {
+            command = 'wmic csproduct get uuid';
+        } else if (process.platform === 'darwin') {
+            command = "ioreg -rd1 -c IOPlatformExpertDevice | grep -E '(IOPlatformUUID)'";
+        } else {
+            return resolve('fallback-id-' + process.platform);
+        }
+
+        exec(command, (err, stdout) => {
+            if (err) return resolve('fallback-' + Date.now());
+            // Extract the UUID/ID and hash it for privacy + consistency
+            const raw = stdout.toString().replace(/IOPlatformUUID|uuid/gi, '').trim();
+            const hash = crypto.createHash('sha256').update(raw).digest('hex').substring(0, 16).toUpperCase();
+            resolve('HW-' + hash);
+        });
+    });
 }
 
 // Disable Default Menu
@@ -53,9 +78,28 @@ function createWindow() {
 
     mainWindow.on('closed', () => {
         mainWindow = null;
-        // Close projector if main closes? Usually yes
         if (projectorWindow) projectorWindow.close();
+        if (stageWindow) stageWindow.close();
     });
+
+    // PRODUCTION HARDENING: Disable DevTools and Context Menu
+    if (app.isPackaged) {
+        mainWindow.webContents.on('devtools-opened', () => {
+            mainWindow.webContents.closeDevTools();
+        });
+
+        // Prevent right-click "Inspect"
+        mainWindow.webContents.on('context-menu', (e) => {
+            e.preventDefault();
+        });
+
+        // Block common shortcuts for devtools
+        mainWindow.webContents.on('before-input-event', (event, input) => {
+            if (input.control && input.shift && input.key.toLowerCase() === 'i') event.preventDefault();
+            if (input.alt && input.control && input.key.toLowerCase() === 'i') event.preventDefault();
+            if (input.key === 'F12') event.preventDefault();
+        });
+    }
 }
 
 // Projector Window Management
@@ -119,7 +163,6 @@ ipcMain.handle('open-stage-window', async () => {
         return { success: true, message: "Window already open" };
     }
 
-    // Usually Stage is on a different display or windowed
     stageWindow = new BrowserWindow({
         width: 1280,
         height: 720,
@@ -145,7 +188,16 @@ ipcMain.handle('open-stage-window', async () => {
         stageWindow = null;
     });
 
+    // Mirror hardening for stage window
+    if (app.isPackaged) {
+        stageWindow.webContents.on('context-menu', (e) => e.preventDefault());
+    }
+
     return { success: true };
+});
+
+ipcMain.handle('get-machine-id', async () => {
+    return await getMachineId();
 });
 
 // Bible Data Management

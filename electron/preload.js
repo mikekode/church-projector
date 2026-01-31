@@ -16,6 +16,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     // Generic System info
     platform: process.platform,
     version: process.versions.electron,
+    getMachineId: () => ipcRenderer.invoke('get-machine-id'),
 
     // Offline Bible
     getVerse: (query) => ipcRenderer.invoke('get-verse', query),
