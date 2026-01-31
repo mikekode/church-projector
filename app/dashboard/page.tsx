@@ -392,20 +392,35 @@ export default function DashboardPage() {
     const goLive = useCallback(async (item: DetectedItem) => {
         // Handle Songs with Navigation Controls
         if (item.version === 'SONG' && item.songData) {
-            const slideIndex = item.songData.slides.findIndex((s: any) => s.content === item.text);
+            // User request: Always start detected songs at the FIRST slide (index 0)
+            // regardless of which specific line was matched.
+            const initialSlideIndex = 0;
+            const initialSlide = item.songData.slides[initialSlideIndex];
+
+            // Set state for navigation
             setLivePresentation({
                 item: item.songData,
-                slideIndex: slideIndex >= 0 ? slideIndex : 0
+                slideIndex: initialSlideIndex
             });
 
-            setActiveItem(item);
+            // Update active item to reflect First Slide content
+            setActiveItem({
+                ...item,
+                text: initialSlide.content
+            });
+
+            // Broadcast content to Projector
+            // Using SHOW_CONTENT matches the format used by handleSlideNavigation for songs
             broadcast({
-                type: 'SHOW_VERSE',
+                type: 'SHOW_CONTENT',
                 payload: {
-                    reference: item.reference,
-                    text: item.text,
-                    version: 'SONG',
-                    verses: []
+                    type: 'song',
+                    title: item.reference, // item.reference holds the Title for songs in detectedQueue
+                    body: initialSlide.content,
+                    slideIndex: initialSlideIndex,
+                    totalSlides: item.songData.slides.length,
+                    meta: item.songData.author,
+                    nextSlide: item.songData.slides[initialSlideIndex + 1]?.content
                 }
             });
             return;
@@ -881,7 +896,6 @@ export default function DashboardPage() {
                         />
                         <div className="absolute inset-0 bg-indigo-500/20 blur-xl rounded-full -z-10 opacity-0 group-hover:opacity-100 transition-opacity" />
                     </div>
-                    <span className="text-xl font-black tracking-tighter text-white leading-none">CREENLY</span>
                     <div className="w-px h-6 bg-white/10 mx-2" />
                     {/* License Button */}
                     <button
@@ -1300,76 +1314,71 @@ export default function DashboardPage() {
                                     >
                                         <Clock size={20} />
                                         {showTimerSettings && (
-                                            <div className="absolute top-full right-0 mt-2 bg-zinc-900 border border-white/10 rounded-xl shadow-2xl p-4 w-64 z-[60]" onClick={e => e.stopPropagation()}>
-                                                <h4 className="text-xs font-bold text-zinc-500 uppercase mb-3">Timer Settings</h4>
+                                            <>
+                                                <div className="fixed inset-0 z-[59]" onClick={() => setShowTimerSettings(false)} />
+                                                <div className="absolute top-full right-0 mt-2 bg-zinc-900 border border-white/10 rounded-xl shadow-2xl p-4 w-64 z-[60]" onClick={e => e.stopPropagation()}>
+                                                    <h4 className="text-xs font-bold text-zinc-500 uppercase mb-3">Timer Settings</h4>
 
-                                                {/* Mode & Time */}
-                                                <div className="space-y-3 mb-4">
-                                                    <div>
-                                                        <label className="text-xs text-zinc-400 block mb-1">Duration (Minutes)</label>
-                                                        <div className="flex gap-2">
-                                                            <input
-                                                                type="number"
-                                                                value={timerDuration}
-                                                                onChange={e => setTimerDuration(parseInt(e.target.value) || 0)}
-                                                                className="flex-1 bg-black/50 border border-white/10 rounded px-2 py-1 text-sm"
-                                                            />
-                                                            <button
-                                                                onClick={() => broadcast({ type: 'TIMER_ACTION', payload: { action: 'set', mode: 'countdown', value: timerDuration * 60 } })}
-                                                                className="bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold px-3 rounded"
-                                                            >
-                                                                SET
-                                                            </button>
+                                                    {/* Mode & Time */}
+                                                    <div className="space-y-3 mb-4">
+                                                        <div>
+                                                            <label className="text-xs text-zinc-400 block mb-1">Duration (Minutes)</label>
+                                                            <div className="flex gap-2">
+                                                                <input
+                                                                    type="number"
+                                                                    value={timerDuration}
+                                                                    onChange={e => setTimerDuration(parseInt(e.target.value) || 0)}
+                                                                    className="flex-1 bg-black/50 border border-white/10 rounded px-2 py-1 text-sm text-white"
+                                                                />
+                                                                <button
+                                                                    onClick={() => broadcast({ type: 'TIMER_ACTION', payload: { action: 'set', mode: 'countdown', value: timerDuration * 60 } })}
+                                                                    className="bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold px-3 rounded"
+                                                                >
+                                                                    SET
+                                                                </button>
+                                                            </div>
                                                         </div>
                                                     </div>
-                                                    <div className="flex gap-2 text-xs">
+
+                                                    {/* Controls */}
+                                                    <div className="grid grid-cols-3 gap-2 border-t border-white/10 pt-3">
                                                         <button
-                                                            onClick={() => broadcast({ type: 'TIMER_ACTION', payload: { action: 'set', mode: 'countup', value: 0 } })}
-                                                            className="flex-1 py-1.5 bg-zinc-800 hover:bg-zinc-700 rounded border border-white/5"
+                                                            onClick={() => broadcast({ type: 'TIMER_ACTION', payload: { action: 'start' } })}
+                                                            className={`flex flex-col items-center justify-center gap-1 p-2 rounded-lg transition-all ${timerState.isRunning
+                                                                ? 'bg-green-500/20 text-green-400 border border-green-500/30'
+                                                                : 'bg-zinc-800 text-zinc-500 hover:text-zinc-300 hover:bg-zinc-700 border border-white/5'
+                                                                }`}
                                                         >
-                                                            Mode: Count Up
+                                                            <Play size={16} fill={timerState.isRunning ? "currentColor" : "none"} />
+                                                            <span className="text-[10px] font-bold">START</span>
+                                                        </button>
+                                                        <button
+                                                            onClick={() => broadcast({ type: 'TIMER_ACTION', payload: { action: 'pause' } })}
+                                                            className={`flex flex-col items-center justify-center gap-1 p-2 rounded-lg transition-all ${timerState.isPaused
+                                                                ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
+                                                                : 'bg-zinc-800 text-zinc-500 hover:text-zinc-300 hover:bg-zinc-700 border border-white/5'
+                                                                }`}
+                                                        >
+                                                            <Pause size={16} fill={timerState.isPaused ? "currentColor" : "none"} />
+                                                            <span className="text-[10px] font-bold">PAUSE</span>
+                                                        </button>
+                                                        <button
+                                                            onClick={() => {
+                                                                setResetFlash(true);
+                                                                broadcast({ type: 'TIMER_ACTION', payload: { action: 'reset' } });
+                                                                setTimeout(() => setResetFlash(false), 300);
+                                                            }}
+                                                            className={`flex flex-col items-center justify-center gap-1 p-2 rounded-lg transition-all ${resetFlash
+                                                                ? 'bg-red-500/20 text-red-500 border border-red-500/50 scale-95'
+                                                                : 'bg-zinc-800 text-zinc-500 hover:text-red-400 hover:bg-zinc-700 border border-white/5'
+                                                                }`}
+                                                        >
+                                                            <Square size={16} />
+                                                            <span className="text-[10px] font-bold">RESET</span>
                                                         </button>
                                                     </div>
                                                 </div>
-
-                                                {/* Controls */}
-                                                <div className="grid grid-cols-3 gap-2 border-t border-white/10 pt-3">
-                                                    <button
-                                                        onClick={() => broadcast({ type: 'TIMER_ACTION', payload: { action: 'start' } })}
-                                                        className={`flex flex-col items-center justify-center gap-1 p-2 rounded-lg transition-all ${timerState.isRunning
-                                                            ? 'bg-green-500/20 text-green-400 border border-green-500/30'
-                                                            : 'bg-zinc-800 text-zinc-500 hover:text-zinc-300 hover:bg-zinc-700 border border-white/5'
-                                                            }`}
-                                                    >
-                                                        <Play size={16} fill={timerState.isRunning ? "currentColor" : "none"} />
-                                                        <span className="text-[10px] font-bold">START</span>
-                                                    </button>
-                                                    <button
-                                                        onClick={() => broadcast({ type: 'TIMER_ACTION', payload: { action: 'pause' } })}
-                                                        className={`flex flex-col items-center justify-center gap-1 p-2 rounded-lg transition-all ${timerState.isPaused
-                                                            ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
-                                                            : 'bg-zinc-800 text-zinc-500 hover:text-zinc-300 hover:bg-zinc-700 border border-white/5'
-                                                            }`}
-                                                    >
-                                                        <Pause size={16} fill={timerState.isPaused ? "currentColor" : "none"} />
-                                                        <span className="text-[10px] font-bold">PAUSE</span>
-                                                    </button>
-                                                    <button
-                                                        onClick={() => {
-                                                            setResetFlash(true);
-                                                            broadcast({ type: 'TIMER_ACTION', payload: { action: 'reset' } });
-                                                            setTimeout(() => setResetFlash(false), 300);
-                                                        }}
-                                                        className={`flex flex-col items-center justify-center gap-1 p-2 rounded-lg transition-all ${resetFlash
-                                                            ? 'bg-red-500/20 text-red-500 border border-red-500/50 scale-95'
-                                                            : 'bg-zinc-800 text-zinc-500 hover:text-red-400 hover:bg-zinc-700 border border-white/5'
-                                                            }`}
-                                                    >
-                                                        <Square size={16} />
-                                                        <span className="text-[10px] font-bold">RESET</span>
-                                                    </button>
-                                                </div>
-                                            </div>
+                                            </>
                                         )}
                                     </button>
 

@@ -3,6 +3,8 @@
 import { useState, useEffect, useRef } from 'react';
 import { useBroadcastChannel } from '@/hooks/useBroadcast';
 import { Clock, ChevronRight, Music, BookOpen, Image, AlertCircle } from 'lucide-react';
+import { useLicense } from '@/hooks/useLicense';
+import DemoWatermark from '@/components/DemoWatermark';
 
 interface StageContent {
     type: 'verse' | 'song' | 'media' | 'clear';
@@ -17,6 +19,7 @@ interface StageContent {
 }
 
 export default function StageDisplayPage() {
+    const { isDemo, loading } = useLicense();
     const [content, setContent] = useState<StageContent | null>(null);
     const [currentTime, setCurrentTime] = useState<Date | null>(null);
     const [timerMode, setTimerMode] = useState<'countup' | 'countdown'>('countup');
@@ -307,6 +310,9 @@ export default function StageDisplayPage() {
             <div className="fixed bottom-4 left-1/2 -translate-x-1/2 text-zinc-600 text-sm">
                 Double-click to toggle fullscreen • Stage Display
             </div>
+
+            {/* Demo Watermark if unlicensed */}
+            {isDemo && !loading && <DemoWatermark />}
         </div>
     );
 }

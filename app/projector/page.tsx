@@ -113,7 +113,8 @@ export default function ProjectorPage() {
             textShadow: activeTheme.styles.textShadow,
             fontWeight: activeTheme.styles.fontWeight,
             textAlign: activeTheme.styles.textAlign || 'center',
-            fontSize: activeTheme.styles.fontSize
+            fontSize: activeTheme.styles.fontSize,
+            textTransform: activeTheme.styles.textTransform || 'none'
         };
 
         const layout = activeTheme.layout || { referencePosition: 'bottom', referenceScale: 1, showVerseNumbers: true };
@@ -171,9 +172,10 @@ export default function ProjectorPage() {
                         ))}
                     </div>
                 ) : (
-                    <div className="relative w-full">
+                    <div className="flex items-start gap-4 relative w-full" style={{ justifyContent: activeTheme.styles.textAlign === 'center' ? 'center' : activeTheme.styles.textAlign === 'right' ? 'flex-end' : 'flex-start' }}>
                         {layout.showVerseNumbers && activeContent.verses && activeContent.verses[0] && (
-                            <span className="text-[0.5em] opacity-60 font-mono absolute -left-16 top-0" style={{ color: activeTheme.styles.color }}>
+                            // Use same consistent styling as multi-verse (50% size, opacity 60%)
+                            <span className="text-[50%] opacity-60 font-mono mt-[0.2em] flex-shrink-0 select-none" style={{ color: activeTheme.styles.color }}>
                                 {activeContent.verses[0].verseNum}
                             </span>
                         )}

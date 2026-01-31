@@ -32,7 +32,8 @@ function createWindow() {
             contextIsolation: true,
             preload: path.join(__dirname, 'preload.js')
         },
-        autoHideMenuBar: true // Hide default menu bar for premium look
+        autoHideMenuBar: true, // Hide default menu bar for premium look
+        icon: path.join(__dirname, app.isPackaged ? '../out/icon.png' : '../public/icon.png')
     });
 
     // In production, we would load the static build or start a bundled server
@@ -85,6 +86,7 @@ ipcMain.handle('open-projector-window', async () => {
         frame: false, // Frameless for immersion? Or maybe standard for now
         fullscreen: true, // Start full screen
         autoHideMenuBar: true, // Absolutely ensure no menu on projector
+        icon: path.join(__dirname, app.isPackaged ? '../out/icon.png' : '../public/icon.png'),
         webPreferences: {
             nodeIntegration: false,
             contextIsolation: true,

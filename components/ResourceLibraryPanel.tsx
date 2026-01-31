@@ -1,10 +1,10 @@
 import { useState, useEffect, useRef } from 'react';
-import { saveResource, getResources, deleteResource, ResourceItem, saveCollection, getCollections, deleteCollection, ResourceCollection } from '@/utils/resourceLibrary';
+import { saveResource, getResources, deleteResource, ResourceItem, saveCollection, getCollections, deleteCollection, ResourceCollection, saveTheme, getThemes, deleteTheme } from '@/utils/resourceLibrary';
 import { getBibleBooks, getChapterVerseCount, lookupVerseAsync, SUPPORTED_VERSIONS } from '@/utils/bible';
 import { DEFAULT_THEMES, GOOGLE_FONTS, ProjectorTheme } from '@/utils/themes';
 import { ScheduleItem } from '@/utils/scheduleManager';
 import { extractTextFromFile, parseLyrics, isCcliCopy, parseCcliCopy, parsePresentationFile } from '@/utils/lyricsParser';
-import { Search, Music, Monitor, FileText, Image as ImageIcon, Book, Plus, Play, Trash2, Folder, FolderPlus, X, Video, Check, Eye } from 'lucide-react';
+import { Search, Music, Monitor, FileText, Image as ImageIcon, Book, Plus, Play, Trash2, Folder, FolderPlus, X, Video, Check, Eye, ImagePlus } from 'lucide-react';
 import PreviewModal from './PreviewModal';
 import SongImportModal from './SongImportModal';
 import { MOTION_BACKGROUNDS } from '@/utils/motionBackgrounds';
@@ -80,8 +80,30 @@ export default function ResourceLibraryPanel({
     const resetBibleNav = () => setBibleNav(prev => ({ ...prev, book: null, chapter: null }));
 
     const fileInputRef = useRef<HTMLInputElement>(null);
+    const themeBgInputRef = useRef<HTMLInputElement>(null);
+    const [offlineFlash, setOfflineFlash] = useState(false); // Quick red flash or indicator
+
+    const handleThemeBgUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file || !editingTheme) return;
+
+        const reader = new FileReader();
+        reader.onload = (ev) => {
+            const result = ev.target?.result as string;
+            setEditingTheme({
+                ...editingTheme,
+                background: { ...editingTheme.background, type: 'image', value: result }
+            });
+        };
+        reader.readAsDataURL(file);
+    };
 
     const handleOnlineSearch = async () => {
+        if (!navigator.onLine) {
+            setOfflineFlash(true);
+            setTimeout(() => setOfflineFlash(false), 3000);
+            return;
+        }
         if (!searchQuery.trim()) return;
         setIsSearchingOnline(true);
         try {
@@ -227,18 +249,12 @@ export default function ResourceLibraryPanel({
     }, []);
 
     const loadData = async () => {
-        const [items, cols] = await Promise.all([getResources(), getCollections()]);
+        const [items, cols, themes] = await Promise.all([getResources(), getCollections(), getThemes()]);
         items.sort((a, b) => b.dateAdded - a.dateAdded);
         setResources(items);
         onResourcesChanged?.(items);
         setCollections(cols.sort((a, b) => b.createdAt - a.createdAt));
-        const savedThemes = localStorage.getItem('custom_themes');
-        if (savedThemes) setCustomThemes(JSON.parse(savedThemes));
-    };
-
-    const saveCustomThemes = (themes: ProjectorTheme[]) => {
         setCustomThemes(themes);
-        localStorage.setItem('custom_themes', JSON.stringify(themes));
     };
 
     const handleCreateCollection = async () => {
@@ -797,20 +813,44 @@ export default function ResourceLibraryPanel({
         );
     };
 
-    const handleSaveTheme = (theme: ProjectorTheme) => {
-        if (customThemes.some(t => t.id === theme.id)) {
-            saveCustomThemes(customThemes.map(t => t.id === theme.id ? theme : t));
-        } else {
-            saveCustomThemes([...customThemes, theme]);
+    const handleSaveTheme = async (theme: ProjectorTheme) => {
+        const themeToSave = { ...theme };
+
+        let createdNew = false;
+        // If it's a built-in theme (not marked custom), Force-Clone it to a new ID
+        if (!themeToSave.isCustom) {
+            themeToSave.id = `custom-theme-${Date.now()}`;
+            themeToSave.isCustom = true;
+            if (themeToSave.name === theme.name) {
+                themeToSave.name = `${theme.name} (Custom)`;
+            }
+            createdNew = true;
         }
+
+        try {
+            await saveTheme(themeToSave);
+            await loadData();
+
+            // UX Improvement: Immediately select/apply the new theme so user sees results
+            onApplyTheme?.(themeToSave);
+
+            if (createdNew) {
+                alert(`Theme saved as new custom theme: "${themeToSave.name}"`);
+            }
+        } catch (e) {
+            console.error("Save failed", e);
+            alert("Failed to save theme. Please try again.");
+        }
+
         setIsThemeModalOpen(false);
         setEditingTheme(null);
     };
 
-    const handleDeleteTheme = (id: string, e: React.MouseEvent) => {
+    const handleDeleteTheme = async (id: string, e: React.MouseEvent) => {
         e.stopPropagation();
         if (confirm('Delete this theme?')) {
-            saveCustomThemes(customThemes.filter(t => t.id !== id));
+            await deleteTheme(id);
+            await loadData();
         }
     };
 
@@ -949,6 +989,27 @@ export default function ResourceLibraryPanel({
                                 </select>
                             </div>
 
+                            <div className="space-y-2">
+                                <label className="text-xs font-bold text-zinc-500 uppercase">Text Casing</label>
+                                <div className="flex bg-zinc-950 rounded border border-white/10 p-1 gap-1">
+                                    {[
+                                        { id: 'none', label: 'Normal' },
+                                        { id: 'uppercase', label: 'ALL CAPS' },
+                                        { id: 'lowercase', label: 'abc' },
+                                        { id: 'capitalize', label: 'Title' }
+                                    ].map(opt => (
+                                        <button key={opt.id}
+                                            onClick={() => setEditingTheme({
+                                                ...editingTheme, styles: { ...editingTheme.styles, textTransform: opt.id as any }
+                                            })}
+                                            className={`flex-1 py-1 rounded text-xs transition-colors ${(!editingTheme.styles.textTransform && opt.id === 'none') || editingTheme.styles.textTransform === opt.id ? 'bg-indigo-600 text-white shadow-sm' : 'text-zinc-500 hover:text-white hover:bg-zinc-800'} `}
+                                        >
+                                            {opt.label}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+
                             <div className="grid grid-cols-2 gap-4">
                                 <div className="space-y-2">
                                     <label className="text-xs font-bold text-zinc-500 uppercase">Text Color</label>
@@ -969,7 +1030,7 @@ export default function ResourceLibraryPanel({
                                 </div>
                                 <div className="space-y-2">
                                     <label className="text-xs font-bold text-zinc-500 uppercase">Alignment</label>
-                                    <div className="flex bg-zinc-950 rounded border border-white/10 p-1">
+                                    <div className="flex bg-zinc-950 rounded border border-white/10 p-1 gap-1">
                                         {['left', 'center', 'right'].map(align => (
                                             <button key={align}
                                                 onClick={() => setEditingTheme({
@@ -979,7 +1040,7 @@ export default function ResourceLibraryPanel({
                                                         alignItems: align === 'center' ? 'center' : align === 'left' ? 'flex-start' : 'flex-end'
                                                     }
                                                 })}
-                                                className={`flex - 1 py - 1 rounded text - xs capitalize ${editingTheme.styles.textAlign === align ? 'bg-indigo-600 text-white' : 'text-zinc-500 hover:text-white'} `}
+                                                className={`flex-1 py-1 rounded text-xs capitalize transition-colors ${editingTheme.styles.textAlign === align ? 'bg-indigo-600 text-white shadow-sm' : 'text-zinc-500 hover:text-white hover:bg-zinc-800'} `}
                                             >
                                                 {align}
                                             </button>
@@ -994,7 +1055,7 @@ export default function ResourceLibraryPanel({
                                     {['color', 'gradient', 'image'].map(t => (
                                         <button key={t}
                                             onClick={() => setEditingTheme({ ...editingTheme, background: { ...editingTheme.background, type: t as any } })}
-                                            className={`px - 3 py - 1 rounded text - xs font - bold uppercase transition - colors ${editingTheme.background.type === t ? 'bg-white text-black' : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'} `}
+                                            className={`px-3 py-1 rounded text-xs font-bold uppercase transition-colors ${editingTheme.background.type === t ? 'bg-white text-black' : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'} `}
                                         >
                                             {t}
                                         </button>
@@ -1004,7 +1065,7 @@ export default function ResourceLibraryPanel({
 
                             <div className="space-y-2">
                                 <label className="text-xs font-bold text-zinc-500 uppercase">
-                                    {editingTheme.background.type === 'color' ? 'Color Hex' : editingTheme.background.type === 'gradient' ? 'CSS Gradient' : 'Image URL'}
+                                    {editingTheme.background.type === 'color' ? 'Color Hex' : editingTheme.background.type === 'gradient' ? 'CSS Gradient' : 'Image Source'}
                                 </label>
                                 {editingTheme.background.type === 'color' ? (
                                     <div className="flex items-center gap-2">
@@ -1023,15 +1084,42 @@ export default function ResourceLibraryPanel({
                                     </div>
                                 ) : (
                                     <>
-                                        <input
-                                            className="w-full bg-zinc-950 border border-white/10 rounded px-3 py-2 text-sm text-white focus:border-indigo-500 outline-none font-mono text-xs"
-                                            value={editingTheme.background.value}
-                                            placeholder={editingTheme.background.type === 'image' ? 'https://...' : 'linear-gradient(...)'}
-                                            onChange={e => setEditingTheme({ ...editingTheme, background: { ...editingTheme.background, value: e.target.value } })}
-                                        />
-                                        {editingTheme.background.type === 'image' && (
-                                            <p className="text-[10px] text-zinc-500">Paste an image URL above.</p>
-                                        )}
+                                        <div className="flex gap-2">
+                                            <input
+                                                className="flex-1 bg-zinc-950 border border-white/10 rounded px-3 py-2 text-sm text-white focus:border-indigo-500 outline-none font-mono text-xs"
+                                                value={editingTheme.background.value.startsWith('data:') ? '(Uploaded Image Data)' : editingTheme.background.value}
+                                                readOnly={editingTheme.background.value.startsWith('data:')}
+                                                placeholder={editingTheme.background.type === 'image' ? 'Image URL or Upload' : 'linear-gradient(...)'}
+                                                onChange={e => !editingTheme.background.value.startsWith('data:') && setEditingTheme({ ...editingTheme, background: { ...editingTheme.background, value: e.target.value } })}
+                                            />
+                                            {editingTheme.background.type === 'image' && (
+                                                <>
+                                                    <button
+                                                        onClick={() => themeBgInputRef.current?.click()}
+                                                        className="px-3 py-2 bg-zinc-800 hover:bg-zinc-700 rounded text-zinc-300 transition-colors border border-white/10"
+                                                        title="Upload Image"
+                                                    >
+                                                        <ImagePlus size={14} />
+                                                    </button>
+                                                    <input
+                                                        ref={themeBgInputRef}
+                                                        type="file"
+                                                        accept="image/*,video/*"
+                                                        className="hidden"
+                                                        onChange={handleThemeBgUpload}
+                                                    />
+                                                </>
+                                            )}
+                                            {editingTheme.background.value.startsWith('data:') && (
+                                                <button
+                                                    onClick={() => setEditingTheme({ ...editingTheme, background: { ...editingTheme.background, value: '' } })}
+                                                    className="px-3 py-2 bg-red-900/30 hover:bg-red-900/50 text-red-400 border border-red-500/30 rounded"
+                                                    title="Clear Image"
+                                                >
+                                                    <X size={14} />
+                                                </button>
+                                            )}
+                                        </div>
                                     </>
                                 )}
                             </div>
@@ -1041,16 +1129,16 @@ export default function ResourceLibraryPanel({
                                 <div className="grid grid-cols-2 gap-4">
                                     <div className="space-y-2">
                                         <label className="text-xs font-bold text-zinc-500 uppercase">Reference Position</label>
-                                        <div className="flex bg-zinc-950 rounded border border-white/10 p-1">
+                                        <div className="flex bg-zinc-950 rounded border border-white/10 p-1 gap-1">
                                             <button
                                                 onClick={() => setEditingTheme({ ...editingTheme, layout: { ...(editingTheme.layout || { referenceScale: 1, showVerseNumbers: true }), referencePosition: 'top' } })}
-                                                className={`flex - 1 py - 1 rounded text - xs ${(!editingTheme.layout || editingTheme.layout.referencePosition === 'top') ? 'bg-indigo-600 text-white' : 'text-zinc-500 hover:text-white'} `}
+                                                className={`flex-1 py-1 rounded text-xs transition-colors ${(!editingTheme.layout || editingTheme.layout.referencePosition === 'top') ? 'bg-indigo-600 text-white shadow-sm' : 'text-zinc-500 hover:text-white hover:bg-zinc-800'} `}
                                             >
                                                 TOP
                                             </button>
                                             <button
                                                 onClick={() => setEditingTheme({ ...editingTheme, layout: { ...(editingTheme.layout || { referenceScale: 1, showVerseNumbers: true }), referencePosition: 'bottom' } })}
-                                                className={`flex - 1 py - 1 rounded text - xs ${(editingTheme.layout?.referencePosition === 'bottom') ? 'bg-indigo-600 text-white' : 'text-zinc-500 hover:text-white'} `}
+                                                className={`flex-1 py-1 rounded text-xs transition-colors ${(editingTheme.layout?.referencePosition === 'bottom') ? 'bg-indigo-600 text-white shadow-sm' : 'text-zinc-500 hover:text-white hover:bg-zinc-800'} `}
                                             >
                                                 BOTTOM
                                             </button>
@@ -1087,7 +1175,7 @@ export default function ResourceLibraryPanel({
                             <label className="text-xs font-bold text-zinc-500 uppercase">Live Preview</label>
                             <div className="flex-1 rounded-xl overflow-hidden border border-white/10 relative shadow-2xl bg-zinc-950 select-none">
                                 <div className="absolute inset-0 w-full h-full transition-all duration-300" style={{
-                                    background: editingTheme.background.type === 'image' ? `url(${editingTheme.background.value}) center / cover no - repeat` :
+                                    background: editingTheme.background.type === 'image' ? `url(${editingTheme.background.value}) center / cover no-repeat` :
                                         editingTheme.background.type === 'gradient' ? editingTheme.background.value : editingTheme.background.value
                                 }}>
                                     <div className="absolute inset-0 flex flex-col p-8" style={{
@@ -1100,6 +1188,7 @@ export default function ResourceLibraryPanel({
                                             textShadow: editingTheme.styles.textShadow,
                                             fontWeight: editingTheme.styles.fontWeight,
                                             textAlign: editingTheme.styles.textAlign,
+                                            textTransform: editingTheme.styles.textTransform || 'none',
                                         }}>
                                             <h1 className="text-4xl leading-tight mb-4">Amazing Grace</h1>
                                             <p className="text-2xl opacity-80">How sweet the sound<br />That saved a wretch like me</p>
@@ -1302,6 +1391,14 @@ export default function ResourceLibraryPanel({
                                 </div>
                             )}
                         </div>
+
+                        {/* Offline Indicator */}
+                        {offlineFlash && (
+                            <div className="absolute top-12 right-4 bg-red-500/90 text-white text-xs px-3 py-1.5 rounded-lg shadow-xl animate-in fade-in slide-in-from-top-2 border border-white/20 z-50 font-bold flex items-center gap-2">
+                                <span className="w-2 h-2 bg-white rounded-full animate-pulse" />
+                                Offline - Check Connection
+                            </div>
+                        )}
 
 
                         {isOnlineMode && (

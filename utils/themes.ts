@@ -12,7 +12,7 @@ export interface ProjectorTheme {
         justifyContent: 'center' | 'flex-start' | 'flex-end'; // Vertical alignment
         alignItems: 'center' | 'flex-start' | 'flex-end'; // Horizontal alignment
         textShadow?: string;
-        textTransform?: 'none' | 'uppercase' | 'lowercase';
+        textTransform?: 'none' | 'uppercase' | 'lowercase' | 'capitalize';
         letterSpacing?: string;
         lineHeight?: string;
     };

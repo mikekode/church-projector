@@ -3,7 +3,7 @@ import { ScheduleItem } from '@/utils/scheduleManager';
 const DB_NAME = 'church-projector-library';
 const STORE_NAME = 'resources';
 
-const DB_VERSION = 2;
+const DB_VERSION = 3;
 
 function openDB(): Promise<IDBDatabase> {
     return new Promise((resolve, reject) => {
@@ -17,6 +17,9 @@ function openDB(): Promise<IDBDatabase> {
             }
             if (!db.objectStoreNames.contains('collections')) {
                 db.createObjectStore('collections', { keyPath: 'id' });
+            }
+            if (!db.objectStoreNames.contains('themes')) {
+                db.createObjectStore('themes', { keyPath: 'id' });
             }
         };
     });
@@ -113,6 +116,57 @@ export async function deleteCollection(id: string): Promise<void> {
     const db = await openDB();
     const tx = db.transaction('collections', 'readwrite');
     tx.objectStore('collections').delete(id);
+    return new Promise((resolve, reject) => {
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => reject(tx.error);
+    });
+}
+// Themes CRUD
+export interface ProjectorTheme {
+    id: string;
+    name: string;
+    isCustom?: boolean;
+    styles: any;
+    background: any;
+    layout?: any;
+}
+
+export async function saveTheme(theme: ProjectorTheme): Promise<void> {
+    if (typeof window === 'undefined') return;
+    try {
+        const db = await openDB();
+        const tx = db.transaction('themes', 'readwrite');
+        tx.objectStore('themes').put(theme);
+        return new Promise((resolve, reject) => {
+            tx.oncomplete = () => resolve();
+            tx.onerror = () => reject(tx.error);
+        });
+    } catch (e) {
+        console.error("Failed to save theme", e);
+    }
+}
+
+export async function getThemes(): Promise<ProjectorTheme[]> {
+    if (typeof window === 'undefined') return [];
+    try {
+        const db = await openDB();
+        const tx = db.transaction('themes', 'readonly');
+        const request = tx.objectStore('themes').getAll();
+        return new Promise((resolve, reject) => {
+            request.onsuccess = () => resolve(request.result);
+            request.onerror = () => reject(request.error);
+        });
+    } catch (e) {
+        // Fallback for if object store doesn't exist yet
+        console.warn("Failed to get themes (store might not exist yet)", e);
+        return [];
+    }
+}
+
+export async function deleteTheme(id: string): Promise<void> {
+    const db = await openDB();
+    const tx = db.transaction('themes', 'readwrite');
+    tx.objectStore('themes').delete(id);
     return new Promise((resolve, reject) => {
         tx.oncomplete = () => resolve();
         tx.onerror = () => reject(tx.error);

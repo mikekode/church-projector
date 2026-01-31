@@ -1,3 +1,4 @@
+'use client';
 import Link from 'next/link';
 import { Check, ArrowLeft, Zap, Star, Shield, HelpCircle } from 'lucide-react';
 
@@ -57,7 +58,10 @@ export default function SubscribePage() {
                             ))}
                         </div>
 
-                        <button className="w-full py-5 rounded-full bg-white text-black font-black text-lg hover:bg-zinc-200 transition-all shadow-xl active:scale-95">
+                        <button
+                            onClick={() => window.location.href = 'https://creenly.lemonsqueezy.com/checkout/buy/2ee312d4-cbab-464f-8707-50f0ecd872cc'}
+                            className="w-full py-5 rounded-full bg-white text-black font-black text-lg hover:bg-zinc-200 transition-all shadow-xl active:scale-95"
+                        >
                             Get Monthly Access
                         </button>
                     </div>
@@ -93,7 +97,10 @@ export default function SubscribePage() {
                             ))}
                         </div>
 
-                        <button className="w-full py-5 rounded-full bg-indigo-600 text-white font-black text-lg hover:bg-indigo-500 transition-all shadow-2xl shadow-indigo-500/40 active:scale-95">
+                        <button
+                            onClick={() => window.location.href = 'https://creenly.lemonsqueezy.com/checkout/buy/d9aa88d0-4c95-481c-9d56-a7831a1279fb'}
+                            className="w-full py-5 rounded-full bg-indigo-600 text-white font-black text-lg hover:bg-indigo-500 transition-all shadow-2xl shadow-indigo-500/40 active:scale-95"
+                        >
                             Get Annual Access
                         </button>
                     </div>
