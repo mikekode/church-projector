@@ -30,6 +30,10 @@ jobs:
       - name: Install Dependencies
         run: npm install
 
+      - name: Hide API routes for static export
+        run: mv app/api app/_api || true
+        shell: bash
+
       - name: Build Next.js
         run: npm run build
         env:
