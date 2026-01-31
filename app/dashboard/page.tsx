@@ -695,35 +695,21 @@ export default function DashboardPage() {
             // Handle scripture detections - ALWAYS push first scripture to live when SWITCH signal
             if (scriptures.length > 0) {
                 const topScripture = scriptures[0]; // Already sorted by confidence
-
-                // Create item for queue and live
-                const newItem: DetectedItem = {
-                    id: Date.now().toString() + Math.random(),
-                    reference: topScripture.reference,
-                    text: topScripture.text,
-                    version: topScripture.version || selectedVersionRef.current,
+                // Add to queue (handles duplicate checking and auto-push logic)
+                addToQueue({
                     book: topScripture.book,
                     chapter: topScripture.chapter,
-                    verseNum: topScripture.verse,
+                    verse: topScripture.verse,
                     verseEnd: topScripture.verseEnd,
-                    timestamp: new Date(),
+                    text: topScripture.text,
+                    reference: topScripture.reference,
                     confidence: topScripture.confidence,
                     matchType: topScripture.matchType,
+                    version: topScripture.version,
                     songData: topScripture.songData,
-                };
-
-                // Add to queue
-                setDetectedQueue(prev => [newItem, ...prev].slice(0, 50));
-                console.log('[AI] Detected:', topScripture.reference, `(${topScripture.confidence} %) - Signal: ${signal} `);
-
-                // Auto-push to live ONLY if auto mode is ON (SCRIPTURES ONLY)
-                const isSong = newItem.version === 'SONG';
-                if (autoModeRef.current && !isSong) {
-                    console.log('[AUTO-LIVE] Pushing to projector:', topScripture.reference);
-                    goLive(newItem);
-                }
+                }, 'ai');
             }
-        }, [navigateVerse, navigateChapter, clearProjector, goLive]),
+        }, [navigateVerse, navigateChapter, clearProjector, goLive, addToQueue]),
         activeItem?.reference || null,
         { confidenceThreshold, version: selectedVersion }
     );
