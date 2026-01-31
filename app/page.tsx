@@ -188,6 +188,16 @@ export default function Home() {
                                 <Laptop size={20} /> APPLE MAC DMG
                             </a>
                         </div>
+                        {/* System Requirements */}
+                        <div className="flex flex-col sm:flex-row gap-4 justify-center text-[10px] uppercase font-bold tracking-[0.2em] text-zinc-600">
+                            <div className="flex items-center gap-2 py-2 px-4 border border-white/5 rounded-lg bg-zinc-900/10">
+                                <Monitor size={12} className="text-zinc-700" /> Windows 10/11 (64-bit)
+                            </div>
+                            <div className="flex items-center gap-2 py-2 px-4 border border-white/5 rounded-lg bg-zinc-900/10">
+                                <Laptop size={12} className="text-zinc-700" /> macOS 12.0 or later
+                            </div>
+                        </div>
+
                         <p className="text-zinc-500 text-xs font-bold uppercase tracking-widest italic">
                             Version 2.1.6 • 100% Virus Free • Certified Open Source Build
                         </p>
