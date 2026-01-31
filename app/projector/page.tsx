@@ -194,8 +194,16 @@ export default function ProjectorPage() {
         );
     };
 
+    const toggleFullscreen = () => {
+        if (!document.fullscreenElement) {
+            document.documentElement.requestFullscreen();
+        } else {
+            document.exitFullscreen();
+        }
+    };
+
     return (
-        <>
+        <div onDoubleClick={toggleFullscreen} className="h-full w-full">
             <VisualStack
                 background={activeBackground}
                 content={renderContent()}
@@ -203,6 +211,6 @@ export default function ProjectorPage() {
             />
             {/* Show watermark for demo/unlicensed users */}
             {isDemo && !loading && <DemoWatermark />}
-        </>
+        </div>
     );
 }

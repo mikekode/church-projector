@@ -126,13 +126,9 @@ ipcMain.handle('open-projector-window', async () => {
     }
 
     projectorWindow = new BrowserWindow({
-        x: targetDisplay.bounds.x,
-        y: targetDisplay.bounds.y,
-        width: targetDisplay.bounds.width,
-        height: targetDisplay.bounds.height,
+        width: 1280,
+        height: 720,
         backgroundColor: '#000000',
-        frame: false,
-        fullscreen: true,
         autoHideMenuBar: true,
         icon: getIconPath(),
         webPreferences: {
