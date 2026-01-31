@@ -10,7 +10,7 @@ export default function Home() {
         <div className="min-h-screen bg-black text-white font-sans selection:bg-indigo-500/30 overflow-x-hidden">
             {/* Top Announcement */}
             <div className="bg-indigo-600 px-4 py-2 text-center text-xs font-bold tracking-widest uppercase animate-pulse">
-                New: Creenly 2.1.1 "Growth" SEO Update is now live 🚀
+                Special Offer: Get Creenly Pro for your Church at 50% Off this month 🎁
             </div>
 
             {/* Navigation */}
@@ -45,7 +45,7 @@ export default function Home() {
                         <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 text-xs font-bold tracking-widest uppercase mb-4">
                             Stop Stressing. Start Projecting.
                         </div>
-                        <h1 className="text-7xl md:text-[140px] font-black tracking-tighter leading-[0.85] bg-gradient-to-b from-white via-white to-white/40 bg-clip-text text-transparent italic">
+                        <h1 className="text-5xl md:text-8xl lg:text-[140px] font-black tracking-tighter leading-[0.85] bg-gradient-to-b from-white via-white to-white/40 bg-clip-text text-transparent italic">
                             PROJECTOR<br />WITHOUT<br />THE PREP.
                         </h1>
                         <div className="max-w-3xl mx-auto space-y-10">
@@ -115,14 +115,14 @@ export default function Home() {
                             <p className="text-zinc-500 uppercase tracking-[0.3em] text-xs font-black">Creenly vs the Legacy Giants</p>
                         </div>
 
-                        <div className="bg-zinc-900/10 border border-white/5 rounded-[40px] overflow-hidden backdrop-blur-sm">
-                            <table className="w-full text-left">
+                        <div className="bg-zinc-900/10 border border-white/5 rounded-[40px] overflow-x-auto backdrop-blur-sm">
+                            <table className="w-full text-left min-w-[300px]">
                                 <thead>
                                     <tr className="border-b border-white/10">
-                                        <th className="py-8 px-8 text-[10px] font-black uppercase tracking-widest text-zinc-600">Feature</th>
-                                        <th className="py-8 px-8 bg-indigo-600/10"><span className="text-xl font-black text-indigo-400">CREENLY</span></th>
-                                        <th className="py-8 px-8 text-zinc-500 font-bold uppercase text-[10px] tracking-widest">Legacy Pros</th>
-                                        <th className="py-8 px-8 text-zinc-500 font-bold uppercase text-[10px] tracking-widest">Small Alternatives</th>
+                                        <th className="py-8 px-6 text-[10px] font-black uppercase tracking-widest text-zinc-600">Feature</th>
+                                        <th className="py-8 px-6 bg-indigo-600/10"><span className="text-lg md:text-xl font-black text-indigo-400">CREENLY</span></th>
+                                        <th className="py-8 px-6 text-zinc-500 font-bold uppercase text-[10px] tracking-widest">Legacy Pros</th>
+                                        <th className="py-8 px-6 text-zinc-500 font-bold uppercase text-[10px] tracking-widest">Small Alternatives</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -134,14 +134,14 @@ export default function Home() {
                                         { f: "Monthly Cost", a: "$15", b: "$40+", c: "$20+" },
                                     ].map((row, i) => (
                                         <tr key={i} className="border-b border-white/5 group hover:bg-white/[0.01] transition-colors">
-                                            <td className="py-8 px-8 text-sm font-bold text-zinc-400 group-hover:text-white transition-colors">{row.f}</td>
-                                            <td className="py-8 px-8 bg-indigo-600/5 font-black text-white italic">
-                                                {typeof row.a === 'boolean' ? (row.a ? <CheckCircle className="text-indigo-400" size={20} /> : "—") : row.a}
+                                            <td className="py-8 px-6 text-xs md:text-sm font-bold text-zinc-400 group-hover:text-white transition-colors">{row.f}</td>
+                                            <td className="py-8 px-6 bg-indigo-600/5 font-black text-white italic">
+                                                {typeof row.a === 'boolean' ? (row.a ? <CheckCircle className="text-indigo-400" size={18} /> : "—") : row.a}
                                             </td>
-                                            <td className="py-8 px-8 text-sm text-zinc-600 font-medium">
+                                            <td className="py-8 px-6 text-xs md:text-sm text-zinc-600 font-medium">
                                                 {typeof row.b === 'boolean' ? (row.b ? <Check className="text-zinc-600 opacity-30" /> : "—") : row.b}
                                             </td>
-                                            <td className="py-8 px-8 text-sm text-zinc-600 font-medium">
+                                            <td className="py-8 px-6 text-xs md:text-sm text-zinc-600 font-medium">
                                                 {typeof row.c === 'boolean' ? (row.c ? <Check className="text-zinc-600 opacity-30" /> : "—") : row.c}
                                             </td>
                                         </tr>
@@ -188,17 +188,17 @@ export default function Home() {
                                 <Laptop size={20} /> APPLE MAC DMG
                             </a>
                         </div>
-                        <p className="text-zinc-500 text-xs font-bold uppercase tracking-widest">Version 2.1.1 • 100% Virus Free • Certified Build</p>
+                        <p className="text-zinc-500 text-xs font-bold uppercase tracking-widest">Version 2.1.2 • 100% Virus Free • Certified Build</p>
                     </div>
                 </section>
 
                 {/* Final CTA */}
                 <section className="py-60 px-6 text-center relative overflow-hidden bg-white/5">
-                    <h2 className="text-6xl md:text-[160px] font-black tracking-tighter mb-12 bg-clip-text text-transparent bg-gradient-to-b from-white to-zinc-800 leading-[0.8] select-none opacity-5">
+                    <h2 className="text-5xl md:text-[160px] font-black tracking-tighter mb-12 bg-clip-text text-transparent bg-gradient-to-b from-white to-zinc-800 leading-[0.8] select-none opacity-5">
                         FAITH<br />AI
                     </h2>
                     <div className="absolute inset-0 flex flex-col items-center justify-center">
-                        <h2 className="text-6xl md:text-8xl font-black italic mb-12 tracking-tighter leading-none">
+                        <h2 className="text-6xl md:text-9xl font-black italic mb-12 tracking-tighter leading-none">
                             Take the <br /><span className="text-indigo-500">Stage.</span>
                         </h2>
                         <div className="flex justify-center flex-wrap gap-6">

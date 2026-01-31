@@ -60,6 +60,7 @@ const VoiceWave = ({ level, active }: { level: number, active: boolean }) => {
 
 export default function DashboardPage() {
     const [isListening, setIsListening] = useState(false);
+    const [isMicLoading, setIsMicLoading] = useState(false);
     const [transcript, setTranscript] = useState("");
     const [interim, setInterim] = useState("");
     const [voiceLevel, setVoiceLevel] = useState(0); // Audio RMS level (0-1)
@@ -1130,6 +1131,11 @@ export default function DashboardPage() {
                                 }}
                             >
                                 {transcript || <span className="text-zinc-600 italic">Waiting for speech...</span>}
+                                {deepgramStatus.error && (
+                                    <div className="mt-2 p-2 bg-red-500/20 border border-red-500/50 rounded text-red-400 text-[10px] font-bold">
+                                        ERROR: {deepgramStatus.error}
+                                    </div>
+                                )}
                                 <span className="text-indigo-400 animate-pulse block mt-1">{interim}</span>
                             </div>
 
@@ -1175,11 +1181,17 @@ export default function DashboardPage() {
                                 />
 
                                 <button
-                                    onClick={() => setIsListening(!isListening)}
+                                    onClick={() => {
+                                        if (isMicLoading) return;
+                                        setIsMicLoading(true);
+                                        setIsListening(!isListening);
+                                        // Auto-unlock after 1.5s to prevent toggle spamming
+                                        setTimeout(() => setIsMicLoading(false), 1500);
+                                    }}
                                     className={`w-full py-2 rounded-xl font-black text-xs tracking-wider shadow-xl transition-all flex items-center justify-center gap-3 relative overflow-hidden group
                                     ${deepgramStatus.status === 'listening'
                                             ? 'bg-red-500/10 text-red-400 border border-red-500/50 hover:bg-red-500/20'
-                                            : deepgramStatus.status === 'connecting'
+                                            : deepgramStatus.status === 'connecting' || isMicLoading
                                                 ? 'bg-yellow-500/10 text-yellow-400 border border-yellow-500/50 cursor-wait'
                                                 : 'bg-indigo-600 text-white hover:bg-indigo-500 hover:scale-[1.02] active:scale-[0.98]'
                                         } `}
@@ -1193,10 +1205,10 @@ export default function DashboardPage() {
                                             <span>LISTENING...</span>
                                             <span className="text-[10px] font-normal opacity-60 ml-2">CLICK TO STOP</span>
                                         </>
-                                    ) : deepgramStatus.status === 'connecting' ? (
+                                    ) : (deepgramStatus.status === 'connecting' || isMicLoading) ? (
                                         <>
-                                            <span className="w-4 h-4 border-2 border-yellow-400 border-t-transparent rounded-full animate-spin" />
-                                            CONNECTING...
+                                            <div className="w-4 h-4 border-2 border-yellow-400 border-t-transparent rounded-full animate-spin" />
+                                            <span>STARTING MIC...</span>
                                         </>
                                     ) : (
                                         <>

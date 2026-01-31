@@ -126,10 +126,10 @@ ipcMain.handle('open-projector-window', async () => {
     }
 
     projectorWindow = new BrowserWindow({
-        x: targetDisplay.bounds.x + 50,
-        y: targetDisplay.bounds.y + 50,
-        width: 1280,
-        height: 720,
+        x: targetDisplay.bounds.x,
+        y: targetDisplay.bounds.y,
+        width: targetDisplay.bounds.width,
+        height: targetDisplay.bounds.height,
         backgroundColor: '#000000',
         frame: false,
         fullscreen: true,
@@ -142,9 +142,15 @@ ipcMain.handle('open-projector-window', async () => {
         }
     });
 
+
     if (app.isPackaged) {
         const projectorPath = path.join(__dirname, '../out/projector.html');
-        projectorWindow.loadFile(projectorPath);
+        if (fs.existsSync(projectorPath)) {
+            projectorWindow.loadFile(projectorPath);
+        } else {
+            console.error("Projector HTML missing:", projectorPath);
+            projectorWindow.loadFile(path.join(__dirname, '../out/dashboard.html'));
+        }
     } else {
         const startUrl = process.env.ELECTRON_START_URL || 'http://localhost:3000';
         projectorWindow.loadURL(`${startUrl}/projector`);

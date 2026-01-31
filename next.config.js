@@ -1,6 +1,6 @@
 module.exports = {
     output: process.env.VERCEL ? undefined : 'export',
-    assetPrefix: process.env.VERCEL ? undefined : './',
+    assetPrefix: process.env.VERCEL ? undefined : '',
     trailingSlash: false,
     images: {
         unoptimized: true
@@ -15,12 +15,12 @@ module.exports = {
         return [
             {
                 source: '/download/windows',
-                destination: 'https://github.com/mikekode/church-projector/releases/download/v2.1.1/Creenly-Setup-2.1.1.exe',
+                destination: 'https://github.com/mikekode/church-projector/releases/download/v2.1.3/Creenly-Setup-2.1.3.exe',
                 permanent: false,
             },
             {
                 source: '/download/mac',
-                destination: 'https://github.com/mikekode/church-projector/releases/download/v2.1.1/Creenly-2.1.1-arm64.dmg',
+                destination: 'https://github.com/mikekode/church-projector/releases/download/v2.1.3/Creenly-2.1.3-arm64.dmg',
                 permanent: false,
             },
         ]
