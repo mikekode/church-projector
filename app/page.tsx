@@ -33,7 +33,7 @@ export default function Home() {
                         <a href="/subscribe" className="hover:text-white transition-colors text-indigo-400">Pricing</a>
                     </div>
                     <div className="flex items-center gap-4">
-                        <a href="https://github.com/mikekode/church-projector/releases/download/v2.0.2/Church-Projector-Setup-2.0.2.exe" className="px-6 py-3 rounded-full bg-white text-black text-sm font-black hover:bg-indigo-500 hover:text-white transition-all shadow-xl active:scale-95 flex items-center gap-2">
+                        <a href="#download-section" className="px-6 py-3 rounded-full bg-white text-black text-sm font-black hover:bg-indigo-500 hover:text-white transition-all shadow-xl active:scale-95 flex items-center gap-2">
                             <Download size={16} />
                             DOWNLOAD
                         </a>
@@ -64,7 +64,7 @@ export default function Home() {
                         <span className="block mt-4 text-indigo-400 font-bold">Download the Free Demo and see it in action.</span>
                     </p>
 
-                    <div className="flex flex-col items-center gap-8">
+                    <div id="download-section" className="flex flex-col items-center gap-8">
                         <div className="flex flex-col sm:flex-row items-center justify-center gap-6 w-full">
                             <a href="https://github.com/mikekode/church-projector/releases/download/v2.0.2/Church-Projector-Setup-2.0.2.exe" className="grow sm:grow-0 w-full sm:w-auto px-10 py-6 rounded-3xl bg-indigo-600 font-black text-xl hover:bg-indigo-500 transition-all shadow-[0_20px_50px_-12px_rgba(79,70,229,0.5)] flex items-center justify-center gap-3 group">
                                 <Monitor size={24} />
@@ -80,6 +80,19 @@ export default function Home() {
                             <Link href="/subscribe" className="text-white hover:text-indigo-400 underline decoration-indigo-500/50 underline-offset-8 transition-colors">
                                 Buy License Key to Unlock Full Version
                             </Link>
+                        </div>
+
+                        {/* System Requirements */}
+                        <div className="mt-20 pt-10 border-t border-white/5 w-full max-w-2xl mx-auto flex flex-col sm:flex-row gap-8 justify-center text-left opacity-50 hover:opacity-100 transition-opacity">
+                            <div className="flex-1">
+                                <h4 className="text-[10px] font-black uppercase tracking-widest text-indigo-400 mb-3">Windows Requirements</h4>
+                                <p className="text-[11px] leading-relaxed text-zinc-400">Win 10/11 (64-bit) • Intel i3 or Ryzen 3+ • 4GB RAM (8GB Rec) • Secondary HDMI/Output for Stage Display.</p>
+                            </div>
+                            <div className="w-px h-12 bg-white/5 hidden sm:block" />
+                            <div className="flex-1">
+                                <h4 className="text-[10px] font-black uppercase tracking-widest text-indigo-400 mb-3">Mac Requirements</h4>
+                                <p className="text-[11px] leading-relaxed text-zinc-400">macOS 10.15+ • Intel or Apple Silicon (M1/M2/M3) • 8GB RAM • Microphone input required for AI features.</p>
+                            </div>
                         </div>
                     </div>
 

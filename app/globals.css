@@ -8,6 +8,10 @@
   --background-end-rgb: 10, 10, 10;
 }
 
+html {
+  scroll-behavior: smooth;
+}
+
 @layer base {
   body {
     @apply bg-black text-white selection:bg-indigo-500/30;
