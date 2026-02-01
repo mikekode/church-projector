@@ -6,7 +6,7 @@
     "scripts": {
         "dev": "next dev",
         "build": "next build",
-        "build:electron": "next build && node scripts/fix-paths.js",
+        "build:electron": "node scripts/prepare-electron-build.js hide && next build && node scripts/prepare-electron-build.js restore && node scripts/fix-paths.js",
         "start": "next start",
         "lint": "next lint",
         "electron": "electron electron/main.js",
