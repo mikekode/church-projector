@@ -1,8 +1,6 @@
 import { NextResponse } from 'next/server';
 
-// Skip static generation for this route - only works on Vercel (server)
 export const dynamic = 'force-dynamic';
-export const runtime = 'edge';
 
 export async function GET(request: Request) {
     try {
