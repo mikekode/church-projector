@@ -84,7 +84,7 @@ async function sendLicenseEmail(email, licenseKey, plan, expiresAt) {
                     
                     <div style="background: #f8f9fa; border-radius: 8px; padding: 16px; margin: 24px 0;">
                         <p style="margin: 0; color: #6b7280; font-size: 14px;">
-                            <strong>Plan:</strong> ${plan === 'yearly' ? 'Yearly ($200/year)' : 'Monthly ($20/month)'}<br>
+                            <strong>Plan:</strong> ${plan === 'yearly' ? 'Yearly ($150/year)' : 'Monthly ($15/month)'}<br>
                             <strong>Valid until:</strong> ${expiryDate}
                         </p>
                     </div>

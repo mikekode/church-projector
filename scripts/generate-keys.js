@@ -1,9 +1,9 @@
 /**
  * CREENLY License Key Generator
- * 
+ *
  * Pricing:
- *   - Monthly: $20/month
- *   - Yearly: $200/year
+ *   - Monthly: $15/month
+ *   - Yearly: $150/year
  * 
  * Usage:
  *   node scripts/generate-keys.js monthly <email>    # 1 month access
@@ -21,8 +21,8 @@ const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 // Plan configuration
 const PLANS = {
-    monthly: { months: 1, label: 'Monthly ($20)' },
-    yearly: { months: 12, label: 'Yearly ($200)' }
+    monthly: { months: 1, label: 'Monthly ($15)' },
+    yearly: { months: 12, label: 'Yearly ($150)' }
 };
 
 // Generate a random key code
@@ -178,8 +178,8 @@ function showHelp() {
 📖 CREENLY License Manager
 
 GENERATE NEW LICENSE:
-  node scripts/generate-keys.js monthly <email>     Create 1-month license ($20)
-  node scripts/generate-keys.js yearly <email>      Create 12-month license ($200)
+  node scripts/generate-keys.js monthly <email>     Create 1-month license ($15)
+  node scripts/generate-keys.js yearly <email>      Create 12-month license ($150)
 
 EXTEND EXISTING LICENSE:
   node scripts/generate-keys.js extend <email> monthly   Add 1 month
