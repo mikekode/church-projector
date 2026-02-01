@@ -58,10 +58,6 @@ const VoiceWave = ({ level, active }: { level: number, active: boolean }) => {
     );
 };
 
-export const metadata = {
-    title: "Creenly Dashboard",
-    robots: { index: false }
-};
 
 export default function DashboardPage() {
     const [isListening, setIsListening] = useState(false);

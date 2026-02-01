@@ -1,14 +1,35 @@
+# Dependencies
 node_modules
+
+# Next.js
 .next
 out
+
+# Electron build output
 dist-build
 resources/app
+
+# Environment files (SENSITIVE - never commit!)
+.env
+.env.local
+.env.*.local
+
+# OS files
 .DS_Store
 *.log
-node_modules
+
+# Vercel
 .vercel
-check_git.txt 
-deploy_log.txt 
-vercel_deploy_out.txt 
-vercel_list.txt 
-"*_out.txt" 
+
+# Temporary files
+check_git.txt
+deploy_log.txt
+vercel_deploy_out.txt
+vercel_list.txt
+*_out.txt
+
+# Credentials (SENSITIVE)
+credentials.json
+token.json
+*.pem
+*.key 

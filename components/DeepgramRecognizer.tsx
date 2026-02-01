@@ -67,10 +67,25 @@ export default function DeepgramRecognizer({ isListening, onTranscript, onInteri
             streamRef.current = stream;
             console.log("Got microphone access");
 
-            // 2. Connect to Deepgram
-            const apiKey = process.env.NEXT_PUBLIC_DEEPGRAM_API_KEY || "a188ec28bdf23274c9d7d6e7b645d2cbc6850806";
+            // 2. Fetch Deepgram token from secure API proxy
+            const API_PROXY_URL = process.env.NEXT_PUBLIC_API_PROXY_URL || 'http://localhost:3001';
+            let apiKey: string;
+
+            try {
+                const tokenResponse = await fetch(`${API_PROXY_URL}/api/deepgram-token`);
+                if (!tokenResponse.ok) {
+                    throw new Error('Failed to fetch Deepgram token');
+                }
+                const tokenData = await tokenResponse.json();
+                apiKey = tokenData.token;
+            } catch (fetchError) {
+                console.warn("Could not fetch token from proxy, using fallback");
+                // Fallback to env var for development
+                apiKey = process.env.NEXT_PUBLIC_DEEPGRAM_API_KEY || '';
+            }
+
             if (!apiKey) {
-                throw new Error("Missing Deepgram API Key");
+                throw new Error("Missing Deepgram API Key - configure API proxy or NEXT_PUBLIC_DEEPGRAM_API_KEY");
             }
 
             const wsUrl = `wss://api.deepgram.com/v1/listen?` +

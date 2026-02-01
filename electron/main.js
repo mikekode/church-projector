@@ -6,18 +6,9 @@ const { spawn } = require('child_process');
 const cheerio = require('cheerio');
 // Load environment variables for local dev
 require('dotenv').config({ path: path.join(__dirname, '../.env.local') });
-// If dotenv fails (not installed), it throws. We might need to handle that or install it.
-// Ideally usage: const OpenAI = require('openai');
 
 const { exec } = require('child_process');
 const crypto = require('crypto');
-
-let OpenAI;
-try {
-    OpenAI = require('openai');
-} catch (e) {
-    console.error("OpenAI package not found. Smart Detect will fail.");
-}
 
 // Security: Machine ID for Hardware Binding
 async function getMachineId() {
@@ -53,6 +44,8 @@ function createWindow() {
         width: 1280,
         height: 720,
         backgroundColor: '#000000',
+        show: false, // Don't show until ready
+        title: 'Creenly',
         webPreferences: {
             nodeIntegration: false,
             contextIsolation: true,
@@ -60,6 +53,11 @@ function createWindow() {
         },
         autoHideMenuBar: true, // Hide default menu bar for premium look
         icon: iconPath
+    });
+
+    // Show window only after content is loaded (prevents "electron" flash)
+    mainWindow.once('ready-to-show', () => {
+        mainWindow.show();
     });
 
     // In production, we would load the static build or start a bundled server
@@ -129,6 +127,8 @@ ipcMain.handle('open-projector-window', async () => {
         width: 1280,
         height: 720,
         backgroundColor: '#000000',
+        show: false,
+        title: 'Creenly - Projector',
         autoHideMenuBar: true,
         icon: getIconPath(),
         webPreferences: {
@@ -138,6 +138,9 @@ ipcMain.handle('open-projector-window', async () => {
         }
     });
 
+    projectorWindow.once('ready-to-show', () => {
+        projectorWindow.show();
+    });
 
     if (app.isPackaged) {
         // Use file protocol with absolute path for predictability
@@ -173,6 +176,8 @@ ipcMain.handle('open-stage-window', async () => {
         width: 1280,
         height: 720,
         backgroundColor: '#000000',
+        show: false,
+        title: 'Creenly - Stage Monitor',
         autoHideMenuBar: true,
         icon: getIconPath(),
         webPreferences: {
@@ -180,6 +185,10 @@ ipcMain.handle('open-stage-window', async () => {
             contextIsolation: true,
             preload: path.join(__dirname, 'preload.js')
         }
+    });
+
+    stageWindow.once('ready-to-show', () => {
+        stageWindow.show();
     });
 
     if (app.isPackaged) {
@@ -489,29 +498,17 @@ ipcMain.handle('song-lyrics', async (event, { title, artist }) => {
 
 
 // ----------------------------------------------------------------------
-// Smart AI Detection (Migrated from Server-Side API)
+// Smart AI Detection (Via Secure API Proxy)
 // ----------------------------------------------------------------------
 
+// API Proxy URL - set in .env.local or defaults to localhost for dev
+const API_PROXY_URL = process.env.API_PROXY_URL || 'http://localhost:3001';
+
 ipcMain.handle('smart-detect', async (event, payload) => {
-    if (!OpenAI) return { error: "OpenAI module not loaded." };
-
-    // Initialize OpenAI with key from env or fallback (bundled)
-    const apiKey = process.env.OPENAI_API_KEY || "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";
-
-    const openai = new OpenAI({
-        apiKey: apiKey,
-    });
-
-    if (!apiKey) {
-        return { error: "Missing OPENAI_API_KEY." };
-    }
-
     try {
         const { text, context, pastorHints, currentVerse, chapterContext } = payload;
 
-        // Basic logging (optional)
-        // console.log(`[SmartDetect] Processing: "${text}"`);
-
+        // Quick validation
         if (!text || text.trim().length < 3) {
             return {
                 scriptures: [],
@@ -521,155 +518,31 @@ ipcMain.handle('smart-detect', async (event, payload) => {
             };
         }
 
-        const systemPrompt = buildSystemPrompt(pastorHints, currentVerse, chapterContext);
-
-        const response = await openai.chat.completions.create({
-            model: "gpt-4o-mini",
-            messages: [
-                { role: "system", content: systemPrompt },
-                {
-                    role: "user",
-                    content: `Context: "${context || 'none'}"\n\nNew text: "${text}"\n\nAnalyze for scripture references and commands.`
-                }
-            ],
-            response_format: { type: "json_object" },
-            temperature: 0,
-            max_tokens: 300,
+        // Call the secure API proxy (keys are server-side)
+        const response = await fetch(`${API_PROXY_URL}/api/openai`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                text,
+                context,
+                pastorHints,
+                currentVerse,
+                chapterContext
+            })
         });
 
-        const content = response.choices[0]?.message?.content || '{}';
-
-        try {
-            const parsed = JSON.parse(content);
-            return validateAndNormalize(parsed);
-        } catch (parseError) {
-            console.error("Failed to parse AI response:", content);
-            return {
-                scriptures: [],
-                commands: [],
-                signal: 'WAIT',
-                signalReason: 'Parse error'
-            };
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(errorData.error || `API error: ${response.status}`);
         }
+
+        return await response.json();
 
     } catch (error) {
         console.error("Smart detection error:", error);
         return { error: error.message };
     }
 });
-
-// Helpers (Ported from route.ts)
-
-function buildSystemPrompt(pastorHints, currentVerse, chapterContext) {
-    let prompt = `You are a real-time scripture detection system for a church projector. You analyze small text windows (5-15 words) from live sermon transcription.
-
-RESPOND with JSON:
-{
-  "scriptures": [
-    {
-      "book": "string",
-      "chapter": number,
-      "verse": number,
-      "confidence": number,
-      "matchType": "exact" | "partial" | "paraphrase",
-      "reason": "string"
-    }
-  ],
-  "commands": [],
-  "signal": "SWITCH" | "HOLD" | "WAIT",
-  "signalReason": "string",
-  "verseCount": 1
-}
-
-STRICT RULE: You MUST ALWAYS include "verseCount" (1, 2, or 3) in the JSON response whenever "scriptures" or "commands" are not empty. Default to 1 if only one verse is mentioned or implied.
-
-DETECTION TYPES:
-- "exact": Direct verse reference like "John 3:16" or "John chapter 3 verse 16"
-- "partial": Incomplete reference like "For God so loved..." (recognizable start of verse)
-- "paraphrase": Sermon paraphrase type
-- "exact": Direct reference
-
-CONFIDENCE SCORING (0-100):
-- 90-100: Direct reference
-- 70-89: Strong match
-- 50-69: Likely match
-- Below 50: Don't include
-
-SIGNALS:
-- "SWITCH": High confidence (>=80)
-- "HOLD": Currently displaying correct verse
-- "WAIT": No detection
-
-NAVIGATION COMMANDS:
-- "next verse" -> {"type": "next_verse"}
-- "previous verse" -> {"type": "prev_verse"}
-- "verse [number]" -> {"type": "jump_to_verse", "verse": number}
-- "next chapter" / "previous chapter"
-- "clear"
-
-RULES:
-- "three" -> 3
-- "Revelation" (singular)
-- "Song of Solomon"`;
-
-    if (pastorHints) prompt += `\n\nPASTOR CONTEXT:\n${pastorHints}`;
-    if (currentVerse) prompt += `\n\nCURRENTLY DISPLAYING: ${currentVerse}`;
-    if (chapterContext) prompt += `\n\nACTIVE CHAPTER CONTEXT: ${chapterContext}`;
-
-    return prompt;
-}
-
-function validateAndNormalize(parsed) {
-    const scriptures = (Array.isArray(parsed.scriptures) ? parsed.scriptures : [])
-        .map(s => {
-            return {
-                book: normalizeBookName(s.book || ''),
-                chapter: parseInt(s.chapter) || 1,
-                verse: parseInt(s.verse) || 1,
-                verseEnd: s.verseEnd ? parseInt(s.verseEnd) : undefined,
-                confidence: Math.min(100, Math.max(0, parseInt(s.confidence) || 50)),
-                matchType: ['exact', 'partial', 'paraphrase'].includes(s.matchType) ? s.matchType : 'exact',
-                reason: s.reason || 'Detected',
-            };
-        })
-        .filter(s => s && s.book && s.chapter && s.confidence >= 50)
-        .sort((a, b) => b.confidence - a.confidence);
-
-    const validCommands = ['next_verse', 'prev_verse', 'next_chapter', 'prev_chapter', 'clear', 'jump_to_verse', 'switch_translation'];
-
-    let rawCommands = parsed.commands;
-    if (rawCommands && !Array.isArray(rawCommands)) rawCommands = [rawCommands];
-
-    const commands = (Array.isArray(rawCommands) ? rawCommands : [])
-        .filter(c => c && c.type && validCommands.includes(c.type))
-        .map(c => ({
-            type: c.type,
-            verse: c.verse ? parseInt(c.verse) : undefined,
-            version: c.version?.toUpperCase()
-        }));
-
-    let signal = parsed.signal || 'WAIT';
-    let signalReason = parsed.signalReason || '';
-
-    if (scriptures.length > 0 && scriptures[0].confidence >= 80) signal = 'SWITCH';
-    else if (commands.length > 0) signal = 'SWITCH';
-    else if (!scriptures.length && !commands.length) signal = 'WAIT';
-
-    let verseCount = parsed.verseCount ? Math.min(3, Math.max(1, parseInt(parsed.verseCount))) : undefined;
-    if (!verseCount && (scriptures.length > 0 || commands.length > 0)) verseCount = 1;
-
-    return { scriptures, commands: commands.map(c => ({ ...c, verseCount: c.verseCount || verseCount })), signal, signalReason, verseCount };
-}
-
-function normalizeBookName(book) {
-    let result = book.trim();
-    // Simplified normalization for brevity
-    if (result.match(/^Song of/i) || result.match(/^Canticles/i)) return 'Song of Solomon';
-    if (result.match(/^Rev/i)) return 'Revelation';
-    if (result.match(/^Psalm/i)) return 'Psalm';
-    // Uppercase first letter of words
-    return result.replace(/\w\S*/g, (w) => (w.replace(/^\w/, (c) => c.toUpperCase())));
-}
 
 ipcMain.handle('atem-connect', async (event, ip) => {
     try {

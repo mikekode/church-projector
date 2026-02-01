@@ -34,10 +34,14 @@ jobs:
         run: mv app/api app/_api || true
         shell: bash
 
-      - name: Build Next.js
-        run: npm run build
+      - name: Build Next.js with path fixes
+        run: npm run build:electron
         env:
           CI: false
+          NEXT_PUBLIC_API_PROXY_URL: https://creenly-api-proxy.vercel.app
+
+      - name: Obfuscate Electron code
+        run: npm run obfuscate
 
       - name: Build/Release Electron App
         uses: samuelmeuli/action-electron-builder@v1
@@ -47,3 +51,5 @@ jobs:
           # Mac-specific settings
           mac_certs: ${{ secrets.mac_certs }}
           mac_certs_password: ${{ secrets.mac_certs_password }}
+        env:
+          API_PROXY_URL: https://creenly-api-proxy.vercel.app

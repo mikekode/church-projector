@@ -1,0 +1,12 @@
+{
+  "name": "creenly-api-proxy",
+  "version": "1.0.0",
+  "description": "Secure API proxy for Creenly - keeps API keys server-side",
+  "private": true,
+  "scripts": {
+    "dev": "vercel dev"
+  },
+  "dependencies": {
+    "openai": "^4.0.0"
+  }
+}

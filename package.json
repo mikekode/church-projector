@@ -11,7 +11,9 @@
         "lint": "next lint",
         "electron": "electron electron/main.js",
         "pack": "electron-builder --dir",
-        "dist": "npm run build:electron && electron-builder"
+        "obfuscate": "node scripts/obfuscate.js",
+        "dist": "npm run build:electron && npm run obfuscate && electron-builder",
+        "dist:no-obfuscate": "npm run build:electron && electron-builder"
     },
     "dependencies": {
         "@dnd-kit/core": "^6.3.1",
@@ -46,6 +48,7 @@
         "electron-builder": "^26.4.0",
         "eslint": "^8",
         "eslint-config-next": "14.1.0",
+        "javascript-obfuscator": "^4.1.1",
         "postcss": "^8",
         "tailwindcss": "^3.3.0",
         "typescript": "^5"
