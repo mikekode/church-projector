@@ -265,7 +265,7 @@ export default function Home() {
                     <div>
                         <h5 className="font-black text-xs uppercase tracking-widest mb-6 text-white leading-none">Support</h5>
                         <ul className="space-y-4 text-sm text-zinc-500 font-medium">
-                            <li><a href="mailto:hello@creenly.com" className="hover:text-white transition-colors">Contact Us</a></li>
+                            <li><a href="mailto:michael@creenly.com" className="hover:text-white transition-colors">Contact Us</a></li>
                             <li>Terms of Service</li>
                             <li>Privacy Policy</li>
                         </ul>

@@ -134,7 +134,7 @@ export default function SubscribePage() {
 
             {/* Simple Footer */}
             <footer className="py-10 border-t border-white/5 opacity-50 text-center">
-                <p className="text-xs text-zinc-500">Questions? Email us at hello@creenly.com</p>
+                <p className="text-xs text-zinc-500">Questions? Email us at michael@creenly.com</p>
             </footer>
         </div>
     );

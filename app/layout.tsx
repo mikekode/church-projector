@@ -138,7 +138,7 @@ export default function RootLayout({
                             "url": "https://www.creenly.com",
                             "logo": "https://www.creenly.com/logo.png",
                             "description": "AI-powered church projection software for modern worship",
-                            "email": "hello@creenly.com",
+                            "email": "michael@creenly.com",
                             "sameAs": [
                                 "https://twitter.com/creaboratehq"
                             ]
