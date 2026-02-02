@@ -45,8 +45,9 @@ export default function Home() {
                         <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 text-xs font-bold tracking-widest uppercase mb-4">
                             Stop Stressing. Start Projecting.
                         </div>
-                        <h1 className="text-5xl md:text-8xl lg:text-[140px] font-black tracking-tighter leading-[0.85] bg-gradient-to-b from-white via-white to-white/40 bg-clip-text text-transparent italic">
-                            PROJECTOR<br />WITHOUT<br />THE PREP.
+                        <h1 className="text-5xl md:text-8xl lg:text-[120px] font-black tracking-tighter leading-[0.9] bg-gradient-to-b from-white via-white to-white/40 bg-clip-text text-transparent">
+                            <span className="block text-2xl md:text-4xl lg:text-5xl text-indigo-400 not-italic mb-4">AI Church Projector Software</span>
+                            <span className="italic">PROJECTOR<br />WITHOUT<br />THE PREP.</span>
                         </h1>
                         <div className="max-w-3xl mx-auto space-y-10">
                             <p className="text-xl md:text-2xl text-zinc-400 font-medium leading-relaxed">
@@ -76,6 +77,7 @@ export default function Home() {
 
                 {/* Features Section */}
                 <section id="features" className="max-w-7xl mx-auto px-6 py-32">
+                    <h2 className="sr-only">Church Projector Software Features</h2>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
                         <div className="p-10 rounded-[40px] bg-zinc-900/50 border border-white/5 space-y-6 hover:border-indigo-500/30 transition-all group">
                             <div className="w-14 h-14 bg-indigo-600/20 rounded-2xl flex items-center justify-center text-indigo-500 mb-6 group-hover:scale-110 transition-transform">
@@ -234,7 +236,7 @@ export default function Home() {
 
             {/* Footer */}
             <footer className="py-20 px-10 border-t border-white/5 bg-black">
-                <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-4 gap-12">
+                <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-5 gap-12">
                     <div className="col-span-2">
                         <div className="flex items-center gap-1 mb-6">
                             <img src="logo.png" alt="Creenly Logo" className="w-10 h-10 object-contain translate-y-[1px]" />
@@ -254,9 +256,16 @@ export default function Home() {
                         </ul>
                     </div>
                     <div>
+                        <h5 className="font-black text-xs uppercase tracking-widest mb-6 text-white leading-none">Compare</h5>
+                        <ul className="space-y-4 text-sm text-zinc-500 font-medium">
+                            <li><Link href="/propresenter-alternative" className="hover:text-white transition-colors">ProPresenter Alternative</Link></li>
+                            <li><Link href="/easyworship-alternative" className="hover:text-white transition-colors">EasyWorship Alternative</Link></li>
+                        </ul>
+                    </div>
+                    <div>
                         <h5 className="font-black text-xs uppercase tracking-widest mb-6 text-white leading-none">Support</h5>
                         <ul className="space-y-4 text-sm text-zinc-500 font-medium">
-                            <li><Link href="/docs" className="hover:text-white transition-colors italic">Documentation</Link></li>
+                            <li><a href="mailto:hello@creenly.com" className="hover:text-white transition-colors">Contact Us</a></li>
                             <li>Terms of Service</li>
                             <li>Privacy Policy</li>
                         </ul>
