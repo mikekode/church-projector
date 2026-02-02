@@ -315,6 +315,37 @@ export function useSmartDetection(
                 }
             }
 
+            // FAST PATH: Navigation Commands ("next verse", "previous verse", "clear")
+            const lowerText = textWindow.toLowerCase();
+
+            // Next verse patterns
+            if (/(?:next|forward|advance|continue|move on|go forward|next verse|the next|move forward)/.test(lowerText)) {
+                console.log('[SmartDetect] FAST NAV: next_verse');
+                onDetect([], [{ type: 'next_verse' }], 'SWITCH', undefined);
+                wordBufferRef.current = [];
+                processingRef.current = false;
+                return;
+            }
+
+            // Previous verse patterns
+            if (/(?:previous|go back|back up|last verse|prior|before|back one|step back|previous verse|go backward)/.test(lowerText)) {
+                console.log('[SmartDetect] FAST NAV: prev_verse');
+                onDetect([], [{ type: 'prev_verse' }], 'SWITCH', undefined);
+                wordBufferRef.current = [];
+                processingRef.current = false;
+                return;
+            }
+
+            // Clear/black screen patterns
+            if (/(?:clear|black ?out|blank|hide|remove|off|black screen|clear screen|take it down)/.test(lowerText)) {
+                console.log('[SmartDetect] FAST NAV: clear');
+                onDetect([], [{ type: 'clear' }], 'SWITCH', undefined);
+                wordBufferRef.current = [];
+                processingRef.current = false;
+                chapterContextRef.current = null;
+                return;
+            }
+
             let data;
 
             // USE ELECTRON IPC IF AVAILABLE (OFFLINE / DESKTOP MODE)
