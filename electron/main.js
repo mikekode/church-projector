@@ -407,58 +407,82 @@ ipcMain.handle('lookup-verse-online', async (event, { book, chapter, verse, vers
 
         // Use searchVersion in URL
         const bgUrl = `https://www.biblegateway.com/passage/?search=${encodeURIComponent(book)}+${chapter}:${verse}&version=${searchVersion}`;
+        console.log(`[BG] Fetching: ${bgUrl}`);
+
+        // Add timeout to prevent stalling
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
 
         const res = await fetch(bgUrl, {
             headers: {
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
                 'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
                 'Accept-Language': 'en-US,en;q=0.5'
-            }
+            },
+            signal: controller.signal
         });
 
-        if (!res.ok) throw new Error('Gateway Error');
+        clearTimeout(timeoutId);
+
+        if (!res.ok) throw new Error(`Gateway Error: ${res.status}`);
 
         const html = await res.text();
         const $ = cheerio.load(html);
 
         let text = '';
 
-        // Remove unwanted elements FIRST
-        $('sup.versenum, sup.crossreference, sup.footnote, .chapternum, .crossrefs, .footnotes, .full-chap-link, .passage-other-trans, .publisher-info-bottom').remove();
-        $('a').remove(); // Remove all links (footnotes, cross-refs)
-
         // Build the verse class pattern (e.g., "John-3-16" for John 3:16)
         const bookSlug = book.replace(/\s+/g, '-');
         const verseClass = `${bookSlug}-${chapter}-${verse}`;
+        console.log(`[BG] Looking for verse class: ${verseClass}, version: ${searchVersion}`);
 
-        // Method 1: Try to find the SPECIFIC verse span by class (most accurate)
+        // Method 1: Try to find the SPECIFIC verse span by class (most accurate for most versions)
         const specificVerse = $(`.text.${verseClass}`);
         if (specificVerse.length > 0) {
-            text = specificVerse.text();
-            console.log(`[BG] Found specific verse class: ${verseClass}`);
+            const verseClone = specificVerse.clone();
+            verseClone.find('sup, a, .footnote, .crossreference').remove();
+            text = verseClone.text();
+            console.log(`[BG] Found via verse class: ${verseClass}`);
         }
 
-        // Method 2: Look for verse spans within passage-text (for TPT and similar)
+        // Method 2: For TPT and poetic versions - get text from passage directly
         if (!text.trim()) {
-            // Get only the first passage block to avoid duplicates
             const passageBlock = $('.passage-text').first();
             if (passageBlock.length > 0) {
-                // Clone and clean
+                // Clone to avoid modifying original
                 const cleanBlock = passageBlock.clone();
-                cleanBlock.find('sup, .chapternum, .versenum, h3, h4').remove();
 
-                // For single verse, get text from spans with "text" class
+                // Remove all unwanted elements
+                cleanBlock.find('sup.versenum, sup.crossreference, sup.footnote, .chapternum, .crossrefs, .footnotes, .full-chap-link, .passage-other-trans, .publisher-info-bottom, h1, h2, h3, h4, h5, .dropdown').remove();
+                cleanBlock.find('a').remove();
+
+                // Get all text spans
                 const textSpans = cleanBlock.find('span.text');
                 if (textSpans.length > 0) {
+                    // For single verse lookup (not a range), just get all text from spans
+                    let allText = [];
                     textSpans.each((i, el) => {
-                        // Only take the first matching span for single verse
-                        if (i === 0 || text.length < 50) {
-                            text += $(el).text() + ' ';
+                        const spanText = $(el).text().trim();
+                        if (spanText) {
+                            allText.push(spanText);
                         }
                     });
-                } else {
-                    // Fallback: get paragraph text
-                    text = cleanBlock.find('p').first().text();
+                    text = allText.join(' ');
+                    console.log(`[BG] Found ${textSpans.length} text spans`);
+                }
+
+                // If no spans found, try paragraphs
+                if (!text.trim()) {
+                    const paragraphs = cleanBlock.find('p');
+                    let allText = [];
+                    paragraphs.each((i, el) => {
+                        const pText = $(el).text().trim();
+                        if (pText && !pText.includes('No results found')) {
+                            allText.push(pText);
+                        }
+                    });
+                    text = allText.join(' ');
+                    console.log(`[BG] Found ${paragraphs.length} paragraphs`);
                 }
             }
         }
@@ -468,29 +492,37 @@ ipcMain.handle('lookup-verse-online', async (event, { book, chapter, verse, vers
             const resultBlock = $('.result-text-style-normal').first();
             if (resultBlock.length > 0) {
                 const cleanResult = resultBlock.clone();
-                cleanResult.find('sup, .chapternum, .versenum, h3, h4, a').remove();
+                cleanResult.find('sup, .chapternum, .versenum, h3, h4, a, .footnote, .crossreference').remove();
                 text = cleanResult.text();
+                console.log(`[BG] Found via result-text-style-normal`);
             }
         }
 
-        // Method 4: Last resort - passage-content
+        // Method 4: Last resort - passage-content div
         if (!text.trim()) {
             const content = $('.passage-content').first();
             if (content.length > 0) {
                 const cleanContent = content.clone();
-                cleanContent.find('sup, .chapternum, .versenum, h1, h2, h3, h4, a, .dropdown, .passage-other-trans').remove();
-                text = cleanContent.find('p').first().text() || cleanContent.text();
+                cleanContent.find('sup, .chapternum, .versenum, h1, h2, h3, h4, a, .dropdown, .passage-other-trans, .footnote, .crossreference, .publisher-info-bottom').remove();
+                const paragraphs = cleanContent.find('p');
+                if (paragraphs.length > 0) {
+                    text = paragraphs.first().text();
+                } else {
+                    text = cleanContent.text();
+                }
+                console.log(`[BG] Found via passage-content fallback`);
             }
         }
 
         // Clean up the text
         text = text
-            .replace(/\[\w+\]/g, '')      // Remove bracketed references [a], [b]
-            .replace(/&#\d+;/g, '')       // Remove HTML entities
-            .replace(/\s+/g, ' ')         // Normalize whitespace
+            .replace(/\[\w+\]/g, '')           // Remove bracketed references [a], [b]
+            .replace(/&#\d+;/g, '')            // Remove HTML entities
+            .replace(/\d+\s*(?=\w)/g, '')      // Remove verse numbers at start of text
+            .replace(/\s+/g, ' ')              // Normalize whitespace
             .trim();
 
-        console.log(`[BG] Extracted text (${text.length} chars): "${text.substring(0, 100)}..."`);
+        console.log(`[BG] Final text (${text.length} chars): "${text.substring(0, 150)}..."`);
 
         // Filter out if it looks like copyright or error text
         if (text && text.length > 10 && !text.toLowerCase().includes('no results found')) {
@@ -501,6 +533,9 @@ ipcMain.handle('lookup-verse-online', async (event, { book, chapter, verse, vers
 
     } catch (e) {
         console.error("Online lookup failed:", e);
+        if (e.name === 'AbortError') {
+            return { error: 'Request timed out - please try again' };
+        }
         return { error: e.message };
     }
 });
