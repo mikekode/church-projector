@@ -423,36 +423,74 @@ ipcMain.handle('lookup-verse-online', async (event, { book, chapter, verse, vers
 
         let text = '';
 
-        // Remove unwanted elements
-        $('sup.versenum, sup.crossreference, sup.footnote, .chapternum, .crossrefs, .footnotes, a').remove();
+        // Remove unwanted elements FIRST
+        $('sup.versenum, sup.crossreference, sup.footnote, .chapternum, .crossrefs, .footnotes, .full-chap-link, .passage-other-trans, .publisher-info-bottom').remove();
+        $('a').remove(); // Remove all links (footnotes, cross-refs)
 
-        // Method 1: Look for spans with verse text class (most reliable for specific verses)
-        $('span.text').each((i, el) => {
-            text += $(el).text() + ' ';
-        });
+        // Build the verse class pattern (e.g., "John-3-16" for John 3:16)
+        const bookSlug = book.replace(/\s+/g, '-');
+        const verseClass = `${bookSlug}-${chapter}-${verse}`;
 
-        // Method 2: If no text spans, try passage-text paragraphs
-        if (!text.trim()) {
-            $('.passage-text p').each((i, el) => {
-                text += $(el).text() + ' ';
-            });
+        // Method 1: Try to find the SPECIFIC verse span by class (most accurate)
+        const specificVerse = $(`.text.${verseClass}`);
+        if (specificVerse.length > 0) {
+            text = specificVerse.text();
+            console.log(`[BG] Found specific verse class: ${verseClass}`);
         }
 
-        // Method 3: Try result-text-style-normal (used in some versions)
+        // Method 2: Look for verse spans within passage-text (for TPT and similar)
         if (!text.trim()) {
-            text = $('.result-text-style-normal').text();
+            // Get only the first passage block to avoid duplicates
+            const passageBlock = $('.passage-text').first();
+            if (passageBlock.length > 0) {
+                // Clone and clean
+                const cleanBlock = passageBlock.clone();
+                cleanBlock.find('sup, .chapternum, .versenum, h3, h4').remove();
+
+                // For single verse, get text from spans with "text" class
+                const textSpans = cleanBlock.find('span.text');
+                if (textSpans.length > 0) {
+                    textSpans.each((i, el) => {
+                        // Only take the first matching span for single verse
+                        if (i === 0 || text.length < 50) {
+                            text += $(el).text() + ' ';
+                        }
+                    });
+                } else {
+                    // Fallback: get paragraph text
+                    text = cleanBlock.find('p').first().text();
+                }
+            }
         }
 
-        // Method 4: Try passage-content as last resort
+        // Method 3: Try result-text-style-normal (alternate layout)
         if (!text.trim()) {
-            text = $('.passage-content').first().text();
+            const resultBlock = $('.result-text-style-normal').first();
+            if (resultBlock.length > 0) {
+                const cleanResult = resultBlock.clone();
+                cleanResult.find('sup, .chapternum, .versenum, h3, h4, a').remove();
+                text = cleanResult.text();
+            }
+        }
+
+        // Method 4: Last resort - passage-content
+        if (!text.trim()) {
+            const content = $('.passage-content').first();
+            if (content.length > 0) {
+                const cleanContent = content.clone();
+                cleanContent.find('sup, .chapternum, .versenum, h1, h2, h3, h4, a, .dropdown, .passage-other-trans').remove();
+                text = cleanContent.find('p').first().text() || cleanContent.text();
+            }
         }
 
         // Clean up the text
         text = text
-            .replace(/\[\w+\]/g, '')  // Remove bracketed references [a], [b]
-            .replace(/\s+/g, ' ')
+            .replace(/\[\w+\]/g, '')      // Remove bracketed references [a], [b]
+            .replace(/&#\d+;/g, '')       // Remove HTML entities
+            .replace(/\s+/g, ' ')         // Normalize whitespace
             .trim();
+
+        console.log(`[BG] Extracted text (${text.length} chars): "${text.substring(0, 100)}..."`);
 
         // Filter out if it looks like copyright or error text
         if (text && text.length > 10 && !text.toLowerCase().includes('no results found')) {
