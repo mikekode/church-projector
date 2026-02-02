@@ -68,7 +68,8 @@ export default function DeepgramRecognizer({ isListening, onTranscript, onInteri
             console.log("Got microphone access");
 
             // 2. Fetch Deepgram token from secure API proxy
-            const API_PROXY_URL = process.env.NEXT_PUBLIC_API_PROXY_URL || 'http://localhost:3001';
+            // Hardcoded for production - env vars don't work reliably in static export
+            const API_PROXY_URL = 'https://creenly-api-proxy.vercel.app';
             let apiKey: string;
 
             try {
