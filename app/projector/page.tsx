@@ -1,11 +1,52 @@
 "use client";
 
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { useBroadcastChannel } from '@/hooks/useBroadcast';
 import VisualStack from '@/components/projector/VisualStack';
 import { ProjectorTheme, DEFAULT_THEMES } from '@/utils/themes';
 import { useLicense } from '@/hooks/useLicense';
 import DemoWatermark from '@/components/DemoWatermark';
+
+/**
+ * Calculate optimal font size based on text length and verse count
+ * Returns a multiplier to apply to the base font size
+ */
+function calculateFontScale(text: string, verseCount: number = 1): number {
+    const charCount = text.length;
+
+    // Base thresholds for single verse
+    // Short text (< 150 chars): full size
+    // Medium text (150-300 chars): scale down slightly
+    // Long text (300-500 chars): scale down more
+    // Very long text (500+ chars): scale down significantly
+
+    let scale = 1;
+
+    if (verseCount === 1) {
+        if (charCount < 150) scale = 1;
+        else if (charCount < 250) scale = 0.9;
+        else if (charCount < 350) scale = 0.8;
+        else if (charCount < 450) scale = 0.7;
+        else if (charCount < 600) scale = 0.6;
+        else if (charCount < 800) scale = 0.5;
+        else scale = 0.4;
+    } else if (verseCount === 2) {
+        if (charCount < 300) scale = 0.85;
+        else if (charCount < 450) scale = 0.75;
+        else if (charCount < 600) scale = 0.65;
+        else if (charCount < 800) scale = 0.55;
+        else scale = 0.45;
+    } else {
+        // 3+ verses
+        if (charCount < 400) scale = 0.7;
+        else if (charCount < 600) scale = 0.6;
+        else if (charCount < 800) scale = 0.5;
+        else if (charCount < 1000) scale = 0.45;
+        else scale = 0.38;
+    }
+
+    return scale;
+}
 
 // Generic Content Type
 type ProjectorContent = {
@@ -150,43 +191,59 @@ export default function ProjectorPage() {
             >
                 {layout.referencePosition === 'top' && ReferenceComponent}
 
-                {/* Body Text */}
+                {/* Body Text - with smart auto-sizing */}
                 {activeContent.verses && activeContent.verses.length > 1 ? (
-                    <div className="space-y-2 w-full">
-                        {activeContent.verses.map((v, idx) => (
-                            <div key={idx} className="flex items-start gap-4" style={{ justifyContent: activeTheme.styles.textAlign === 'center' ? 'center' : activeTheme.styles.textAlign === 'right' ? 'flex-end' : 'flex-start' }}>
-                                {layout.showVerseNumbers && (
-                                    <span className="text-[50%] opacity-60 font-mono mt-2 flex-shrink-0" style={{ color: activeTheme.styles.color }}>{v.verseNum}</span>
+                    (() => {
+                        // Calculate total text for auto-sizing
+                        const totalText = activeContent.verses.map(v => v.text).join(' ');
+                        const fontScale = calculateFontScale(totalText, activeContent.verses.length);
+
+                        return (
+                            <div className="space-y-2 w-full">
+                                {activeContent.verses.map((v, idx) => (
+                                    <div key={idx} className="flex items-start gap-4" style={{ justifyContent: activeTheme.styles.textAlign === 'center' ? 'center' : activeTheme.styles.textAlign === 'right' ? 'flex-end' : 'flex-start' }}>
+                                        {layout.showVerseNumbers && (
+                                            <span className="text-[50%] opacity-60 font-mono mt-2 flex-shrink-0" style={{ color: activeTheme.styles.color }}>{v.verseNum}</span>
+                                        )}
+                                        <p style={{
+                                            ...themeStyle,
+                                            // Dynamic font scaling based on total text length
+                                            fontSize: `${fontScale}em`,
+                                            textAlign: 'left',
+                                            lineHeight: 1.25,
+                                            transition: 'font-size 0.3s ease-out'
+                                        }}>
+                                            {v.text}
+                                        </p>
+                                    </div>
+                                ))}
+                            </div>
+                        );
+                    })()
+                ) : (
+                    (() => {
+                        // Calculate font scale for single verse
+                        const fontScale = calculateFontScale(activeContent.body, 1);
+
+                        return (
+                            <div className="flex items-start gap-4 relative w-full" style={{ justifyContent: activeTheme.styles.textAlign === 'center' ? 'center' : activeTheme.styles.textAlign === 'right' ? 'flex-end' : 'flex-start' }}>
+                                {layout.showVerseNumbers && activeContent.verses && activeContent.verses[0] && (
+                                    <span className="text-[50%] opacity-60 font-mono mt-[0.2em] flex-shrink-0 select-none" style={{ color: activeTheme.styles.color }}>
+                                        {activeContent.verses[0].verseNum}
+                                    </span>
                                 )}
                                 <p style={{
                                     ...themeStyle,
-                                    // Use em to scale relative to the Container's fontSize (which is now theme size)
-                                    // 2 verses: 85% of theme size. 3 verses: 70% of theme size (to fit)
-                                    fontSize: activeContent.verses!.length === 2 ? '0.85em' : '0.70em',
-                                    textAlign: 'left',
-                                    lineHeight: 1.2
+                                    fontSize: `${fontScale}em`,
+                                    whiteSpace: 'pre-wrap',
+                                    lineHeight: 1.25,
+                                    transition: 'font-size 0.3s ease-out'
                                 }}>
-                                    {v.text}
+                                    {activeContent.body}
                                 </p>
                             </div>
-                        ))}
-                    </div>
-                ) : (
-                    <div className="flex items-start gap-4 relative w-full" style={{ justifyContent: activeTheme.styles.textAlign === 'center' ? 'center' : activeTheme.styles.textAlign === 'right' ? 'flex-end' : 'flex-start' }}>
-                        {layout.showVerseNumbers && activeContent.verses && activeContent.verses[0] && (
-                            // Use same consistent styling as multi-verse (50% size, opacity 60%)
-                            <span className="text-[50%] opacity-60 font-mono mt-[0.2em] flex-shrink-0 select-none" style={{ color: activeTheme.styles.color }}>
-                                {activeContent.verses[0].verseNum}
-                            </span>
-                        )}
-                        <p style={{
-                            ...themeStyle,
-                            whiteSpace: 'pre-wrap',
-                            lineHeight: 1.2
-                        }}>
-                            {activeContent.body}
-                        </p>
-                    </div>
+                        );
+                    })()
                 )}
 
                 {layout.referencePosition === 'bottom' && ReferenceComponent}

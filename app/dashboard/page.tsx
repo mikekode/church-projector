@@ -733,10 +733,18 @@ export default function DashboardPage() {
                 }
             }
 
+            // Auto-switch verse count tab if a range is detected
+            if (match.verseEnd && match.verseEnd > match.verse) {
+                const detectedCount = Math.min(match.verseEnd - match.verse + 1, 3) as 1 | 2 | 3;
+                console.log('[REGEX] Detected verse range, auto-switching to', detectedCount, 'verse tab');
+                setVerseCount(detectedCount);
+            }
+
             addToQueue({
                 book: match.book,
                 chapter: match.chapter,
                 verse: match.verse,
+                verseEnd: match.verseEnd,
                 text: verseText,
                 reference: match.reference,
                 confidence: 100, // Regex = exact match

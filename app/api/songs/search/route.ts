@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 
-export const dynamic = 'force-dynamic';
+// Note: Removed 'force-dynamic' - incompatible with static export for Electron
 
 export async function GET(request: Request) {
     try {

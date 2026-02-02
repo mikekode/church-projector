@@ -384,7 +384,7 @@ ipcMain.handle('lookup-verse-online', async (event, { book, chapter, verse, vers
             }
         }
 
-        // 2. BibleGateway Fallback (NIV, MSG, AMP, ESV, NKJV, KJV21, GW, etc)
+        // 2. BibleGateway Fallback (NIV, MSG, AMP, ESV, NKJV, KJV21, GW, TPT, etc)
         console.log(`Scraping BibleGateway for ${v}...`);
 
         // Version Mapping (Internal -> BibleGateway)
@@ -394,7 +394,14 @@ ipcMain.handle('lookup-verse-online', async (event, { book, chapter, verse, vers
             'CSB': 'CSB',
             'RSV': 'RSV',
             'AMPC': 'AMPC',
-            'GW': 'GW'
+            'GW': 'GW',
+            'TPT': 'TPT',  // The Passion Translation
+            'MSG': 'MSG',
+            'AMP': 'AMP',
+            'NLT': 'NLT',
+            'NIV': 'NIV',
+            'NKJV': 'NKJV',
+            'ESV': 'ESV'
         };
         const searchVersion = versionMap[v] || v;
 
@@ -402,7 +409,11 @@ ipcMain.handle('lookup-verse-online', async (event, { book, chapter, verse, vers
         const bgUrl = `https://www.biblegateway.com/passage/?search=${encodeURIComponent(book)}+${chapter}:${verse}&version=${searchVersion}`;
 
         const res = await fetch(bgUrl, {
-            headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' }
+            headers: {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                'Accept-Language': 'en-US,en;q=0.5'
+            }
         });
 
         if (!res.ok) throw new Error('Gateway Error');
@@ -412,27 +423,39 @@ ipcMain.handle('lookup-verse-online', async (event, { book, chapter, verse, vers
 
         let text = '';
 
-        // Remove verse numbers and footnotes
-        $('sup.versenum, sup.crossreference, sup.footnote').remove();
+        // Remove unwanted elements
+        $('sup.versenum, sup.crossreference, sup.footnote, .chapternum, .crossrefs, .footnotes, a').remove();
 
-        // Extract text
-        // BibleGateway usually puts text in .passage-text p
-        // For MSG, it might be different, but typically still in .passage-text
-        $('.passage-text p').each((i, el) => {
+        // Method 1: Look for spans with verse text class (most reliable for specific verses)
+        $('span.text').each((i, el) => {
             text += $(el).text() + ' ';
         });
 
-        // Fallback selector
+        // Method 2: If no text spans, try passage-text paragraphs
         if (!text.trim()) {
-            text = $('.passage-content').text();
+            $('.passage-text p').each((i, el) => {
+                text += $(el).text() + ' ';
+            });
         }
 
-        text = text.replace(/\s+/g, ' ').trim();
+        // Method 3: Try result-text-style-normal (used in some versions)
+        if (!text.trim()) {
+            text = $('.result-text-style-normal').text();
+        }
 
-        // Filter out copyright text if it accidentally grabbed footer
-        // (Usually footer is outside .passage-text)
+        // Method 4: Try passage-content as last resort
+        if (!text.trim()) {
+            text = $('.passage-content').first().text();
+        }
 
-        if (text) {
+        // Clean up the text
+        text = text
+            .replace(/\[\w+\]/g, '')  // Remove bracketed references [a], [b]
+            .replace(/\s+/g, ' ')
+            .trim();
+
+        // Filter out if it looks like copyright or error text
+        if (text && text.length > 10 && !text.toLowerCase().includes('no results found')) {
             return { text };
         }
 

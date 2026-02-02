@@ -6,6 +6,24 @@ import { Clock, ChevronRight, Music, BookOpen, Image, AlertCircle } from 'lucide
 import { useLicense } from '@/hooks/useLicense';
 import DemoWatermark from '@/components/DemoWatermark';
 
+/**
+ * Calculate optimal font size class based on text length
+ * Returns Tailwind classes for responsive font sizing
+ */
+function getAutoSizeClasses(text: string | undefined): string {
+    const charCount = text?.length || 0;
+
+    // More granular sizing for stage display
+    if (charCount < 80) return 'text-5xl md:text-6xl lg:text-7xl';
+    if (charCount < 150) return 'text-4xl md:text-5xl lg:text-6xl';
+    if (charCount < 250) return 'text-3xl md:text-4xl lg:text-5xl';
+    if (charCount < 350) return 'text-2xl md:text-3xl lg:text-4xl';
+    if (charCount < 500) return 'text-xl md:text-2xl lg:text-3xl';
+    if (charCount < 700) return 'text-lg md:text-xl lg:text-2xl';
+    if (charCount < 900) return 'text-base md:text-lg lg:text-xl';
+    return 'text-sm md:text-base lg:text-lg';
+}
+
 interface StageContent {
     type: 'verse' | 'song' | 'media' | 'clear';
     reference?: string;
@@ -243,28 +261,22 @@ export default function StageDisplayPage() {
                 {/* Current Content - Large Display */}
                 <div className="flex-1 flex items-center justify-center">
                     {content?.type === 'verse' && (
-                        <div className="text-center max-w-5xl">
+                        <div className="text-center max-w-5xl px-4">
                             <p className="text-lg text-indigo-400 font-semibold mb-4 tracking-wide">
                                 {content.reference} • {content.version}
                             </p>
-                            <p className={`font-bold leading-tight ${(content.text?.length || 0) > 300 ? 'text-2xl md:text-3xl lg:text-4xl' :
-                                (content.text?.length || 0) > 150 ? 'text-3xl md:text-4xl lg:text-5xl' :
-                                    'text-5xl md:text-6xl lg:text-7xl'
-                                }`}>
+                            <p className={`font-bold leading-tight transition-all duration-300 ${getAutoSizeClasses(content.text)}`}>
                                 {content.text}
                             </p>
                         </div>
                     )}
 
                     {content?.type === 'song' && (
-                        <div className="text-center max-w-5xl w-full">
+                        <div className="text-center max-w-5xl w-full px-4">
                             <p className="text-lg text-purple-400 font-semibold mb-4 tracking-wide">
                                 {content.title} • Slide {(content.slideIndex || 0) + 1}/{content.totalSlides || 1}
                             </p>
-                            <p className={`font-bold leading-tight whitespace-pre-line ${(content.currentSlide?.length || 0) > 300 ? 'text-2xl md:text-3xl lg:text-4xl' :
-                                    (content.currentSlide?.length || 0) > 150 ? 'text-3xl md:text-4xl lg:text-5xl' :
-                                        'text-5xl md:text-6xl lg:text-7xl'
-                                }`}>
+                            <p className={`font-bold leading-tight whitespace-pre-line transition-all duration-300 ${getAutoSizeClasses(content.currentSlide)}`}>
                                 {content.currentSlide}
                             </p>
 
@@ -275,7 +287,7 @@ export default function StageDisplayPage() {
                                         <ChevronRight size={20} />
                                         <span className="text-sm uppercase tracking-wider">Next</span>
                                     </div>
-                                    <p className="text-2xl text-zinc-400 whitespace-pre-line">
+                                    <p className={`text-zinc-400 whitespace-pre-line transition-all duration-300 ${getAutoSizeClasses(content.nextSlide)}`} style={{ fontSize: '60%' }}>
                                         {content.nextSlide}
                                     </p>
                                 </div>

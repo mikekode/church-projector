@@ -98,6 +98,7 @@ export type DetectedVerse = {
     book: string;
     chapter: number;
     verse: number;
+    verseEnd?: number;  // For verse ranges like 3:16-17
     text: string;
     reference: string;
 };
@@ -105,6 +106,7 @@ export type DetectedVerse = {
 /**
  * Main Detection Logic.
  * Takes raw transcript (speech), normalizes it, runs regex, and validates existence.
+ * Supports verse ranges like "John 3:16-17", "John 3:16 to 17", "John 3:16 through 18", "John 3:16 and 17"
  */
 export function detectVersesInText(rawText: string): DetectedVerse[] {
     const results: DetectedVerse[] = [];
@@ -112,13 +114,14 @@ export function detectVersesInText(rawText: string): DetectedVerse[] {
     // 1. Normalize (Convert "three" -> "3", "First John" -> "1 John")
     const normalized = textToNumbers(rawText);
 
-    // 2. Regex
-    // Matches: "1 John 3 16" or "John 3:16" or "Song of Solomon 2:1" or "Revelation 10"
+    // 2. Regex with verse range support
+    // Matches: "1 John 3 16" or "John 3:16" or "John 3:16-17" or "John 3:16 to 17" or "John 3:16 through 18" or "John 3:16 and 17"
     // Group 1: Optional Number prefix (1, 2, 3, I, II, III)
     // Group 2: Book Name (e.g. "John", "Kings", "Song of Solomon") - allows spaces
     // Group 3: Chapter
-    // Group 4: Optional Verse
-    const regex = /((?:1|2|3|I|II|III)\s+)?([A-Za-z][A-Za-z\s]+?)\s+(\d+)(?:\s?[:\s]\s?(\d+))?/gi;
+    // Group 4: Optional Start Verse
+    // Group 5: Optional End Verse (after -, "to", "through", or "and")
+    const regex = /((?:1|2|3|I|II|III)\s+)?([A-Za-z][A-Za-z\s]+?)\s+(\d+)(?:\s?[:\s]\s?(\d+)(?:\s?(?:-|to|through|and)\s?(\d+))?)?/gi;
 
     const matches = Array.from(normalized.matchAll(regex));
 
@@ -127,28 +130,62 @@ export function detectVersesInText(rawText: string): DetectedVerse[] {
         const bookName = match[2].trim();
         const chapter = parseInt(match[3]);
         const verse = match[4] ? parseInt(match[4]) : 1;
+        const verseEnd = match[5] ? parseInt(match[5]) : undefined;
 
         const fullBookStr = prefix ? `${prefix} ${bookName}` : bookName;
         const bookKey = findBookKey(fullBookStr);
 
         if (bookKey) {
-            const verseText = lookupVerseBase(bookKey, chapter, verse);
+            // For ranges, get all verses; for single, get one
+            let verseText: string | null;
+            if (verseEnd && verseEnd > verse) {
+                verseText = lookupVerseRangeBase(bookKey, chapter, verse, verseEnd);
+            } else {
+                verseText = lookupVerseBase(bookKey, chapter, verse);
+            }
+
             if (verseText) {
                 // Use a canonical name for display
                 const canonicalName = getCanonicalBookName(bookKey);
+
+                // Build reference string (with range if applicable)
+                const reference = verseEnd && verseEnd > verse
+                    ? `${canonicalName} ${chapter}:${verse}-${verseEnd}`
+                    : `${canonicalName} ${chapter}:${verse}`;
 
                 results.push({
                     book: canonicalName,
                     chapter,
                     verse,
+                    verseEnd: verseEnd && verseEnd > verse ? verseEnd : undefined,
                     text: verseText,
-                    reference: `${canonicalName} ${chapter}:${verse}`
+                    reference
                 });
             }
         }
     }
 
     return results;
+}
+
+/**
+ * Internal helper for looking up verse ranges (returns combined text)
+ */
+function lookupVerseRangeBase(bookKey: string, chapter: number, start: number, end: number): string | null {
+    const bookData = BIBLE.find(b => b.abbrev === bookKey);
+    if (!bookData) return null;
+
+    const chapterData = bookData.chapters[chapter - 1];
+    if (!chapterData) return null;
+
+    const verses: string[] = [];
+    for (let i = start; i <= Math.min(end, chapterData.length); i++) {
+        if (chapterData[i - 1]) {
+            verses.push(chapterData[i - 1]);
+        }
+    }
+
+    return verses.length ? verses.join(' ') : null;
 }
 
 function lookupVerseBase(bookKey: string, chapter: number, verse: number): string | null {
@@ -342,5 +379,5 @@ export function getChapterVerseCount(bookKey: string, chapter: number): number {
 
 export const SUPPORTED_VERSIONS = [
     'KJV', 'NKJV', 'ESV', 'NIV', 'NASB', 'CSB', 'NLT',
-    'ASV', 'RSV', 'AMP', 'AMPC', 'MSG', 'WEB', 'GW', 'KJV21'
+    'ASV', 'RSV', 'AMP', 'AMPC', 'MSG', 'WEB', 'GW', 'KJV21', 'TPT'
 ] as const;
