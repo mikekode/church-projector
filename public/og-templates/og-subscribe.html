@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            width: 1200px;
+            height: 630px;
+            background: linear-gradient(135deg, #0a0a0a 0%, #1a1a2e 50%, #0f0f23 100%);
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            position: relative;
+            overflow: hidden;
+        }
+        .blob1 {
+            position: absolute;
+            top: -100px;
+            right: 200px;
+            width: 400px;
+            height: 400px;
+            background: rgba(99, 102, 241, 0.2);
+            border-radius: 50%;
+            filter: blur(80px);
+        }
+        .content {
+            display: flex;
+            align-items: center;
+            gap: 80px;
+            z-index: 10;
+            padding: 60px;
+        }
+        .left {
+            flex: 1;
+        }
+        .logo-row {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 30px;
+        }
+        .logo {
+            width: 50px;
+            height: 50px;
+            background: linear-gradient(135deg, #6366f1, #8b5cf6);
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            font-weight: 900;
+        }
+        .brand {
+            font-size: 28px;
+            font-weight: 900;
+            letter-spacing: -1px;
+        }
+        h1 {
+            font-size: 56px;
+            font-weight: 900;
+            letter-spacing: -2px;
+            line-height: 1.1;
+            margin-bottom: 20px;
+        }
+        .subtitle {
+            font-size: 22px;
+            color: #a1a1aa;
+            line-height: 1.5;
+        }
+        .right {
+            display: flex;
+            gap: 30px;
+        }
+        .price-card {
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 24px;
+            padding: 40px 35px;
+            text-align: center;
+            width: 200px;
+        }
+        .price-card.featured {
+            background: rgba(99, 102, 241, 0.1);
+            border: 2px solid #6366f1;
+            transform: scale(1.05);
+        }
+        .price-label {
+            font-size: 14px;
+            color: #71717a;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            margin-bottom: 15px;
+        }
+        .price-card.featured .price-label {
+            color: #818cf8;
+        }
+        .price {
+            font-size: 48px;
+            font-weight: 900;
+        }
+        .period {
+            font-size: 18px;
+            color: #71717a;
+        }
+        .save {
+            background: #6366f1;
+            color: white;
+            font-size: 11px;
+            font-weight: 700;
+            padding: 6px 12px;
+            border-radius: 20px;
+            margin-top: 15px;
+            display: inline-block;
+        }
+    </style>
+</head>
+<body>
+    <div class="blob1"></div>
+    <div class="content">
+        <div class="left">
+            <div class="logo-row">
+                <div class="logo">C</div>
+                <div class="brand">CREENLY</div>
+            </div>
+            <h1>Simple, Transparent Pricing</h1>
+            <p class="subtitle">AI-powered worship presentation for churches of all sizes. 30-day money-back guarantee.</p>
+        </div>
+        <div class="right">
+            <div class="price-card">
+                <div class="price-label">Monthly</div>
+                <div class="price">$15</div>
+                <div class="period">/month</div>
+            </div>
+            <div class="price-card featured">
+                <div class="price-label">Annual</div>
+                <div class="price">$150</div>
+                <div class="period">/year</div>
+                <div class="save">SAVE $30</div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            width: 1200px;
+            height: 630px;
+            background: linear-gradient(135deg, #0a0a0a 0%, #1a1a2e 50%, #0f0f23 100%);
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            position: relative;
+            overflow: hidden;
+        }
+        .blob1 {
+            position: absolute;
+            top: -100px;
+            left: -100px;
+            width: 400px;
+            height: 400px;
+            background: rgba(99, 102, 241, 0.15);
+            border-radius: 50%;
+            filter: blur(80px);
+        }
+        .blob2 {
+            position: absolute;
+            bottom: -150px;
+            right: -100px;
+            width: 500px;
+            height: 500px;
+            background: rgba(139, 92, 246, 0.1);
+            border-radius: 50%;
+            filter: blur(100px);
+        }
+        .content {
+            text-align: center;
+            z-index: 10;
+            padding: 60px;
+        }
+        .logo-row {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+            margin-bottom: 40px;
+        }
+        .logo {
+            width: 80px;
+            height: 80px;
+            background: linear-gradient(135deg, #6366f1, #8b5cf6);
+            border-radius: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 40px;
+            font-weight: 900;
+        }
+        .brand {
+            font-size: 48px;
+            font-weight: 900;
+            letter-spacing: -2px;
+        }
+        .tagline {
+            font-size: 28px;
+            color: #818cf8;
+            font-weight: 700;
+            margin-bottom: 30px;
+            text-transform: uppercase;
+            letter-spacing: 4px;
+        }
+        h1 {
+            font-size: 72px;
+            font-weight: 900;
+            letter-spacing: -3px;
+            line-height: 1;
+            margin-bottom: 30px;
+            background: linear-gradient(180deg, #fff 0%, rgba(255,255,255,0.6) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .subtitle {
+            font-size: 26px;
+            color: #a1a1aa;
+            max-width: 800px;
+            line-height: 1.4;
+        }
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            background: rgba(99, 102, 241, 0.2);
+            border: 1px solid rgba(99, 102, 241, 0.3);
+            padding: 12px 24px;
+            border-radius: 50px;
+            font-size: 16px;
+            font-weight: 700;
+            color: #a5b4fc;
+            margin-top: 30px;
+        }
+    </style>
+</head>
+<body>
+    <div class="blob1"></div>
+    <div class="blob2"></div>
+    <div class="content">
+        <div class="logo-row">
+            <div class="logo">C</div>
+            <div class="brand">CREENLY</div>
+        </div>
+        <div class="tagline">AI Church Projector Software</div>
+        <h1>Projector Without<br>The Prep.</h1>
+        <p class="subtitle">AI listens to your pastor and projects Bible verses automatically. Used by 500+ churches.</p>
+        <div class="badge">
+            <span>Free Download</span> • <span>Windows & Mac</span>
+        </div>
+    </div>
+</body>
+</html>

@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            width: 1200px;
+            height: 630px;
+            background: linear-gradient(135deg, #0a0a0a 0%, #0f1f1a 50%, #0a1612 100%);
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            position: relative;
+            overflow: hidden;
+        }
+        .blob1 {
+            position: absolute;
+            top: 50px;
+            right: 200px;
+            width: 300px;
+            height: 300px;
+            background: rgba(16, 185, 129, 0.15);
+            border-radius: 50%;
+            filter: blur(60px);
+        }
+        .blob2 {
+            position: absolute;
+            bottom: 50px;
+            left: 150px;
+            width: 350px;
+            height: 350px;
+            background: rgba(20, 184, 166, 0.1);
+            border-radius: 50%;
+            filter: blur(80px);
+        }
+        .content {
+            text-align: center;
+            z-index: 10;
+            padding: 50px;
+        }
+        .badge {
+            display: inline-block;
+            background: rgba(16, 185, 129, 0.2);
+            border: 1px solid rgba(16, 185, 129, 0.3);
+            padding: 10px 24px;
+            border-radius: 50px;
+            font-size: 14px;
+            font-weight: 700;
+            color: #6ee7b7;
+            margin-bottom: 30px;
+            text-transform: uppercase;
+            letter-spacing: 3px;
+        }
+        h1 {
+            font-size: 64px;
+            font-weight: 900;
+            letter-spacing: -2px;
+            line-height: 1.1;
+            margin-bottom: 30px;
+        }
+        h1 span {
+            color: #10b981;
+        }
+        .features {
+            display: flex;
+            justify-content: center;
+            gap: 40px;
+            margin-top: 40px;
+        }
+        .feature {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.1);
+            padding: 16px 28px;
+            border-radius: 16px;
+        }
+        .check {
+            width: 28px;
+            height: 28px;
+            background: #10b981;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+        }
+        .feature-text {
+            font-size: 18px;
+            font-weight: 600;
+        }
+    </style>
+</head>
+<body>
+    <div class="blob1"></div>
+    <div class="blob2"></div>
+    <div class="content">
+        <div class="badge">Mac & Windows</div>
+        <h1>Smarter <span>EasyWorship</span><br>Alternative</h1>
+        <div class="features">
+            <div class="feature">
+                <div class="check">✓</div>
+                <span class="feature-text">AI Voice Detection</span>
+            </div>
+            <div class="feature">
+                <div class="check">✓</div>
+                <span class="feature-text">Works on Mac</span>
+            </div>
+            <div class="feature">
+                <div class="check">✓</div>
+                <span class="feature-text">$15/month</span>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

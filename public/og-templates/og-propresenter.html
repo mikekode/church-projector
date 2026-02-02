@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            width: 1200px;
+            height: 630px;
+            background: linear-gradient(135deg, #0a0a0a 0%, #1a1a2e 50%, #0f0f23 100%);
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            position: relative;
+            overflow: hidden;
+        }
+        .blob1 {
+            position: absolute;
+            top: 50px;
+            left: 100px;
+            width: 300px;
+            height: 300px;
+            background: rgba(99, 102, 241, 0.15);
+            border-radius: 50%;
+            filter: blur(60px);
+        }
+        .blob2 {
+            position: absolute;
+            bottom: 50px;
+            right: 150px;
+            width: 350px;
+            height: 350px;
+            background: rgba(34, 197, 94, 0.1);
+            border-radius: 50%;
+            filter: blur(80px);
+        }
+        .content {
+            text-align: center;
+            z-index: 10;
+            padding: 50px;
+        }
+        .badge {
+            display: inline-block;
+            background: rgba(99, 102, 241, 0.2);
+            border: 1px solid rgba(99, 102, 241, 0.3);
+            padding: 10px 24px;
+            border-radius: 50px;
+            font-size: 14px;
+            font-weight: 700;
+            color: #a5b4fc;
+            margin-bottom: 30px;
+            text-transform: uppercase;
+            letter-spacing: 3px;
+        }
+        h1 {
+            font-size: 64px;
+            font-weight: 900;
+            letter-spacing: -2px;
+            line-height: 1.1;
+            margin-bottom: 30px;
+        }
+        h1 span {
+            color: #6366f1;
+        }
+        .comparison {
+            display: flex;
+            justify-content: center;
+            gap: 60px;
+            margin-top: 40px;
+        }
+        .vs-item {
+            text-align: center;
+        }
+        .vs-label {
+            font-size: 14px;
+            color: #71717a;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            margin-bottom: 10px;
+        }
+        .vs-value {
+            font-size: 42px;
+            font-weight: 900;
+        }
+        .vs-value.good {
+            color: #22c55e;
+        }
+        .vs-value.bad {
+            color: #71717a;
+            text-decoration: line-through;
+            opacity: 0.6;
+        }
+        .vs-sub {
+            font-size: 16px;
+            color: #a1a1aa;
+            margin-top: 5px;
+        }
+        .divider {
+            width: 2px;
+            height: 100px;
+            background: linear-gradient(180deg, transparent, #3f3f46, transparent);
+        }
+    </style>
+</head>
+<body>
+    <div class="blob1"></div>
+    <div class="blob2"></div>
+    <div class="content">
+        <div class="badge">Comparison 2025</div>
+        <h1>Best <span>ProPresenter</span><br>Alternative</h1>
+        <div class="comparison">
+            <div class="vs-item">
+                <div class="vs-label">Creenly</div>
+                <div class="vs-value good">$15</div>
+                <div class="vs-sub">per month</div>
+            </div>
+            <div class="divider"></div>
+            <div class="vs-item">
+                <div class="vs-label">ProPresenter</div>
+                <div class="vs-value bad">$40+</div>
+                <div class="vs-sub">per month</div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
