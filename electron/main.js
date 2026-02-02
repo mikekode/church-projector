@@ -4,11 +4,103 @@ const path = require('path');
 const fs = require('fs');
 const { spawn } = require('child_process');
 const cheerio = require('cheerio');
+const OpenAI = require('openai');
 // Load environment variables for local dev
 require('dotenv').config({ path: path.join(__dirname, '../.env.local') });
 
 const { exec } = require('child_process');
 const crypto = require('crypto');
+
+// ==================== SEMANTIC BIBLE SEARCH ====================
+// Bible verse embeddings for semantic paraphrase detection
+let bibleEmbeddings = null;
+let openaiClient = null;
+
+// Load embeddings on startup
+function loadBibleEmbeddings() {
+    try {
+        const embeddingsPath = app.isPackaged
+            ? path.join(process.resourcesPath, 'resources', 'bible-embeddings.json')
+            : path.join(__dirname, 'resources', 'bible-embeddings.json');
+
+        if (fs.existsSync(embeddingsPath)) {
+            console.log('[Semantic] Loading Bible embeddings...');
+            const data = fs.readFileSync(embeddingsPath, 'utf-8');
+            bibleEmbeddings = JSON.parse(data);
+            console.log(`[Semantic] Loaded ${bibleEmbeddings.length} verse embeddings`);
+        } else {
+            console.log('[Semantic] Bible embeddings not found at:', embeddingsPath);
+        }
+    } catch (error) {
+        console.error('[Semantic] Failed to load embeddings:', error.message);
+    }
+}
+
+// Initialize OpenAI client
+function initOpenAI() {
+    const apiKey = process.env.OPENAI_API_KEY;
+    if (apiKey) {
+        openaiClient = new OpenAI({ apiKey });
+        console.log('[Semantic] OpenAI client initialized');
+    } else {
+        console.log('[Semantic] OPENAI_API_KEY not found - semantic search disabled');
+    }
+}
+
+// Cosine similarity between two vectors
+function cosineSimilarity(a, b) {
+    let dotProduct = 0;
+    let normA = 0;
+    let normB = 0;
+    for (let i = 0; i < a.length; i++) {
+        dotProduct += a[i] * b[i];
+        normA += a[i] * a[i];
+        normB += b[i] * b[i];
+    }
+    return dotProduct / (Math.sqrt(normA) * Math.sqrt(normB));
+}
+
+// Find similar Bible verses
+async function findSimilarVerses(text, threshold = 0.45, maxResults = 5) {
+    if (!bibleEmbeddings || !openaiClient) {
+        return [];
+    }
+
+    try {
+        // Get embedding for input text (must match dimensions used in bible-embeddings.json)
+        const response = await openaiClient.embeddings.create({
+            model: 'text-embedding-3-small',
+            input: text,
+            dimensions: 128
+        });
+
+        const queryEmbedding = response.data[0].embedding;
+
+        // Calculate similarity with all verses
+        const similarities = bibleEmbeddings.map(verse => ({
+            ref: verse.ref,
+            text: verse.text,
+            similarity: cosineSimilarity(queryEmbedding, verse.emb)
+        }));
+
+        // Sort by similarity and filter above threshold
+        const results = similarities
+            .filter(v => v.similarity >= threshold)
+            .sort((a, b) => b.similarity - a.similarity)
+            .slice(0, maxResults)
+            .map(v => ({
+                ref: v.ref,
+                text: v.text,
+                confidence: Math.round(v.similarity * 100)
+            }));
+
+        return results;
+
+    } catch (error) {
+        console.error('[Semantic] Search error:', error.message);
+        return [];
+    }
+}
 
 // Security: Machine ID for Hardware Binding
 async function getMachineId() {
@@ -640,6 +732,43 @@ ipcMain.handle('smart-detect', async (event, payload) => {
     }
 });
 
+// Semantic Bible Verse Search - finds paraphrased scripture
+ipcMain.handle('semantic-search', async (event, { text, threshold = 0.45, maxResults = 3 }) => {
+    try {
+        if (!text || text.trim().length < 20) {
+            return { results: [], reason: 'Text too short for semantic analysis' };
+        }
+
+        if (!bibleEmbeddings) {
+            return { results: [], reason: 'Bible embeddings not loaded' };
+        }
+
+        if (!openaiClient) {
+            return { results: [], reason: 'OpenAI client not initialized' };
+        }
+
+        console.log(`[Semantic] Searching for: "${text.substring(0, 50)}..."`);
+
+        const results = await findSimilarVerses(text, threshold, maxResults);
+
+        console.log(`[Semantic] Found ${results.length} matches`);
+
+        // Return results with semantic tag
+        return {
+            results: results.map(r => ({
+                ref: r.ref,
+                text: r.text,
+                confidence: r.confidence,
+                type: 'semantic' // Tag for frontend
+            }))
+        };
+
+    } catch (error) {
+        console.error("[Semantic] Search error:", error);
+        return { results: [], error: error.message };
+    }
+});
+
 ipcMain.handle('atem-connect', async (event, ip) => {
     try {
         // Dynamically require to avoid crash if not installed yet
@@ -714,6 +843,10 @@ autoUpdater.on('error', (err) => {
 });
 
 app.on('ready', () => {
+    // Initialize semantic Bible search
+    initOpenAI();
+    loadBibleEmbeddings();
+
     createWindow();
     if (app.isPackaged) {
         // Check for updates shortly after startup

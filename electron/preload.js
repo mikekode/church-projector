@@ -32,6 +32,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
     // AI
     smartDetect: (payload) => ipcRenderer.invoke('smart-detect', payload),
+    semanticSearch: (text, threshold, maxResults) => ipcRenderer.invoke('semantic-search', { text, threshold, maxResults }),
 
     // Auto Update
     checkUpdate: () => ipcRenderer.invoke('check-update'),

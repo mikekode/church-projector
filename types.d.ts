@@ -44,3 +44,51 @@ declare namespace WebMidi {
 interface Navigator {
     requestMIDIAccess(options?: { sysex: boolean }): Promise<WebMidi.MIDIAccess>;
 }
+
+// Electron API types
+interface SemanticSearchResult {
+    ref: string;
+    text: string;
+    confidence: number;
+    type: 'semantic';
+}
+
+interface SemanticSearchResponse {
+    results: SemanticSearchResult[];
+    reason?: string;
+    error?: string;
+}
+
+interface Window {
+    electronAPI?: {
+        // ATEM
+        connectAtem: (ip: string) => Promise<any>;
+        performAtemAction: (action: string, input?: number) => Promise<any>;
+        onAtemStatus: (callback: (status: string) => void) => () => void;
+        // NDI
+        startNdi: () => Promise<any>;
+        // System
+        platform: string;
+        version: string;
+        getMachineId: () => Promise<string>;
+        // Bible
+        getVerse: (query: any) => Promise<any>;
+        getVerseOnline: (query: any) => Promise<any>;
+        // Window Management
+        openProjectorWindow: () => Promise<any>;
+        openStageWindow: () => Promise<any>;
+        // Songs
+        searchSongs: (query: string) => Promise<any>;
+        getLyrics: (title: string, artist: string) => Promise<any>;
+        // AI
+        smartDetect: (payload: any) => Promise<any>;
+        semanticSearch: (text: string, threshold?: number, maxResults?: number) => Promise<SemanticSearchResponse>;
+        // Updates
+        checkUpdate: () => Promise<any>;
+        downloadUpdate: () => Promise<any>;
+        installUpdate: () => Promise<any>;
+        onUpdateAvailable: (cb: (info: any) => void) => () => void;
+        onUpdateDownloaded: (cb: (info: any) => void) => () => void;
+        onUpdateError: (cb: (err: string) => void) => () => void;
+    };
+}

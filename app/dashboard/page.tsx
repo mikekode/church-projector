@@ -34,6 +34,8 @@ type DetectedItem = {
     songData?: any; // Full song object for slide navigation
     // Multi-verse support
     additionalVerses?: { verseNum: number; text: string; reference: string }[];
+    // Source type for semantic detection (never auto-push)
+    sourceType?: 'regex' | 'ai' | 'song' | 'semantic';
 };
 
 // Pulsating Voice Wave Component
@@ -229,6 +231,7 @@ export default function DashboardPage() {
     const activeItemRef = useRef(activeItem);
     const selectedVersionRef = useRef(selectedVersion);
     const verseCountRef = useRef(verseCount);
+    const confidenceThresholdRef = useRef(confidenceThreshold);
     const transcriptScrollRef = useRef<HTMLDivElement>(null);
 
     // Auto-scroll transcript to bottom
@@ -246,7 +249,8 @@ export default function DashboardPage() {
         activeItemRef.current = activeItem;
         selectedVersionRef.current = selectedVersion;
         verseCountRef.current = verseCount;
-    }, [transcript, detectedQueue, autoMode, activeItem, selectedVersion, verseCount]);
+        confidenceThresholdRef.current = confidenceThreshold;
+    }, [transcript, detectedQueue, autoMode, activeItem, selectedVersion, verseCount, confidenceThreshold]);
 
     // Broadcast Theme Changes
     useEffect(() => {
@@ -490,7 +494,7 @@ export default function DashboardPage() {
         matchType?: 'exact' | 'partial' | 'paraphrase';
         version?: string;
         songData?: any;
-    }, source: 'regex' | 'ai' | 'song') => {
+    }, source: 'regex' | 'ai' | 'song' | 'semantic') => {
         const isDuplicate = detectedQueueRef.current.length > 0 &&
             detectedQueueRef.current[0].reference === data.reference;
 
@@ -507,15 +511,18 @@ export default function DashboardPage() {
                 timestamp: new Date(),
                 confidence: data.confidence,
                 matchType: data.matchType,
-                songData: data.songData
+                songData: data.songData,
+                sourceType: source
             };
 
-            console.log(`[${source.toUpperCase()}] Detected: `, data.reference, data.confidence ? `(${data.confidence} %)` : '');
+            console.log(`[${source.toUpperCase()}] Detected: `, data.reference, data.confidence ? `(${data.confidence}%)` : '');
             setDetectedQueue(prev => [newItem, ...prev].slice(0, 50));
 
             // Auto-push logic: Only Bible verses go live automatically
+            // NEVER auto-push semantic detections or songs
             const isSong = newItem.version === 'SONG';
-            if (autoModeRef.current && !isSong) {
+            const isSemantic = source === 'semantic';
+            if (autoModeRef.current && !isSong && !isSemantic) {
                 goLive(newItem);
             }
         }
@@ -800,6 +807,51 @@ export default function DashboardPage() {
         // 3. Smart AI detection (debounced, catches natural language + paraphrases)
         setAiStatus('processing');
         addToSmartDetection(text);
+
+        // 4. Semantic search for paraphrased scriptures (requires 15+ words of context)
+        if (recentWords.length >= 15 && window.electronAPI?.semanticSearch) {
+            try {
+                const semanticText = recentWords.slice(-30).join(' '); // Last 30 words
+                // Convert threshold from percentage (e.g., 85) to decimal (0.85) for API
+                // Use a lower API threshold to get candidates, then filter by user threshold
+                const apiThreshold = Math.max(0.40, (confidenceThresholdRef.current - 10) / 100);
+                const result = await window.electronAPI.semanticSearch(semanticText, apiThreshold, 5);
+
+                if (result?.results?.length > 0) {
+                    // Filter by user's confidence threshold and take top 3
+                    const filteredResults = result.results
+                        .filter(m => m.confidence >= confidenceThresholdRef.current)
+                        .slice(0, 3);
+
+                    // Add semantic matches to queue (1-3 results, highest confidence first)
+                    for (const match of filteredResults) {
+                        // Parse the reference (e.g., "John 3:16" -> book: John, chapter: 3, verse: 16)
+                        const refMatch = match.ref.match(/^(.+?)\s+(\d+):(\d+)$/);
+                        if (refMatch) {
+                            const [, book, chapter, verse] = refMatch;
+
+                            // Check for duplicates (don't add if already in queue)
+                            const isDupe = detectedQueueRef.current.some(
+                                item => item.reference === match.ref
+                            );
+                            if (isDupe) continue;
+
+                            addToQueue({
+                                book: book,
+                                chapter: parseInt(chapter),
+                                verse: parseInt(verse),
+                                text: match.text,
+                                reference: match.ref,
+                                confidence: match.confidence,
+                                matchType: 'paraphrase',
+                            }, 'semantic');
+                        }
+                    }
+                }
+            } catch (err) {
+                console.error('[SEMANTIC] Search error:', err);
+            }
+        }
 
     }, [addToQueue, addToSmartDetection]);
 
@@ -1295,6 +1347,11 @@ export default function DashboardPage() {
                                                     {matchBadge && (
                                                         <span className={`text-[10px] px-1.5 py-0.5 rounded ${matchBadge.color} `}>
                                                             {matchBadge.text}
+                                                        </span>
+                                                    )}
+                                                    {item.sourceType === 'semantic' && (
+                                                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-purple-500/20 text-purple-400 border border-purple-500/30">
+                                                            semantic
                                                         </span>
                                                     )}
                                                     <span className="text-[10px] text-zinc-600">{item.timestamp.toLocaleTimeString()}</span>
