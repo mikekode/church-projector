@@ -38,12 +38,32 @@ function loadBibleEmbeddings() {
 
 // Initialize OpenAI client
 function initOpenAI() {
-    const apiKey = process.env.OPENAI_API_KEY;
+    // Check environment variable first (for development)
+    let apiKey = process.env.OPENAI_API_KEY;
+
+    // Then check bundled secrets file (for production build)
+    if (!apiKey) {
+        try {
+            const secretsPath = app.isPackaged
+                ? path.join(process.resourcesPath, 'resources', 'secrets.json')
+                : path.join(__dirname, 'resources', 'secrets.json');
+
+            if (fs.existsSync(secretsPath)) {
+                const secrets = JSON.parse(fs.readFileSync(secretsPath, 'utf-8'));
+                apiKey = secrets.OPENAI_API_KEY;
+            }
+        } catch (error) {
+            console.error('[Semantic] Failed to load secrets:', error.message);
+        }
+    }
+
     if (apiKey) {
         openaiClient = new OpenAI({ apiKey });
         console.log('[Semantic] OpenAI client initialized');
+        return true;
     } else {
         console.log('[Semantic] OPENAI_API_KEY not found - semantic search disabled');
+        return false;
     }
 }
 

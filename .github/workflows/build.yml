@@ -30,6 +30,12 @@ jobs:
       - name: Install Dependencies
         run: npm install
 
+      - name: Create secrets file for bundled API key
+        run: |
+          mkdir -p electron/resources
+          echo '{"OPENAI_API_KEY":"${{ secrets.OPENAI_API_KEY }}"}' > electron/resources/secrets.json
+        shell: bash
+
       - name: Hide API routes for static export
         run: mv app/api app/_api || true
         shell: bash

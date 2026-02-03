@@ -32,4 +32,5 @@ vercel_list.txt
 credentials.json
 token.json
 *.pem
-*.key 
+*.key
+secrets.json
