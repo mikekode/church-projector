@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, Menu } = require('electron');
+const { app, BrowserWindow, ipcMain, Menu, dialog } = require('electron');
 const { autoUpdater } = require('electron-updater');
 const path = require('path');
 const fs = require('fs');
@@ -10,6 +10,76 @@ require('dotenv').config({ path: path.join(__dirname, '../.env.local') });
 
 const { exec } = require('child_process');
 const crypto = require('crypto');
+
+// ==================== EULA / LICENSE AGREEMENT ====================
+function getEulaAcceptedPath() {
+    return path.join(app.getPath('userData'), 'eula-accepted.json');
+}
+
+function hasAcceptedEula() {
+    try {
+        const eulaPath = getEulaAcceptedPath();
+        if (fs.existsSync(eulaPath)) {
+            const data = JSON.parse(fs.readFileSync(eulaPath, 'utf-8'));
+            return data.accepted === true;
+        }
+    } catch (error) {
+        console.error('[EULA] Error checking acceptance:', error.message);
+    }
+    return false;
+}
+
+function saveEulaAcceptance() {
+    try {
+        const eulaPath = getEulaAcceptedPath();
+        fs.writeFileSync(eulaPath, JSON.stringify({
+            accepted: true,
+            acceptedAt: new Date().toISOString(),
+            version: app.getVersion()
+        }));
+        return true;
+    } catch (error) {
+        console.error('[EULA] Error saving acceptance:', error.message);
+        return false;
+    }
+}
+
+async function showEulaDialog() {
+    const eulaText = `CREENLY END USER LICENSE AGREEMENT (EULA)
+
+By using Creenly, you agree to the following terms:
+
+1. LICENSE: You are granted a limited, non-exclusive license to use this software for personal or organizational use.
+
+2. RESTRICTIONS - You agree NOT to:
+   • Reverse engineer, decompile, or disassemble the software
+   • Modify, adapt, or create derivative works
+   • Sell, resell, rent, lease, or redistribute the software
+   • Remove or alter any proprietary notices
+
+3. INTELLECTUAL PROPERTY: The software and all copies are proprietary. All rights not granted are reserved.
+
+4. DISCLAIMER: THE SOFTWARE IS PROVIDED "AS IS" WITHOUT WARRANTY OF ANY KIND.
+
+5. LIMITATION OF LIABILITY: The licensor shall not be liable for any indirect, incidental, or consequential damages.
+
+By clicking "I Accept", you acknowledge that you have read and agree to be bound by these terms.
+
+Full license terms are available at: https://creenly.app/license`;
+
+    const result = await dialog.showMessageBox({
+        type: 'info',
+        title: 'Creenly - License Agreement',
+        message: 'End User License Agreement',
+        detail: eulaText,
+        buttons: ['I Accept', 'I Decline'],
+        defaultId: 0,
+        cancelId: 1,
+        noLink: true
+    });
+
+    return result.response === 0; // 0 = "I Accept"
+}
 
 // ==================== SEMANTIC BIBLE SEARCH ====================
 // Bible verse embeddings for semantic paraphrase detection
@@ -862,7 +932,17 @@ autoUpdater.on('error', (err) => {
     if (mainWindow) mainWindow.webContents.send('update-error', err.toString());
 });
 
-app.on('ready', () => {
+app.on('ready', async () => {
+    // Check EULA acceptance on first launch
+    if (!hasAcceptedEula()) {
+        const accepted = await showEulaDialog();
+        if (!accepted) {
+            app.quit();
+            return;
+        }
+        saveEulaAcceptance();
+    }
+
     // Initialize semantic Bible search
     initOpenAI();
     loadBibleEmbeddings();
