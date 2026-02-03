@@ -321,16 +321,19 @@ export default function ResourceLibraryPanel({
                 } else {
                     const slides = await parsePresentationFile(file);
                     const isPresentation = file.name.match(/\.(pdf|docx|pptx)$/i);
+                    // Check if slides contain images (PDF rendered as images)
+                    const hasImageContent = slides.length > 0 && slides[0].content?.startsWith('data:image');
 
                     newItem = {
                         id: `res - ${Date.now()} -${i} `,
-                        type: 'song',
+                        type: hasImageContent ? 'media' : 'song',
                         title: file.name.replace(/\.[^/.]+$/, ""),
                         slides: slides,
                         activeSlideIndex: 0,
                         category: isPresentation ? 'presentation' : 'song',
                         dateAdded: Date.now(),
-                        collectionId: selectedCollectionId || undefined
+                        collectionId: selectedCollectionId || undefined,
+                        meta: hasImageContent ? { imageMode: 'contain' } : undefined
                     };
                     await saveResource(newItem);
                 }
