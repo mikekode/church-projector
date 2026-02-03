@@ -86,9 +86,6 @@
                 "github"
             ]
         },
-        "dmg": {
-            "license": "LICENSE.txt"
-        },
         "extraResources": [
             {
                 "from": "electron/resources",
