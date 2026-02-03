@@ -73,12 +73,20 @@
                 "github"
             ]
         },
+        "nsis": {
+            "oneClick": false,
+            "allowToChangeInstallationDirectory": true,
+            "license": "LICENSE.txt"
+        },
         "mac": {
             "target": "dmg",
             "icon": "public/icon.png",
             "publish": [
                 "github"
             ]
+        },
+        "dmg": {
+            "license": "LICENSE.txt"
         },
         "extraResources": [
             {

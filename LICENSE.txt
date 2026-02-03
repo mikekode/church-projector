@@ -1,0 +1,53 @@
+CREENLY END USER LICENSE AGREEMENT (EULA)
+
+Last Updated: February 2025
+
+IMPORTANT: PLEASE READ THIS END USER LICENSE AGREEMENT ("AGREEMENT") CAREFULLY BEFORE USING CREENLY SOFTWARE.
+
+By installing, copying, or otherwise using Creenly ("Software"), you agree to be bound by the terms of this Agreement. If you do not agree to the terms of this Agreement, do not install or use the Software.
+
+1. LICENSE GRANT
+Subject to the terms of this Agreement, the licensor grants you a limited, non-exclusive, non-transferable license to install and use the Software for your personal or organizational use in church, ministry, or presentation settings.
+
+2. RESTRICTIONS
+You agree NOT to:
+
+a) REVERSE ENGINEER: Reverse engineer, decompile, disassemble, or attempt to derive the source code of the Software or any part thereof.
+
+b) MODIFY: Modify, adapt, translate, or create derivative works based on the Software.
+
+c) RESELL OR REDISTRIBUTE: Sell, resell, rent, lease, sublicense, distribute, or otherwise transfer the Software or any rights therein to any third party.
+
+d) COPY: Copy or duplicate the Software except for reasonable backup purposes.
+
+e) REMOVE NOTICES: Remove, alter, or obscure any proprietary notices, labels, or marks on the Software.
+
+f) CIRCUMVENT: Circumvent, disable, or otherwise interfere with security-related features of the Software or features that prevent or restrict use or copying.
+
+3. INTELLECTUAL PROPERTY
+The Software and all copies thereof are proprietary to the licensor and title thereto remains exclusively with the licensor. All rights in the Software not specifically granted in this Agreement are reserved to the licensor.
+
+4. DATA AND PRIVACY
+The Software may collect and transmit certain usage data to improve functionality. By using the Software, you consent to such data collection as described in our Privacy Policy.
+
+5. THIRD-PARTY SERVICES
+The Software may integrate with third-party services (including but not limited to AI services, Bible databases, and song lyric providers). Your use of such services is subject to their respective terms and conditions.
+
+6. DISCLAIMER OF WARRANTIES
+THE SOFTWARE IS PROVIDED "AS IS" WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, AND NONINFRINGEMENT. THE LICENSOR DOES NOT WARRANT THAT THE SOFTWARE WILL BE ERROR-FREE OR UNINTERRUPTED.
+
+7. LIMITATION OF LIABILITY
+IN NO EVENT SHALL THE LICENSOR BE LIABLE FOR ANY INDIRECT, INCIDENTAL, SPECIAL, CONSEQUENTIAL, OR PUNITIVE DAMAGES, OR ANY LOSS OF PROFITS OR REVENUES, WHETHER INCURRED DIRECTLY OR INDIRECTLY, OR ANY LOSS OF DATA, USE, GOODWILL, OR OTHER INTANGIBLE LOSSES RESULTING FROM YOUR USE OF THE SOFTWARE.
+
+8. TERMINATION
+This Agreement is effective until terminated. Your rights under this Agreement will terminate automatically without notice if you fail to comply with any of its terms. Upon termination, you must cease all use of the Software and destroy all copies.
+
+9. GOVERNING LAW
+This Agreement shall be governed by and construed in accordance with applicable laws, without regard to conflict of law principles.
+
+10. ENTIRE AGREEMENT
+This Agreement constitutes the entire agreement between you and the licensor regarding the Software and supersedes all prior agreements and understandings, whether written or oral.
+
+BY CLICKING "I ACCEPT" OR BY INSTALLING OR USING THE SOFTWARE, YOU ACKNOWLEDGE THAT YOU HAVE READ THIS AGREEMENT, UNDERSTAND IT, AND AGREE TO BE BOUND BY ITS TERMS AND CONDITIONS.
+
+Copyright (c) 2025 Creenly. All Rights Reserved.
