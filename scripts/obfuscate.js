@@ -14,37 +14,37 @@ const path = require('path');
 const ELECTRON_DIR = path.join(__dirname, '../electron');
 const FILES_TO_OBFUSCATE = ['main.js', 'preload.js'];
 
-// Standard obfuscation settings (balance between protection and performance)
+// HIGH SECURITY obfuscation settings - makes reverse engineering extremely difficult
 const OBFUSCATION_OPTIONS = {
     compact: true,
     controlFlowFlattening: true,
-    controlFlowFlatteningThreshold: 0.5,
+    controlFlowFlatteningThreshold: 0.75, // Increased from 0.5
     deadCodeInjection: true,
-    deadCodeInjectionThreshold: 0.2,
-    debugProtection: false, // Can cause issues, disabled
-    disableConsoleOutput: false, // Keep console for debugging
+    deadCodeInjectionThreshold: 0.4, // Increased from 0.2
+    debugProtection: false, // Keep false - causes issues in Electron
+    disableConsoleOutput: false, // Keep for debugging in production
     identifierNamesGenerator: 'hexadecimal',
     log: false,
     numbersToExpressions: true,
     renameGlobals: false, // Keep false to avoid breaking require() calls
-    selfDefending: false, // Can cause issues in Electron
+    selfDefending: true, // ENABLED: Breaks code if beautified/formatted
     simplify: true,
     splitStrings: true,
-    splitStringsChunkLength: 10,
+    splitStringsChunkLength: 5, // Smaller chunks = harder to read
     stringArray: true,
     stringArrayCallsTransform: true,
-    stringArrayCallsTransformThreshold: 0.5,
-    stringArrayEncoding: ['base64'],
+    stringArrayCallsTransformThreshold: 0.75, // Increased
+    stringArrayEncoding: ['rc4'], // Stronger encoding than base64
     stringArrayIndexShift: true,
     stringArrayRotate: true,
     stringArrayShuffle: true,
-    stringArrayWrappersCount: 2,
+    stringArrayWrappersCount: 3, // Increased from 2
     stringArrayWrappersChainedCalls: true,
-    stringArrayWrappersParametersMaxCount: 4,
+    stringArrayWrappersParametersMaxCount: 5, // Increased
     stringArrayWrappersType: 'function',
-    stringArrayThreshold: 0.75,
+    stringArrayThreshold: 0.9, // Increased from 0.75
     transformObjectKeys: true,
-    unicodeEscapeSequence: false
+    unicodeEscapeSequence: true // ENABLED: Makes strings unreadable
 };
 
 console.log('=== CREENLY CODE OBFUSCATION ===\n');
