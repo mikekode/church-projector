@@ -86,6 +86,9 @@ Full license terms are available at: https://creenly.app/license`;
 let bibleEmbeddings = null;
 let openaiClient = null;
 
+// Hardware integration
+let atem = null;
+
 // Load embeddings on startup
 function loadBibleEmbeddings() {
     try {
