@@ -48,6 +48,7 @@ export default function StageDisplayPage() {
     const [elapsedTime, setElapsedTime] = useState('00:00:00');
     // RESTORED STATE
     const [notes, setNotes] = useState('');
+    const [showHint, setShowHint] = useState(true);
     const [isFullscreen, setIsFullscreen] = useState(false);
 
     // Broadcast Subscription
@@ -70,6 +71,12 @@ export default function StageDisplayPage() {
         setCurrentTime(new Date());
         const timer = setInterval(() => setCurrentTime(new Date()), 1000);
         return () => clearInterval(timer);
+    }, []);
+
+    // Auto-hide footer hint after 5 seconds
+    useEffect(() => {
+        const timer = setTimeout(() => setShowHint(false), 5000);
+        return () => clearTimeout(timer);
     }, []);
 
     // Timer Interval
@@ -324,8 +331,8 @@ export default function StageDisplayPage() {
                 )}
             </div>
 
-            {/* Footer Hint */}
-            <div className="fixed bottom-4 left-1/2 -translate-x-1/2 text-zinc-600 text-sm">
+            {/* Footer Hint - auto-hides after 5 seconds */}
+            <div className={`fixed bottom-4 left-1/2 -translate-x-1/2 text-zinc-600 text-sm transition-opacity duration-1000 ${showHint ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
                 Double-click to toggle fullscreen • Stage Display
             </div>
 
