@@ -20,7 +20,7 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import { GripVertical, Music, BookOpen, Image, Play, Trash2, Eye, Upload, FileText, ImageIcon } from 'lucide-react';
 import { ScheduleItem, ServiceSchedule, loadSchedule, saveSchedule, createBlankSchedule } from '@/utils/scheduleManager';
-import { parseLyrics, extractTextFromFile } from '@/utils/lyricsParser';
+import { parseLyrics, extractTextFromFile, parsePresentationFile } from '@/utils/lyricsParser';
 import PreviewModal from './PreviewModal';
 
 interface ServiceScheduleProps {
@@ -290,8 +290,24 @@ export default function ServiceSchedulePanel({ onGoLive, schedule: controlledSch
                     };
                     addItem(newItem);
                 }
-                // Handle Text/Lyrics/Docs (txt, docx, pdf)
-                else if (['txt', 'docx', 'pdf'].includes(ext || '')) {
+                // Handle PDF files - render as images
+                else if (ext === 'pdf') {
+                    const slides = await parsePresentationFile(file);
+                    const newItem: ScheduleItem = {
+                        id: `pdf-${Date.now()}-${Math.random()}`,
+                        type: 'media',
+                        title: baseName,
+                        slides: slides.map((s, i) => ({
+                            id: s.id,
+                            content: s.content,
+                            label: `Page ${i + 1}`
+                        })),
+                        activeSlideIndex: 0
+                    };
+                    addItem(newItem);
+                }
+                // Handle Text/Lyrics/Docs (txt, docx)
+                else if (['txt', 'docx'].includes(ext || '')) {
                     const text = await extractTextFromFile(file);
                     // Use parseLyrics which now handles generic text chunks too
                     const slides = parseLyrics(text);
