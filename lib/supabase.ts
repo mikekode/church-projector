@@ -15,6 +15,10 @@ export type License = {
     email?: string;
     expiresAt?: string;
     daysRemaining?: number;
+    // Usage tracking fields
+    usageHoursLimit?: number | null;
+    usageHoursUsed?: number;
+    hoursRemaining?: number | null;
 };
 
 // Local Storage Keys
@@ -182,12 +186,35 @@ export async function validateLicenseOnline(licenseKey: string): Promise<License
         ? Math.ceil((expiresAt.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
         : undefined;
 
+    // Calculate hours remaining
+    const usageHoursLimit = license.usage_hours_limit ?? null;
+    const usageHoursUsed = license.usage_hours_used ?? 0;
+    const hoursRemaining = usageHoursLimit !== null
+        ? Math.max(0, usageHoursLimit - usageHoursUsed)
+        : null;
+
+    // Check if usage is exhausted
+    if (usageHoursLimit !== null && usageHoursUsed >= usageHoursLimit) {
+        return {
+            status: 'expired',
+            licenseKey,
+            email: license.email,
+            expiresAt: license.current_period_end,
+            usageHoursLimit,
+            usageHoursUsed,
+            hoursRemaining: 0
+        };
+    }
+
     return {
         status: 'active',
         licenseKey,
         email: license.email,
         expiresAt: license.current_period_end,
-        daysRemaining
+        daysRemaining,
+        usageHoursLimit,
+        usageHoursUsed,
+        hoursRemaining
     };
 }
 

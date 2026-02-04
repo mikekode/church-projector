@@ -133,7 +133,7 @@ export default function Home() {
                                         { f: "Zero-Prep Scripture Search", a: true, b: "Manual", c: "Laggy" },
                                         { f: "Learning Curve", a: "Minutes", b: "Weeks", c: "Days" },
                                         { f: "Volunteer Satisfaction", a: "High", b: "Stressed", c: "Okay" },
-                                        { f: "Monthly Cost", a: "$15", b: "$40+", c: "$20+" },
+                                        { f: "Monthly Cost", a: "From $15", b: "$40+", c: "$20+" },
                                     ].map((row, i) => (
                                         <tr key={i} className="border-b border-white/5 group hover:bg-white/[0.01] transition-colors">
                                             <td className="py-8 px-6 text-xs md:text-sm font-bold text-zinc-400 group-hover:text-white transition-colors">{row.f}</td>

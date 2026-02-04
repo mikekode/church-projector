@@ -9,6 +9,8 @@ import MIDISettingsModal from '@/components/MIDISettingsModal';
 import { useMIDI, MidiAction } from '@/hooks/useMIDI';
 import { useBroadcastChannel } from '@/hooks/useBroadcast';
 import { useSmartDetection, type DetectionSignal } from '@/hooks/useSmartDetection';
+import { useLicense } from '@/hooks/useLicense';
+import { useUsageTracker } from '@/hooks/useUsageTracker';
 import DeepgramRecognizer from '@/components/DeepgramRecognizer';
 import { detectVersesInText, lookupVerseAsync, SUPPORTED_VERSIONS } from '@/utils/bible';
 import { DEFAULT_THEMES, ProjectorTheme } from '@/utils/themes';
@@ -16,8 +18,43 @@ import Link from 'next/link';
 import OmniSearch from '@/components/OmniSearch';
 import ServiceSchedulePanel from '@/components/ServiceSchedulePanel';
 import ResourceLibraryPanel from '@/components/ResourceLibraryPanel';
+import MediaControls from '@/components/MediaControls';
 import { ScheduleItem, ServiceSchedule, createBlankSchedule, loadSchedule, saveSchedule } from '@/utils/scheduleManager';
 import { ResourceItem } from '@/utils/resourceLibrary';
+
+/**
+ * Render formatted text with allowed HTML tags (b, i, font/span with color)
+ */
+function renderFormattedText(text: string): string {
+    if (!text) return '';
+    let safe = text
+        .replace(/<b>/gi, '___BOLD_OPEN___')
+        .replace(/<\/b>/gi, '___BOLD_CLOSE___')
+        .replace(/<i>/gi, '___ITALIC_OPEN___')
+        .replace(/<\/i>/gi, '___ITALIC_CLOSE___')
+        .replace(/<font color="([^"]+)">/gi, (_, color) => '___FONT_' + color + '___')
+        .replace(/<\/font>/gi, '___FONT_CLOSE___')
+        .replace(/<span style="color:([^"]+)">/gi, (_, color) => '___SPAN_' + color + '___')
+        .replace(/<\/span>/gi, '___SPAN_CLOSE___');
+
+    safe = safe
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+
+    safe = safe
+        .replace(/___BOLD_OPEN___/g, '<b>')
+        .replace(/___BOLD_CLOSE___/g, '</b>')
+        .replace(/___ITALIC_OPEN___/g, '<i>')
+        .replace(/___ITALIC_CLOSE___/g, '</i>')
+        .replace(/___FONT_([^_]+)___/g, '<span style="color:$1">')
+        .replace(/___FONT_CLOSE___/g, '</span>')
+        .replace(/___SPAN_([^_]+)___/g, '<span style="color:$1">')
+        .replace(/___SPAN_CLOSE___/g, '</span>');
+
+    safe = safe.replace(/\n/g, '<br>');
+    return safe;
+}
 
 type DetectedItem = {
     id: string;
@@ -67,6 +104,10 @@ export default function DashboardPage() {
     const [transcript, setTranscript] = useState("");
     const [interim, setInterim] = useState("");
     const [voiceLevel, setVoiceLevel] = useState(0); // Audio RMS level (0-1)
+
+    // License and usage tracking
+    const { license, isLicensed, hoursRemaining, isLowHours } = useLicense();
+    useUsageTracker(isListening, license?.licenseKey || null);
     const [detectedQueue, setDetectedQueue] = useState<DetectedItem[]>([]);
     const [activeItem, setActiveItem] = useState<DetectedItem | null>(null);
     const [autoMode, setAutoMode] = useState(false);
@@ -1381,6 +1422,8 @@ export default function DashboardPage() {
                                 <h3 className="text-xs font-bold text-green-500 uppercase tracking-wider flex items-center gap-2">
                                     <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" /> Live Output
                                 </h3>
+                                {/* Media Controls (Only show if active item is video) */}
+
                                 <div className="flex items-center gap-2">
                                     <button
                                         onClick={() => setShowTimerSettings(!showTimerSettings)}
@@ -1531,11 +1574,21 @@ export default function DashboardPage() {
                                 {activeItem ? (
                                     activeItem.version === 'MEDIA' ? (
                                         <div className="text-center w-full h-full flex flex-col items-center justify-center relative z-10">
-                                            <img
-                                                src={activeItem.text}
-                                                alt={activeItem.reference}
-                                                className="max-h-full max-w-full object-contain"
-                                            />
+                                            {activeItem.text?.startsWith('data:video') || activeItem.text?.endsWith('.mp4') || activeItem.text?.endsWith('.webm') ? (
+                                                <video
+                                                    src={activeItem.text}
+                                                    className="max-h-full max-w-full object-contain"
+                                                    autoPlay
+                                                    loop
+                                                    muted
+                                                />
+                                            ) : (
+                                                <img
+                                                    src={activeItem.text}
+                                                    alt={activeItem.reference}
+                                                    className="max-h-full max-w-full object-contain"
+                                                />
+                                            )}
                                         </div>
                                     ) : (
                                         <div
@@ -1576,7 +1629,7 @@ export default function DashboardPage() {
                                                         fontSize: '1.5rem', // Force smaller size for preview
                                                         textShadow: currentTheme?.styles.textShadow,
                                                         lineHeight: 1.2
-                                                    }}>{activeItem.text}</span>
+                                                    }} dangerouslySetInnerHTML={{ __html: renderFormattedText(activeItem.text) }} />
                                                 </div>
 
                                                 {/* Additional verses */}
@@ -1594,7 +1647,7 @@ export default function DashboardPage() {
                                                             fontSize: '1.5rem', // Force smaller size for preview
                                                             textShadow: currentTheme?.styles.textShadow,
                                                             lineHeight: 1.2
-                                                        }}>{v.text}</span>
+                                                        }} dangerouslySetInnerHTML={{ __html: renderFormattedText(v.text) }} />
                                                     </div>
                                                 ))}
                                             </div>
@@ -1634,6 +1687,17 @@ export default function DashboardPage() {
                                         Open Projector Window ↗
                                     </button>
                                 </div>
+
+                                {/* Floating Media Controls */}
+                                {activeItem?.text?.startsWith('data:video') && (
+                                    <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-[60] animate-in fade-in slide-in-from-bottom-2 duration-300">
+                                        <MediaControls
+                                            onAction={(action, value) => {
+                                                broadcast({ type: 'MEDIA_ACTION', payload: { action, value } });
+                                            }}
+                                        />
+                                    </div>
+                                )}
                             </div>
                         </div>
                     </section>
@@ -1683,7 +1747,13 @@ export default function DashboardPage() {
                             onResourcesChanged={setLibraryResources}
                             onAddToSchedule={handleAddToSchedule}
                             onGoLive={(item: ScheduleItem) => {
-                                const slide = item.slides[0];
+                                const slide = item.slides?.[0];
+
+                                // Guard: if no slides, show error and return
+                                if (!slide) {
+                                    console.error('No slides found for item:', item.title);
+                                    return;
+                                }
 
                                 // Support all types for live presentation handling (slide nav)
                                 if (['song', 'media', 'scripture'].includes(item.type)) {

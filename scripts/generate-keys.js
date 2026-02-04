@@ -1,14 +1,16 @@
 /**
  * CREENLY License Key Generator
  *
- * Pricing:
- *   - Monthly: $15/month
- *   - Yearly: $150/year
+ * Pricing (Usage-Based):
+ *   - Monthly: $15/month (40 hours)
+ *   - 6-Month: $90/6 months (240 hours)
+ *   - Yearly: $180/year (480 hours)
  * 
  * Usage:
- *   node scripts/generate-keys.js monthly <email>    # 1 month access
- *   node scripts/generate-keys.js yearly <email>     # 12 months access
- *   node scripts/generate-keys.js extend <email> monthly|yearly
+ *   node scripts/generate-keys.js monthly <email>     # 1 month, 40 hours
+ *   node scripts/generate-keys.js sixmonth <email>    # 6 months, 240 hours
+ *   node scripts/generate-keys.js yearly <email>      # 12 months, 480 hours
+ *   node scripts/generate-keys.js extend <email> monthly|sixmonth|yearly
  *   node scripts/generate-keys.js list
  */
 
@@ -19,10 +21,11 @@ const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYm
 
 const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
-// Plan configuration
+// Plan configuration with usage hours
 const PLANS = {
-    monthly: { months: 1, label: 'Monthly ($15)' },
-    yearly: { months: 12, label: 'Yearly ($150)' }
+    monthly: { months: 1, hours: 40, label: 'Monthly - $15 (40 hrs)' },
+    sixmonth: { months: 6, hours: 240, label: '6-Month - $90 (240 hrs)' },
+    yearly: { months: 12, hours: 480, label: 'Annual - $180 (480 hrs)' }
 };
 
 // Generate a random key code
@@ -58,7 +61,9 @@ async function generateLicense(planType, email) {
             email: email,
             status: 'active',
             plan: planType,
-            current_period_end: currentPeriodEnd.toISOString()
+            current_period_end: currentPeriodEnd.toISOString(),
+            usage_hours_limit: plan.hours,
+            usage_hours_used: 0
         })
         .select()
         .single();
@@ -72,6 +77,7 @@ async function generateLicense(planType, email) {
     console.log(`✅ License Key:  ${keyCode}`);
     console.log(`   Email:        ${email}`);
     console.log(`   Plan:         ${plan.label}`);
+    console.log(`   Hours:        ${plan.hours} hours`);
     console.log(`   Expires:      ${currentPeriodEnd.toLocaleDateString()}`);
     console.log('━'.repeat(55));
     console.log(`\n📧 Send this key to the customer.\n`);
@@ -175,21 +181,24 @@ async function listLicenses() {
 // Help text
 function showHelp() {
     console.log(`
-📖 CREENLY License Manager
+📖 CREENLY License Manager (Usage-Based Pricing)
 
 GENERATE NEW LICENSE:
-  node scripts/generate-keys.js monthly <email>     Create 1-month license ($15)
-  node scripts/generate-keys.js yearly <email>      Create 12-month license ($150)
+  node scripts/generate-keys.js monthly <email>     Create 1-month, 40-hour license ($15)
+  node scripts/generate-keys.js sixmonth <email>    Create 6-month, 240-hour license ($90)
+  node scripts/generate-keys.js yearly <email>      Create 12-month, 480-hour license ($180)
 
 EXTEND EXISTING LICENSE:
-  node scripts/generate-keys.js extend <email> monthly   Add 1 month
-  node scripts/generate-keys.js extend <email> yearly    Add 12 months
+  node scripts/generate-keys.js extend <email> monthly   Add 1 month + 40 hours
+  node scripts/generate-keys.js extend <email> sixmonth  Add 6 months + 240 hours
+  node scripts/generate-keys.js extend <email> yearly    Add 12 months + 480 hours
 
 LIST LICENSES:
   node scripts/generate-keys.js list
 
 EXAMPLES:
   node scripts/generate-keys.js monthly "pastor@church.org"
+  node scripts/generate-keys.js sixmonth "admin@church.org"
   node scripts/generate-keys.js yearly "admin@megachurch.org"
   node scripts/generate-keys.js extend "pastor@church.org" monthly
 `);
@@ -221,6 +230,7 @@ switch (command) {
         break;
 
     case 'monthly':
+    case 'sixmonth':
     case 'yearly':
         const email = args[1];
         if (!email) {

@@ -40,12 +40,20 @@ function generateLicenseKey() {
 }
 
 // Send license email via Resend
-async function sendLicenseEmail(email, licenseKey, plan, expiresAt) {
+// Plan configuration with hours
+const PLANS = {
+    monthly: { months: 1, hours: 40, label: 'Monthly ($15)', hoursLabel: '40 hours' },
+    sixmonth: { months: 6, hours: 240, label: '6-Month ($90)', hoursLabel: '240 hours' },
+    yearly: { months: 12, hours: 480, label: 'Annual ($180)', hoursLabel: '480 hours' }
+};
+
+async function sendLicenseEmail(email, licenseKey, plan, expiresAt, hoursLimit) {
     if (!RESEND_API_KEY) {
         console.log('RESEND_API_KEY not set, skipping email');
         return;
     }
 
+    const planConfig = PLANS[plan] || PLANS.monthly;
     const expiryDate = new Date(expiresAt).toLocaleDateString('en-US', {
         year: 'numeric',
         month: 'long',
@@ -84,7 +92,8 @@ async function sendLicenseEmail(email, licenseKey, plan, expiresAt) {
                     
                     <div style="background: #f8f9fa; border-radius: 8px; padding: 16px; margin: 24px 0;">
                         <p style="margin: 0; color: #6b7280; font-size: 14px;">
-                            <strong>Plan:</strong> ${plan === 'yearly' ? 'Yearly ($150/year)' : 'Monthly ($15/month)'}<br>
+                            <strong>Plan:</strong> ${planConfig.label}<br>
+                            <strong>Hours Included:</strong> ${planConfig.hoursLabel}<br>
                             <strong>Valid until:</strong> ${expiryDate}
                         </p>
                     </div>
@@ -119,13 +128,22 @@ async function handleWebhook(event, data) {
     const customerId = data.attributes?.customer_id?.toString();
     const subscriptionId = data.id?.toString();
 
-    // Determine plan from variant/product name or price
+    // Determine plan from variant/product name
     const variantName = data.attributes?.variant_name?.toLowerCase() || '';
     const productName = data.attributes?.product_name?.toLowerCase() || '';
-    const plan = (variantName.includes('year') || productName.includes('year')) ? 'yearly' : 'monthly';
-    const months = plan === 'yearly' ? 12 : 1;
 
-    console.log(`[Webhook] Event: ${event}, Email: ${email}, Plan: ${plan}`);
+    let plan = 'monthly';
+    if (variantName.includes('year') || productName.includes('year') || productName.includes('annual')) {
+        plan = 'yearly';
+    } else if (variantName.includes('6') || productName.includes('6') || variantName.includes('six') || productName.includes('six')) {
+        plan = 'sixmonth';
+    }
+
+    const planConfig = PLANS[plan];
+    const months = planConfig.months;
+    const hoursLimit = planConfig.hours;
+
+    console.log(`[Webhook] Event: ${event}, Email: ${email}, Plan: ${plan}, Hours: ${hoursLimit}`);
 
     switch (event) {
         case 'subscription_created':
@@ -160,7 +178,7 @@ async function handleWebhook(event, data) {
                 console.log(`Extended license for ${email}, new expiry: ${newEnd.toISOString()}`);
 
                 // Send confirmation email with existing key
-                await sendLicenseEmail(email, existingLicense.license_key, plan, newEnd.toISOString());
+                await sendLicenseEmail(email, existingLicense.license_key, plan, newEnd.toISOString(), hoursLimit);
             } else {
                 // Create new license
                 const licenseKey = generateLicenseKey();
@@ -174,13 +192,15 @@ async function handleWebhook(event, data) {
                     subscription_id: subscriptionId,
                     status: 'active',
                     plan: plan,
-                    current_period_end: expiresAt.toISOString()
+                    current_period_end: expiresAt.toISOString(),
+                    usage_hours_limit: hoursLimit,
+                    usage_hours_used: 0
                 });
 
                 console.log(`Created license ${licenseKey} for ${email}`);
 
                 // Send license email
-                await sendLicenseEmail(email, licenseKey, plan, expiresAt.toISOString());
+                await sendLicenseEmail(email, licenseKey, plan, expiresAt.toISOString(), hoursLimit);
             }
             break;
         }

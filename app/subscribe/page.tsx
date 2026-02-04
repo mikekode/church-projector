@@ -1,6 +1,6 @@
 'use client';
 import Link from 'next/link';
-import { Check, ArrowLeft, Zap, Star, Shield, HelpCircle } from 'lucide-react';
+import { Check, ArrowLeft, Zap, Star, Shield, HelpCircle, Clock } from 'lucide-react';
 
 export default function SubscribePage() {
     return (
@@ -23,34 +23,38 @@ export default function SubscribePage() {
                         Choose Your Plan
                     </h1>
                     <p className="text-zinc-500 text-lg max-w-2xl mx-auto leading-relaxed">
-                        Simple, transparent pricing for churches of all sizes.
-                        No hidden fees, no per-user licensing, just unlimited worship.
+                        Usage-based pricing that works for churches of all sizes.
+                        Pay only for the hours you use — perfect for weekly services.
                     </p>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-5xl mx-auto relative">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-6xl mx-auto relative">
                     {/* Decorative glow */}
                     <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full h-[300px] bg-indigo-500/10 blur-[150px] -z-10 rounded-full" />
 
                     {/* Monthly Plan */}
-                    <div className="p-10 rounded-[40px] bg-zinc-900/50 border border-white/5 flex flex-col items-start hover:border-white/10 transition-all">
-                        <div className="px-4 py-1.5 rounded-full bg-zinc-800 text-zinc-400 text-xs font-bold mb-8 capitalize">Monthly</div>
-                        <div className="flex items-baseline gap-2 mb-4">
-                            <span className="text-6xl font-blacktracking-tighter">$15</span>
+                    <div className="p-8 rounded-[32px] bg-zinc-900/50 border border-white/5 flex flex-col items-start hover:border-white/10 transition-all">
+                        <div className="px-4 py-1.5 rounded-full bg-zinc-800 text-zinc-400 text-xs font-bold mb-6 capitalize">Monthly</div>
+                        <div className="flex items-baseline gap-2 mb-2">
+                            <span className="text-5xl font-black tracking-tighter">$15</span>
                             <span className="text-zinc-500">/month</span>
                         </div>
-                        <p className="text-zinc-400 text-sm mb-10">Perfect for smaller ministries or trying out Creenly for the first time.</p>
+                        <div className="flex items-center gap-2 text-indigo-400 text-sm font-bold mb-6">
+                            <Clock size={14} />
+                            <span>40 hours included</span>
+                        </div>
+                        <p className="text-zinc-400 text-sm mb-8">Perfect for smaller ministries or trying out Creenly for the first time.</p>
 
-                        <div className="space-y-4 mb-12 w-full">
+                        <div className="space-y-3 mb-10 w-full">
                             {[
                                 "AI Voice Recognition",
                                 "Unlimited Bible Versions",
                                 "Atem & MIDI Integration",
                                 "Cloud Song Library",
-                                "Priority Email Support"
+                                "Email Support"
                             ].map((feature, i) => (
                                 <div key={i} className="flex items-center gap-3">
-                                    <div className="w-5 h-5 rounded-full bg-indigo-500/20 text-indigo-400 flex items-center justify-center">
+                                    <div className="w-5 h-5 rounded-full bg-indigo-500/20 text-indigo-400 flex items-center justify-center flex-shrink-0">
                                         <Check size={12} />
                                     </div>
                                     <span className="text-sm text-zinc-300">{feature}</span>
@@ -60,36 +64,39 @@ export default function SubscribePage() {
 
                         <button
                             onClick={() => window.location.href = 'https://creenly.lemonsqueezy.com/checkout/buy/2ee312d4-cbab-464f-8707-50f0ecd872cc'}
-                            className="w-full py-5 rounded-full bg-white text-black font-black text-lg hover:bg-zinc-200 transition-all shadow-xl active:scale-95"
+                            className="w-full py-4 rounded-full bg-white text-black font-black text-base hover:bg-zinc-200 transition-all shadow-xl active:scale-95 mt-auto"
                         >
                             Get Monthly Access
                         </button>
                     </div>
 
-                    {/* Yearly Plan - Featured */}
-                    <div className="p-10 rounded-[40px] bg-zinc-900 border-2 border-indigo-500 relative flex flex-col items-start shadow-[0_0_60px_rgba(99,102,241,0.2)]">
+                    {/* 6-Month Plan - Featured */}
+                    <div className="p-8 rounded-[32px] bg-zinc-900 border-2 border-indigo-500 relative flex flex-col items-start shadow-[0_0_60px_rgba(99,102,241,0.2)]">
                         <div className="absolute -top-4 left-1/2 -translate-x-1/2 px-6 py-2 rounded-full bg-indigo-500 text-white text-xs font-black uppercase tracking-widest shadow-xl">
-                            Best Value - Save $30
+                            Most Popular
                         </div>
 
-                        <div className="px-4 py-1.5 rounded-full bg-indigo-500/20 text-indigo-400 text-xs font-bold mb-8">Annual</div>
-                        <div className="flex items-baseline gap-2 mb-4">
-                            <span className="text-6xl font-black tracking-tighter">$150</span>
-                            <span className="text-indigo-500/50">/year</span>
+                        <div className="px-4 py-1.5 rounded-full bg-indigo-500/20 text-indigo-400 text-xs font-bold mb-6">6 Months</div>
+                        <div className="flex items-baseline gap-2 mb-2">
+                            <span className="text-5xl font-black tracking-tighter">$90</span>
+                            <span className="text-indigo-500/50">/6 months</span>
                         </div>
-                        <p className="text-indigo-200/50 text-sm mb-10">The ultimate choice for established churches looking for long-term power.</p>
+                        <div className="flex items-center gap-2 text-indigo-400 text-sm font-bold mb-6">
+                            <Clock size={14} />
+                            <span>240 hours included</span>
+                        </div>
+                        <p className="text-indigo-200/50 text-sm mb-8">Best value for established churches with regular weekly services.</p>
 
-                        <div className="space-y-4 mb-12 w-full">
+                        <div className="space-y-3 mb-10 w-full">
                             {[
                                 "Everything in Monthly",
-                                "2 Months Free Access",
-                                "Early Access to AI Beta",
-                                "Direct Phone Support",
-                                "1:1 Onboarding Session",
-                                "Custom Theme Design"
+                                "Priority Email Support",
+                                "Early Access to New Features",
+                                "Extended Hours Pool",
+                                "Save $30 vs Monthly"
                             ].map((feature, i) => (
                                 <div key={i} className="flex items-center gap-3">
-                                    <div className="w-5 h-5 rounded-full bg-indigo-500 text-white flex items-center justify-center">
+                                    <div className="w-5 h-5 rounded-full bg-indigo-500 text-white flex items-center justify-center flex-shrink-0">
                                         <Check size={12} />
                                     </div>
                                     <span className="text-sm text-white font-medium">{feature}</span>
@@ -98,16 +105,67 @@ export default function SubscribePage() {
                         </div>
 
                         <button
+                            onClick={() => window.location.href = 'https://creenly.lemonsqueezy.com/checkout/buy/YOUR_6MONTH_PRODUCT_ID'}
+                            className="w-full py-4 rounded-full bg-indigo-600 text-white font-black text-base hover:bg-indigo-500 transition-all shadow-2xl shadow-indigo-500/40 active:scale-95 mt-auto"
+                        >
+                            Get 6-Month Access
+                        </button>
+                    </div>
+
+                    {/* Annual Plan */}
+                    <div className="p-8 rounded-[32px] bg-zinc-900/50 border border-white/5 flex flex-col items-start hover:border-white/10 transition-all">
+                        <div className="px-4 py-1.5 rounded-full bg-emerald-500/20 text-emerald-400 text-xs font-bold mb-6">Annual</div>
+                        <div className="flex items-baseline gap-2 mb-2">
+                            <span className="text-5xl font-black tracking-tighter">$180</span>
+                            <span className="text-zinc-500">/year</span>
+                        </div>
+                        <div className="flex items-center gap-2 text-emerald-400 text-sm font-bold mb-6">
+                            <Clock size={14} />
+                            <span>480 hours included</span>
+                        </div>
+                        <p className="text-zinc-400 text-sm mb-8">Maximum savings for large churches with multiple weekly services.</p>
+
+                        <div className="space-y-3 mb-10 w-full">
+                            {[
+                                "Everything in 6-Month",
+                                "Direct Phone Support",
+                                "1:1 Onboarding Session",
+                                "Custom Theme Design",
+                                "Save $60 vs Monthly"
+                            ].map((feature, i) => (
+                                <div key={i} className="flex items-center gap-3">
+                                    <div className="w-5 h-5 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center flex-shrink-0">
+                                        <Check size={12} />
+                                    </div>
+                                    <span className="text-sm text-zinc-300">{feature}</span>
+                                </div>
+                            ))}
+                        </div>
+
+                        <button
                             onClick={() => window.location.href = 'https://creenly.lemonsqueezy.com/checkout/buy/d9aa88d0-4c95-481c-9d56-a7831a1279fb'}
-                            className="w-full py-5 rounded-full bg-indigo-600 text-white font-black text-lg hover:bg-indigo-500 transition-all shadow-2xl shadow-indigo-500/40 active:scale-95"
+                            className="w-full py-4 rounded-full bg-white text-black font-black text-base hover:bg-zinc-200 transition-all shadow-xl active:scale-95 mt-auto"
                         >
                             Get Annual Access
                         </button>
                     </div>
                 </div>
 
+                {/* Usage Explanation */}
+                <div className="mt-20 max-w-3xl mx-auto text-center p-8 rounded-3xl bg-zinc-900/30 border border-white/5">
+                    <h3 className="text-xl font-bold mb-4">How Usage Hours Work</h3>
+                    <p className="text-zinc-400 text-sm leading-relaxed mb-4">
+                        Hours are only counted when the <span className="text-indigo-400 font-semibold">"Start Listening"</span> button is active.
+                        A typical 1-hour service uses about 1 hour. With <span className="text-white font-semibold">40 hours/month</span>,
+                        you can run 10 services of 4 hours each — plenty for most churches!
+                    </p>
+                    <p className="text-zinc-500 text-xs">
+                        Need more hours? Just upgrade to a higher tier or contact us for custom plans.
+                    </p>
+                </div>
+
                 {/* FAQ or Trust Section */}
-                <div className="mt-40 grid grid-cols-1 md:grid-cols-3 gap-12 text-center">
+                <div className="mt-32 grid grid-cols-1 md:grid-cols-3 gap-12 text-center">
                     <div>
                         <div className="w-12 h-12 rounded-2xl bg-zinc-900 flex items-center justify-center mx-auto mb-6 text-indigo-500">
                             <Shield size={24} />
@@ -120,14 +178,14 @@ export default function SubscribePage() {
                             <Star size={24} />
                         </div>
                         <h3 className="text-xl font-bold mb-3">Top-Rated Support</h3>
-                        <p className="text-zinc-500 text-sm">Our team is available 24/7. We’re here to help you succeed on Sundays.</p>
+                        <p className="text-zinc-500 text-sm">Our team is available 24/7. We're here to help you succeed on Sundays.</p>
                     </div>
                     <div>
                         <div className="w-12 h-12 rounded-2xl bg-zinc-900 flex items-center justify-center mx-auto mb-6 text-amber-500">
                             <HelpCircle size={24} />
                         </div>
                         <h3 className="text-xl font-bold mb-3">30-Day Guarantee</h3>
-                        <p className="text-zinc-500 text-sm">Not happy? We’ll refund your first month, no questions asked.</p>
+                        <p className="text-zinc-500 text-sm">Not happy? We'll refund your first payment, no questions asked.</p>
                     </div>
                 </div>
             </main>
@@ -139,4 +197,3 @@ export default function SubscribePage() {
         </div>
     );
 }
-

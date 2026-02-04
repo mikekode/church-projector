@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from 'react';
-import { getCurrentLicense, type License } from '@/lib/supabase';
+import { getCurrentLicense, License } from '@/lib/supabase';
 
 /**
  * Hook to check license status
@@ -12,27 +12,43 @@ export function useLicense() {
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        async function checkLicense() {
-            try {
-                const result = await getCurrentLicense();
-                setLicense(result);
-            } catch (error) {
-                console.error('License check failed:', error);
-                setLicense({ status: 'demo' });
-            } finally {
-                setLoading(false);
-            }
-        }
-
-        checkLicense();
+        // Initial check
+        getCurrentLicense().then((result) => {
+            setLicense(result);
+            setLoading(false);
+        });
 
         // Re-check every 5 minutes
-        const interval = setInterval(checkLicense, 5 * 60 * 1000);
+        const interval = setInterval(async () => {
+            const freshLicense = await getCurrentLicense();
+            setLicense(freshLicense);
+        }, 5 * 60 * 1000);
+
         return () => clearInterval(interval);
     }, []);
 
     const isLicensed = license.status === 'active';
-    const isDemo = license.status === 'demo' || license.status === 'expired' || license.status === 'cancelled';
+    const isDemo = license.status === 'demo';
+    const isExpired = license.status === 'expired';
 
-    return { license, loading, isLicensed, isDemo };
+    // Usage tracking helpers
+    const hoursRemaining = license.hoursRemaining ?? null;
+    const usagePercentage = license.usageHoursLimit
+        ? Math.round(((license.usageHoursUsed || 0) / license.usageHoursLimit) * 100)
+        : null;
+    const isUsageExhausted = hoursRemaining !== null && hoursRemaining <= 0;
+    const isLowHours = hoursRemaining !== null && hoursRemaining > 0 && hoursRemaining <= 5;
+
+    return {
+        license,
+        loading,
+        isLicensed,
+        isDemo,
+        isExpired,
+        // Usage tracking
+        hoursRemaining,
+        usagePercentage,
+        isUsageExhausted,
+        isLowHours
+    };
 }
