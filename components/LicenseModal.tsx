@@ -175,7 +175,7 @@ export default function LicenseModal({ isOpen, onClose }: LicenseModalProps) {
                             </div>
                             <button
                                 className="w-full py-3 bg-indigo-600 hover:bg-indigo-500 rounded-lg font-bold text-white transition-colors flex items-center justify-center gap-2"
-                                onClick={() => window.open('https://creenly.com/subscribe', '_blank')}
+                                onClick={() => window.open('https://www.creenly.com/upgrade', '_blank')}
                             >
                                 <CreditCard className="w-4 h-4" />
                                 {isExpired ? 'Renew Subscription' : 'View Plans'}

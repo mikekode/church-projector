@@ -1,5 +1,6 @@
-const { app, BrowserWindow, ipcMain, Menu, dialog } = require('electron');
-const { autoUpdater } = require('electron-updater');
+const { app, BrowserWindow, ipcMain, Menu, dialog, shell } = require('electron');
+// electron-updater loaded lazily after app ready to avoid getVersion() crash
+let autoUpdater = null;
 const path = require('path');
 const fs = require('fs');
 const { spawn } = require('child_process');
@@ -258,6 +259,12 @@ function createWindow() {
         const startUrl = process.env.ELECTRON_START_URL || 'http://localhost:3000';
         mainWindow.loadURL(`${startUrl}/dashboard`);
     }
+
+    // Handle popup windows (e.g., View Plans button) - open in default browser
+    mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+        shell.openExternal(url);
+        return { action: 'deny' };
+    });
 
     mainWindow.on('closed', () => {
         mainWindow = null;
@@ -914,25 +921,38 @@ ipcMain.handle('ndi-start', async () => {
     return { success: true, warning: 'NDI requires native compilation' };
 });
 
-// Auto-Update Logic
-autoUpdater.autoDownload = false;
-autoUpdater.autoInstallOnAppQuit = true;
+// Auto-Update Logic - initialized lazily after app is ready
+function initAutoUpdater() {
+    if (autoUpdater) return;
+    autoUpdater = require('electron-updater').autoUpdater;
+    autoUpdater.autoDownload = false;
+    autoUpdater.autoInstallOnAppQuit = true;
 
-ipcMain.handle('check-update', () => autoUpdater.checkForUpdates());
-ipcMain.handle('download-update', () => autoUpdater.downloadUpdate());
-ipcMain.handle('install-update', () => autoUpdater.quitAndInstall(false, true));
+    autoUpdater.on('update-available', (info) => {
+        if (mainWindow) mainWindow.webContents.send('update-available', info);
+    });
 
-autoUpdater.on('update-available', (info) => {
-    if (mainWindow) mainWindow.webContents.send('update-available', info);
+    autoUpdater.on('update-downloaded', (info) => {
+        if (mainWindow) mainWindow.webContents.send('update-downloaded', info);
+    });
+
+    autoUpdater.on('error', (err) => {
+        console.error("Updater Error:", err);
+        if (mainWindow) mainWindow.webContents.send('update-error', err.toString());
+    });
+}
+
+ipcMain.handle('check-update', () => {
+    if (!autoUpdater) initAutoUpdater();
+    return autoUpdater.checkForUpdates();
 });
-
-autoUpdater.on('update-downloaded', (info) => {
-    if (mainWindow) mainWindow.webContents.send('update-downloaded', info);
+ipcMain.handle('download-update', () => {
+    if (!autoUpdater) initAutoUpdater();
+    return autoUpdater.downloadUpdate();
 });
-
-autoUpdater.on('error', (err) => {
-    console.error("Updater Error:", err);
-    if (mainWindow) mainWindow.webContents.send('update-error', err.toString());
+ipcMain.handle('install-update', () => {
+    if (!autoUpdater) initAutoUpdater();
+    return autoUpdater.quitAndInstall(false, true);
 });
 
 app.on('ready', async () => {
@@ -952,7 +972,8 @@ app.on('ready', async () => {
 
     createWindow();
     if (app.isPackaged) {
-        // Check for updates shortly after startup
+        // Initialize and check for updates shortly after startup
+        initAutoUpdater();
         setTimeout(() => autoUpdater.checkForUpdates(), 3000);
     }
 });
