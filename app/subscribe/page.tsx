@@ -93,7 +93,7 @@ export default function SubscribePage() {
                                 "Priority Email Support",
                                 "Early Access to New Features",
                                 "Extended Hours Pool",
-                                "Save $30 vs Monthly"
+                                "One purchase, 6 months coverage"
                             ].map((feature, i) => (
                                 <div key={i} className="flex items-center gap-3">
                                     <div className="w-5 h-5 rounded-full bg-indigo-500 text-white flex items-center justify-center flex-shrink-0">
@@ -131,7 +131,7 @@ export default function SubscribePage() {
                                 "Direct Phone Support",
                                 "1:1 Onboarding Session",
                                 "Custom Theme Design",
-                                "Save $60 vs Monthly"
+                                "Full year of coverage"
                             ].map((feature, i) => (
                                 <div key={i} className="flex items-center gap-3">
                                     <div className="w-5 h-5 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center flex-shrink-0">
