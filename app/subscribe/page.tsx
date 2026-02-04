@@ -105,7 +105,7 @@ export default function SubscribePage() {
                         </div>
 
                         <button
-                            onClick={() => window.location.href = 'https://creenly.lemonsqueezy.com/checkout/buy/YOUR_6MONTH_PRODUCT_ID'}
+                            onClick={() => window.location.href = 'https://creenly.lemonsqueezy.com/checkout/buy/fdd9f5cf-3238-4e13-86d3-4626796217e9'}
                             className="w-full py-4 rounded-full bg-indigo-600 text-white font-black text-base hover:bg-indigo-500 transition-all shadow-2xl shadow-indigo-500/40 active:scale-95 mt-auto"
                         >
                             Get 6-Month Access
