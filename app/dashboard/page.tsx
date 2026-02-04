@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
-import { Play, Pause, Square, SkipBack, SkipForward, Maximize2, Maximize, Mic, MicOff, Search, Settings, Monitor, CheckCircle, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Key, Download, X, Tv2, Music, Clock } from 'lucide-react';
+import { Play, Pause, Square, SkipBack, SkipForward, Maximize2, Maximize, Mic, MicOff, Search, Settings, Monitor, CheckCircle, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Key, Download, X, Tv2, Music, Clock, Lock } from 'lucide-react';
 import Fuse from 'fuse.js';
 
 import LicenseModal from '@/components/LicenseModal';
@@ -1025,8 +1025,8 @@ export default function DashboardPage() {
                     {hoursRemaining !== null && (
                         <div
                             className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium transition-all ${isLowHours
-                                    ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
-                                    : 'bg-zinc-800 text-zinc-400'
+                                ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
+                                : 'bg-zinc-800 text-zinc-400'
                                 }`}
                             title={`${hoursRemaining.toFixed(1)} hours of AI listening remaining`}
                         >
@@ -1281,6 +1281,10 @@ export default function DashboardPage() {
 
                                 <button
                                     onClick={() => {
+                                        if (!isLicensed) {
+                                            setIsLicenseModalOpen(true);
+                                            return;
+                                        }
                                         if (isMicLoading) return;
                                         setIsMicLoading(true);
                                         setIsListening(!isListening);
@@ -1312,13 +1316,15 @@ export default function DashboardPage() {
                                     ) : (
                                         <>
                                             <div className="p-1.5 bg-white/20 rounded-full group-hover:bg-white/30 transition-colors">
-                                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><line x1="12" y1="19" x2="12" y2="23"></line><line x1="8" y1="23" x2="16" y2="23"></line></svg>
+                                                {isLicensed ? (
+                                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><line x1="12" y1="19" x2="12" y2="23"></line><line x1="8" y1="23" x2="16" y2="23"></line></svg>
+                                                ) : (
+                                                    <Lock size={16} strokeWidth={3} />
+                                                )}
                                             </div>
-                                            START LISTENING
+                                            {isLicensed ? 'START LISTENING' : 'ACTIVATE LICENSE TO START'}
                                         </>
                                     )}
-
-
                                 </button>
                             </div>
                         </div>
