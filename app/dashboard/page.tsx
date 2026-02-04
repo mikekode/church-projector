@@ -1021,6 +1021,19 @@ export default function DashboardPage() {
                         <Music size={12} />
                         MIDI
                     </button>
+                    {/* Usage Hours Indicator */}
+                    {hoursRemaining !== null && (
+                        <div
+                            className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium transition-all ${isLowHours
+                                    ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
+                                    : 'bg-zinc-800 text-zinc-400'
+                                }`}
+                            title={`${hoursRemaining.toFixed(1)} hours of AI listening remaining`}
+                        >
+                            <Clock size={12} />
+                            {hoursRemaining.toFixed(1)}h left
+                        </div>
+                    )}
                     {/* Stage Display Button */}
                     <button
                         onClick={() => {
