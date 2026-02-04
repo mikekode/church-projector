@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useLicense } from '@/hooks/useLicense';
 import { activateLicenseKey, clearLicense } from '@/lib/supabase';
-import { X, Key, CreditCard, CheckCircle, AlertCircle, Loader2, Calendar } from 'lucide-react';
+import { X, Key, CreditCard, CheckCircle, AlertCircle, Loader2, Calendar, Clock } from 'lucide-react';
 
 interface LicenseModalProps {
     isOpen: boolean;
@@ -11,7 +11,7 @@ interface LicenseModalProps {
 }
 
 export default function LicenseModal({ isOpen, onClose }: LicenseModalProps) {
-    const { license, loading, isLicensed, isDemo } = useLicense();
+    const { license, loading, isLicensed, isDemo, hoursRemaining, isExpired } = useLicense();
     const [keyInput, setKeyInput] = useState('');
     const [activating, setActivating] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -124,6 +124,22 @@ export default function LicenseModal({ isOpen, onClose }: LicenseModalProps) {
                             </div>
                         )}
 
+                        {/* Hours Remaining for licensed users */}
+                        {isLicensed && hoursRemaining !== null && (
+                            <div className="mt-4 pt-4 border-t border-white/10 flex items-center gap-3">
+                                <Clock className="w-4 h-4 text-zinc-500" />
+                                <div>
+                                    <p className="text-xs text-zinc-500 uppercase tracking-wider">Listening hours remaining</p>
+                                    <p className="text-white font-medium">{hoursRemaining.toFixed(1)} hours</p>
+                                </div>
+                                {hoursRemaining <= 5 && (
+                                    <span className="ml-auto text-xs bg-amber-500/20 text-amber-400 px-2 py-1 rounded-full">
+                                        Low hours
+                                    </span>
+                                )}
+                            </div>
+                        )}
+
                         {/* Expired notice */}
                         {license.status === 'expired' && license.expiresAt && (
                             <div className="mt-4 pt-4 border-t border-white/10">
@@ -135,25 +151,34 @@ export default function LicenseModal({ isOpen, onClose }: LicenseModalProps) {
                     </div>
 
                     {/* Pricing - Show for demo/expired/cancelled */}
-                    {isDemo && (
+                    {(isDemo || isExpired) && (
                         <div className="p-4 bg-indigo-600/10 border border-indigo-500/30 rounded-xl">
-                            <div className="flex items-center justify-between">
+                            <div className="flex items-center justify-between mb-3">
                                 <div>
                                     <p className="font-bold text-white">CREENLY Pro</p>
-                                    <p className="text-sm text-zinc-400">Full access, no watermark</p>
+                                    <p className="text-sm text-zinc-400">Usage-based pricing</p>
                                 </div>
-                                <div className="text-right">
-                                    <p className="text-2xl font-bold text-white">$15</p>
-                                    <p className="text-xs text-zinc-500">per month</p>
-                                    <p className="text-[10px] text-indigo-400 mt-1 font-medium">or $150/year</p>
+                            </div>
+                            <div className="grid grid-cols-3 gap-2 text-center mb-4">
+                                <div className="p-2 bg-black/30 rounded-lg">
+                                    <p className="text-lg font-bold text-white">$15</p>
+                                    <p className="text-[10px] text-zinc-500">40 hrs/mo</p>
+                                </div>
+                                <div className="p-2 bg-indigo-500/20 rounded-lg border border-indigo-500/30">
+                                    <p className="text-lg font-bold text-indigo-400">$90</p>
+                                    <p className="text-[10px] text-indigo-300">240 hrs/6mo</p>
+                                </div>
+                                <div className="p-2 bg-black/30 rounded-lg">
+                                    <p className="text-lg font-bold text-white">$180</p>
+                                    <p className="text-[10px] text-zinc-500">480 hrs/yr</p>
                                 </div>
                             </div>
                             <button
-                                className="w-full mt-4 py-3 bg-indigo-600 hover:bg-indigo-500 rounded-lg font-bold text-white transition-colors flex items-center justify-center gap-2"
+                                className="w-full py-3 bg-indigo-600 hover:bg-indigo-500 rounded-lg font-bold text-white transition-colors flex items-center justify-center gap-2"
                                 onClick={() => window.open('https://creenly.com/subscribe', '_blank')}
                             >
                                 <CreditCard className="w-4 h-4" />
-                                {license.status === 'expired' ? 'Renew Subscription' : 'Subscribe Now'}
+                                {isExpired ? 'Renew Subscription' : 'View Plans'}
                             </button>
                         </div>
                     )}
