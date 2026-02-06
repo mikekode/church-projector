@@ -26,6 +26,7 @@ export default function DeepgramRecognizer({ isListening, onTranscript, onInteri
     const onInterimRef = useRef(onInterim);
     const onVolumeRef = useRef(onVolume);
     const isListeningRef = useRef(isListening);
+    const lastFinalStartRef = useRef<number>(-1);
 
     // Propagate status changes
     useEffect(() => {
@@ -149,6 +150,11 @@ export default function DeepgramRecognizer({ isListening, onTranscript, onInteri
 
                         if (transcript && transcript.trim()) {
                             if (data.is_final) {
+                                // Deduplicate: skip if same start time as last final result
+                                const startTime = data.start ?? -1;
+                                if (startTime === lastFinalStartRef.current) return;
+                                lastFinalStartRef.current = startTime;
+
                                 onTranscriptRef.current(transcript);
                                 if (onInterimRef.current) onInterimRef.current('', true);
                             } else {
