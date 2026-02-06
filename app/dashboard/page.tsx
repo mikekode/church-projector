@@ -812,7 +812,8 @@ export default function DashboardPage() {
         setTranscript(prev => (prev + " " + text).slice(-1000));
 
         // 0. Feed to Smart Detection for fuzzy matching and auto-navigation
-        addToSmartDetection(text);
+        // Pass true for isFinal as this is called for final results
+        addToSmartDetection(text, true);
 
         // 1. Fast regex detection - ONLY on the new text to prevent re-triggering old verses
         const matches = detectVersesInText(text);
@@ -1320,9 +1321,7 @@ export default function DashboardPage() {
                             <TranscriptMonitor
                                 isListening={isListening}
                                 onTranscript={(text) => {
-                                    setTranscript(prev => prev + ' ' + text);
                                     processTranscript(text);
-                                    addToSmartDetection(text, true);
                                 }}
                                 onInterim={(text, isFinal) => {
                                     setInterim(text);

@@ -27,6 +27,7 @@ export default function DeepgramRecognizer({ isListening, onTranscript, onInteri
     const onVolumeRef = useRef(onVolume);
     const isListeningRef = useRef(isListening);
     const lastFinalStartRef = useRef<number>(-1);
+    const cancelledRef = useRef(false);
 
     // Propagate status changes
     useEffect(() => {
@@ -65,6 +66,13 @@ export default function DeepgramRecognizer({ isListening, onTranscript, onInteri
 
             // 1. Get microphone
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+
+            // Bail out if cancelled during async wait (React StrictMode double-mount)
+            if (cancelledRef.current) {
+                stream.getTracks().forEach(track => track.stop());
+                return;
+            }
+
             streamRef.current = stream;
             console.log("Got microphone access");
 
@@ -84,6 +92,12 @@ export default function DeepgramRecognizer({ isListening, onTranscript, onInteri
                 console.warn("Could not fetch token from proxy, using fallback");
                 // Fallback to env var for development
                 apiKey = process.env.NEXT_PUBLIC_DEEPGRAM_API_KEY || '';
+            }
+
+            // Bail out if cancelled during token fetch
+            if (cancelledRef.current) {
+                stream.getTracks().forEach(track => track.stop());
+                return;
             }
 
             if (!apiKey) {
@@ -220,12 +234,16 @@ export default function DeepgramRecognizer({ isListening, onTranscript, onInteri
     }, []);
 
     useEffect(() => {
+        cancelledRef.current = false;
         if (isListening) {
             startListening();
         } else {
             stopListening();
         }
-        return () => stopListening();
+        return () => {
+            cancelledRef.current = true;
+            stopListening();
+        };
     }, [isListening, startListening, stopListening]);
 
     return null;
