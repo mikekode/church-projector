@@ -411,7 +411,7 @@ export default function StageDisplayPage() {
             </div>
 
             {/* Main Content Area */}
-            <div ref={containerRef} className="pt-24 pb-8 px-8 flex-1 h-full flex flex-col overflow-hidden relative z-10">
+            <div ref={containerRef} className="pt-24 pb-20 px-8 flex-1 h-full flex flex-col overflow-hidden relative z-10">
                 {/* Current Content - Large Display */}
                 <div
                     ref={contentRef}
@@ -538,21 +538,6 @@ export default function StageDisplayPage() {
                                 }}
                                 dangerouslySetInnerHTML={{ __html: renderFormattedText(content.currentSlide) }}
                             />
-
-                            {/* Next Slide Preview */}
-                            {content.nextSlide && (
-                                <div className="mt-12 pt-8 border-t border-white/10">
-                                    <div className="flex items-center justify-center gap-2 text-zinc-500 mb-4">
-                                        <ChevronRight size={20} />
-                                        <span className="text-sm uppercase tracking-wider">Next</span>
-                                    </div>
-                                    <p
-                                        className={`text-zinc-400 transition-all duration-300`}
-                                        style={{ fontSize: `${calculateFontScale(content.nextSlide, 1) * 0.6}em` }}
-                                        dangerouslySetInnerHTML={{ __html: renderFormattedText(content.nextSlide) }}
-                                    />
-                                </div>
-                            )}
                         </div>
                     )}
 
@@ -613,6 +598,22 @@ export default function StageDisplayPage() {
                     </div>
                 )}
             </div>
+
+            {/* Next Slide Footer (For Songs) */}
+            {content?.type === 'song' && content.nextSlide && (
+                <div className="fixed bottom-0 left-0 right-0 bg-black/60 backdrop-blur-xl border-t border-white/10 px-12 py-6 z-[60] animate-in slide-in-from-bottom-full duration-500">
+                    <div className="max-w-7xl mx-auto flex items-start gap-8">
+                        <div className="flex items-center gap-2 text-indigo-400 bg-indigo-500/10 px-3 py-1.5 rounded-full border border-indigo-500/20">
+                            <ChevronRight size={18} strokeWidth={3} />
+                            <span className="text-xs font-black uppercase tracking-[0.2em]">Next</span>
+                        </div>
+                        <p
+                            className="text-2xl text-zinc-400 font-medium line-clamp-2 leading-tight"
+                            dangerouslySetInnerHTML={{ __html: renderFormattedText(content.nextSlide) }}
+                        />
+                    </div>
+                </div>
+            )}
 
             {/* Footer Hint - auto-hides after 5 seconds */}
             <div className={`fixed bottom-4 left-1/2 -translate-x-1/2 text-zinc-600 text-sm transition-opacity duration-1000 ${showHint ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>

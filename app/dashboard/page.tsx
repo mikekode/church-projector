@@ -385,7 +385,10 @@ export default function DashboardPage() {
                     body: slide.content,
                     meta: item.type === 'media' ? 'Image' : item.meta?.author,
                     background: item.meta?.background,
-                    options: item.type === 'media' ? { imageMode: item.meta?.imageMode } : undefined
+                    options: item.type === 'media' ? { imageMode: item.meta?.imageMode } : undefined,
+                    slideIndex: newIndex,
+                    totalSlides: item.slides.length,
+                    nextSlide: item.slides[newIndex + 1]?.content
                 }
             });
 
@@ -1954,7 +1957,10 @@ export default function DashboardPage() {
                                             body: slide.content,
                                             meta: item.type === 'media' ? 'Image' : item.meta?.author,
                                             background: typeof item.meta?.background === 'object' ? (item.meta?.background as any)?.value : item.meta?.background,
-                                            options: item.type === 'media' ? { imageMode: item.meta?.imageMode } : undefined
+                                            options: item.type === 'media' ? { imageMode: item.meta?.imageMode } : undefined,
+                                            slideIndex: 0,
+                                            totalSlides: item.slides?.length || 1,
+                                            nextSlide: item.slides?.[1]?.content
                                         }
                                     });
                                 }
@@ -1994,6 +2000,9 @@ export default function DashboardPage() {
                                 title: item.title,
                                 body: firstSlide.content,
                                 meta: item.subtitle, // Author
+                                slideIndex: 0,
+                                totalSlides: item.content.lyrics.length,
+                                nextSlide: item.content.lyrics[1]?.content
                             }
                         });
 
