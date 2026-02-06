@@ -25,7 +25,22 @@ jobs:
       - name: Install Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
+
+      - name: Install GTK (Windows only - required for canvas)
+        if: matrix.os == 'windows-latest'
+        run: |
+          choco install gtk-runtime -y
+          echo "C:\Program Files\GTK2-Runtime\bin" >> $GITHUB_PATH
+        shell: bash
+
+      - name: Install Cairo dependencies (Windows only)
+        if: matrix.os == 'windows-latest'
+        run: |
+          Invoke-WebRequest -Uri "https://github.com/nickelghost/canvas-prebuilt-deps-win/releases/download/v2.0.0/canvas-prebuilt-deps-win-x64.zip" -OutFile "deps.zip"
+          Expand-Archive -Path "deps.zip" -DestinationPath "C:\GTK"
+          echo "C:\GTK\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+        shell: pwsh
 
       - name: Install Dependencies
         run: npm install
