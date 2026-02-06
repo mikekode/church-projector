@@ -4,8 +4,6 @@ on:
   push:
     tags:
       - 'v*'
-    branches:
-      - 'main'
 
 permissions:
   contents: write
@@ -76,13 +74,67 @@ jobs:
       - name: Obfuscate Electron code
         run: npm run obfuscate
 
-      - name: Build/Release Electron App
-        uses: samuelmeuli/action-electron-builder@v1
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          release: true
-          # Mac-specific settings
-          mac_certs: ${{ secrets.mac_certs }}
-          mac_certs_password: ${{ secrets.mac_certs_password }}
+      - name: Import macOS code signing certificate
+        if: matrix.os == 'macos-latest' && env.MAC_CERTS != ''
         env:
-          API_PROXY_URL: https://creenly-api-proxy.vercel.app
+          MAC_CERTS: ${{ secrets.mac_certs }}
+          MAC_CERTS_PASSWORD: ${{ secrets.mac_certs_password }}
+        run: |
+          echo "$MAC_CERTS" | base64 --decode > certificate.p12
+          security create-keychain -p actions build.keychain
+          security default-keychain -s build.keychain
+          security unlock-keychain -p actions build.keychain
+          security import certificate.p12 -k build.keychain -P "$MAC_CERTS_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k actions build.keychain
+          rm certificate.p12
+
+      - name: Build Electron app (Windows)
+        if: matrix.os == 'windows-latest'
+        run: npx electron-builder --windows --publish never
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build Electron app (macOS)
+        if: matrix.os == 'macos-latest'
+        run: npx electron-builder --mac --publish never
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-${{ matrix.os }}
+          path: |
+            dist-build/*.exe
+            dist-build/*.dmg
+            dist-build/*.blockmap
+            dist-build/latest*.yml
+          if-no-files-found: error
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: List artifacts
+        run: find artifacts -type f || ls -R artifacts
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: Creenly ${{ github.ref_name }}
+          draft: false
+          prerelease: false
+          files: |
+            artifacts/**/*.exe
+            artifacts/**/*.dmg
+            artifacts/**/*.blockmap
+            artifacts/**/*.yml
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
