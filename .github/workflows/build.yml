@@ -27,20 +27,32 @@ jobs:
         with:
           node-version: 22
 
-      - name: Install GTK (Windows only - required for canvas)
+      - name: Install Cairo/Pango via MSYS2 (Windows only - required for canvas)
+        if: matrix.os == 'windows-latest'
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: true
+          install: >-
+            mingw-w64-x86_64-cairo
+            mingw-w64-x86_64-pango
+            mingw-w64-x86_64-libjpeg-turbo
+            mingw-w64-x86_64-giflib
+            mingw-w64-x86_64-librsvg
+            mingw-w64-x86_64-libpng
+
+      - name: Add MSYS2 to PATH (Windows only)
         if: matrix.os == 'windows-latest'
         run: |
-          choco install gtk-runtime -y
-          echo "C:\Program Files\GTK2-Runtime\bin" >> $GITHUB_PATH
+          echo "C:\msys64\mingw64\bin" >> $GITHUB_PATH
+          echo "C:\msys64\mingw64\lib" >> $GITHUB_PATH
+          echo "C:\msys64\mingw64\include" >> $GITHUB_PATH
         shell: bash
 
-      - name: Install Cairo dependencies (Windows only)
+      - name: Set pkg-config path (Windows only)
         if: matrix.os == 'windows-latest'
-        run: |
-          Invoke-WebRequest -Uri "https://github.com/nickelghost/canvas-prebuilt-deps-win/releases/download/v2.0.0/canvas-prebuilt-deps-win-x64.zip" -OutFile "deps.zip"
-          Expand-Archive -Path "deps.zip" -DestinationPath "C:\GTK"
-          echo "C:\GTK\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
-        shell: pwsh
+        run: echo "PKG_CONFIG_PATH=C:\msys64\mingw64\lib\pkgconfig" >> $GITHUB_ENV
+        shell: bash
 
       - name: Install Dependencies
         run: npm install
