@@ -40,6 +40,24 @@ module.exports = async function handler(req, res) {
             });
         }
 
+        if (context === 'extract_sermon_theme') {
+            const themeResponse = await openai.chat.completions.create({
+                model: "gpt-4o-mini",
+                messages: [
+                    {
+                        role: "system",
+                        content: "You are a sermon analysis assistant. Extract the core theological theme from the transcript snippet. Respond with JSON: { \"theme\": \"string\" }. Theme should be 1-3 words (e.g. 'Power of God')."
+                    },
+                    { role: "user", content: `Transcript: "${text}"` }
+                ],
+                response_format: { type: "json_object" },
+                temperature: 0.3,
+                max_tokens: 50,
+            });
+            const themeContent = themeResponse.choices[0]?.message?.content || '{}';
+            return res.status(200).json(JSON.parse(themeContent));
+        }
+
         const systemPrompt = buildSystemPrompt(pastorHints, currentVerse, chapterContext);
 
         const response = await openai.chat.completions.create({

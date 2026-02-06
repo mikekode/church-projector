@@ -4,15 +4,7 @@ import { useState, useEffect } from 'react';
 import { X, Music, Radio, Save, RotateCcw, Server, Monitor, AlertCircle, CheckCircle } from 'lucide-react';
 import { useMIDI, MidiMapping, MidiAction } from '@/hooks/useMIDI';
 
-declare global {
-    interface Window {
-        electronAPI?: {
-            connectAtem: (ip: string) => Promise<{ success: boolean; error?: string }>;
-            performAtemAction: (action: string, input?: number) => Promise<{ success: boolean; error?: string }>;
-            onAtemStatus: (callback: (status: string) => void) => () => void;
-        };
-    }
-}
+
 
 interface MIDISettingsModalProps {
     isOpen: boolean;

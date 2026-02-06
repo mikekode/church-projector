@@ -1,6 +1,6 @@
 {
     "name": "creenly",
-    "version": "2.1.15",
+    "version": "2.1.16",
     "repository": "mikekode/church-projector",
     "private": true,
     "scripts": {
@@ -33,7 +33,7 @@
         "next": "14.1.0",
         "node-fetch": "^3.3.2",
         "openai": "^6.16.0",
-        "pdfjs-dist": "^5.4.530",
+        "pdfjs-dist": "^4.4.168",
         "react": "18.2.0",
         "react-dom": "18.2.0",
         "tailwind-merge": "^2.2.0",
@@ -45,7 +45,7 @@
         "@types/react-dom": "^18",
         "autoprefixer": "^10.0.1",
         "bytenode": "^1.5.7",
-        "electron": "^40.0.0",
+        "electron": "^40.1.0",
         "electron-builder": "^26.4.0",
         "eslint": "^8",
         "eslint-config-next": "14.1.0",

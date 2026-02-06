@@ -1,5 +1,5 @@
 import { useRef, useCallback, useEffect } from 'react';
-import { lookupVerse, lookupVerseAsync, detectVersesInText } from '@/utils/bible';
+import { lookupVerse, lookupVerseAsync, detectVersesInText, getChapterVerseCount } from '@/utils/bible';
 import { getResources, ResourceItem } from '@/utils/resourceLibrary';
 import {
     loadPastorProfile,
@@ -43,7 +43,47 @@ type SmartDetectionOptions = {
     windowSize?: number;           // Words per window (default: 15)
     debounceMs?: number;           // Debounce delay (default: 300)
     version?: string;              // Bible version (default: 'KJV')
+    theme?: string;                // Current sermon theme
 };
+
+// Word-to-number mapping for spoken numbers (Shared across all detection logic)
+const WORD_NUMBERS: Record<string, number> = {
+    'one': 1, 'two': 2, 'three': 3, 'four': 4, 'five': 5,
+    'six': 6, 'seven': 7, 'eight': 8, 'nine': 9, 'ten': 10,
+    'eleven': 11, 'twelve': 12, 'thirteen': 13, 'fourteen': 14, 'fifteen': 15,
+    'sixteen': 16, 'seventeen': 17, 'eighteen': 18, 'nineteen': 19, 'twenty': 20,
+    'twenty one': 21, 'twenty two': 22, 'twenty three': 23, 'twenty four': 24, 'twenty five': 25,
+    'twenty six': 26, 'twenty seven': 27, 'twenty eight': 28, 'twenty nine': 29, 'thirty': 30,
+    'thirty one': 31, 'thirty two': 32, 'thirty three': 33, 'thirty four': 34, 'thirty five': 35,
+    'forty': 40, 'fifty': 50, 'sixty': 60, 'seventy': 70, 'eighty': 80, 'ninety': 90,
+    'hundred': 100, 'one hundred': 100
+};
+
+// Comprehensive Bible Book patterns for quick detection (Shared)
+const BOOK_PATTERNS = /\b(genesis|exodus|leviticus|numbers|deuteronomy|joshua|judges|ruth|samuel|kings|chronicles|ezra|nehemiah|esther|job|psalms?|proverbs?|ecclesiastes|song of solomon|isaiah|jeremiah|lamentations|ezekiel|daniel|hosea|joel|amos|obadiah|jonah|micah|nahum|habakkuk|zephaniah|haggai|zechariah|malachi|matthew|mark|luke|john|acts|romans|corinthians|galatians|ephesians|philippians|colossians|thessalonians|timothy|titus|philemon|hebrews|james|peter|jude|revelation|gen|exo|lev|num|deut|josh|judg|sam|kgs|chr|neh|est|psa|prov|eccl|isa|jer|lam|ezek|dan|hos|amo|obad|mic|nah|hab|zeph|hag|zech|mal|matt|rom|cor|gal|eph|phil|col|thess|tim|heb|rev)\b/i;
+
+// Build pattern for word numbers (longest first)
+const WORD_NUMBER_PATTERN = Object.keys(WORD_NUMBERS).sort((a, b) => b.length - a.length).join('|');
+
+/**
+ * Fuzzy string matching using Sørensen–Dice coefficient
+ */
+const dice = (s1: string, s2: string) => {
+    if (!s1 || !s2) return 0;
+    const a = s1.toLowerCase().replace(/[^a-z0-9]/g, ''), b = s2.toLowerCase().replace(/[^a-z0-9]/g, '');
+    if (a === b) return 1;
+    const getBigrams = (s: string) => {
+        const b = new Set<string>();
+        for (let i = 0; i < s.length - 1; i++) b.add(s.substring(i, i + 2));
+        return b;
+    };
+    const ba = getBigrams(a), bb = getBigrams(b);
+    if (!ba.size || !bb.size) return 0;
+    let i = 0; ba.forEach(x => { if (bb.has(x)) i++ });
+    return (2 * i) / (ba.size + bb.size);
+};
+
+
 
 /**
  * Smart Scripture Detection Hook (PersonaPlex-style)
@@ -65,6 +105,7 @@ export function useSmartDetection(
         windowSize = 15,
         debounceMs = 300,
         version = 'KJV',
+        theme = '',
     } = options;
 
     // State refs
@@ -102,7 +143,6 @@ export function useSmartDetection(
         getResources().then(resources => {
             // Filter only songs
             songLibraryRef.current = resources.filter(r => r.category === 'song');
-            console.log(`[SmartDetect] Loaded ${songLibraryRef.current.length} songs for detection.`);
         });
     }, []);
 
@@ -160,7 +200,7 @@ export function useSmartDetection(
                 // NIV - New International Version
                 "new international version": "NIV", "new international": "NIV", "niv": "NIV",
                 "n i v": "NIV", "n.i.v": "NIV", "the niv": "NIV", "niv version": "NIV",
-                "international version": "NIV",
+                "international version": "NIV", "any standard": "NIV",
 
                 // KJV - King James Version
                 "king james version": "KJV", "king james": "KJV", "kjv": "KJV",
@@ -199,7 +239,7 @@ export function useSmartDetection(
                 "m s g": "MSG", "message bible": "MSG", "the message bible": "MSG",
                 "eugene peterson": "MSG", "peterson": "MSG", "message translation": "MSG",
 
-                // CSB - Christian Standard Bible (formerly HCSB)
+                // CSB - Christian Standard Bible
                 "christian standard bible": "CSB", "christian standard": "CSB", "csb": "CSB",
                 "c s b": "CSB", "c.s.b": "CSB", "the csb": "CSB", "csb version": "CSB",
                 "holman christian standard": "CSB", "hcsb": "CSB", "h c s b": "CSB",
@@ -208,102 +248,73 @@ export function useSmartDetection(
                 // NLT - New Living Translation
                 "new living translation": "NLT", "new living": "NLT", "nlt": "NLT",
                 "n l t": "NLT", "n.l.t": "NLT", "the nlt": "NLT", "nlt version": "NLT",
-                "living translation": "NLT",
-
-                // GW - God's Word Translation
-                "god's word": "GW", "gods word": "GW", "gw": "GW", "g w": "GW",
-                "god's word translation": "GW", "gods word translation": "GW",
-                "the god's word": "GW",
-
-                // KJV21 - 21st Century King James Version
-                "21st century king james": "KJV21", "21st century": "KJV21", "kjv21": "KJV21",
-                "k j v 21": "KJV21", "twenty first century king james": "KJV21",
-                "kjv 21": "KJV21", "king james 21": "KJV21",
-
-                // TLB - The Living Bible
-                "the living bible": "TLB", "living bible": "TLB", "tlb": "TLB",
-                "t l b": "TLB", "t.l.b": "TLB",
-
-                // CEV - Contemporary English Version
-                "contemporary english version": "CEV", "contemporary english": "CEV", "cev": "CEV",
-                "c e v": "CEV", "c.e.v": "CEV", "the cev": "CEV",
-
-                // GNT/GNB - Good News Translation/Bible
-                "good news translation": "GNT", "good news bible": "GNT", "good news": "GNT",
-                "gnt": "GNT", "gnb": "GNT", "g n t": "GNT", "g n b": "GNT",
-                "today's english version": "GNT", "tev": "GNT", "t e v": "GNT",
-
-                // TPT - The Passion Translation
-                "the passion translation": "TPT", "passion translation": "TPT", "passion": "TPT",
-                "tpt": "TPT", "t p t": "TPT", "t.p.t": "TPT", "the passion": "TPT",
-
-                // WEB - World English Bible
-                "world english bible": "WEB", "world english": "WEB", "web": "WEB",
-                "w e b": "WEB",
-
-                // ASV - American Standard Version
-                "american standard version": "ASV", "asv": "ASV", "a s v": "ASV",
-                "a.s.v": "ASV", "the asv": "ASV",
-
-                // RSV - Revised Standard Version
-                "revised standard version": "RSV", "revised standard": "RSV", "rsv": "RSV",
-                "r s v": "RSV", "r.s.v": "RSV",
-
-                // NRSV - New Revised Standard Version
-                "new revised standard version": "NRSV", "new revised standard": "NRSV", "nrsv": "NRSV",
-                "n r s v": "NRSV", "n.r.s.v": "NRSV",
-
-                // NET - New English Translation
-                "new english translation": "NET", "net bible": "NET", "net": "NET",
-                "n e t": "NET", "the net": "NET",
-
-                // ISV - International Standard Version
-                "international standard version": "ISV", "isv": "ISV", "i s v": "ISV",
-
-                // ERV - Easy-to-Read Version
-                "easy to read version": "ERV", "easy to read": "ERV", "erv": "ERV",
-                "e r v": "ERV", "easy read": "ERV",
-
-                // ICB - International Children's Bible
-                "international children's bible": "ICB", "children's bible": "ICB", "icb": "ICB",
-                "i c b": "ICB",
+                "living translation": "NLT", "not": "NLT", "nl tea": "NLT", "en l t": "NLT",
 
                 // VOICE - The Voice
                 "the voice": "VOICE", "voice bible": "VOICE", "voice": "VOICE",
-                "voice translation": "VOICE"
+                "voice translation": "VOICE",
+
+                // WEB - World English Bible
+                "world english bible": "WEB", "world english": "WEB", "web": "WEB",
+                "the web": "WEB", "web version": "WEB", "web translation": "WEB",
+
+                // TPT - The Passion Translation
+                "the passion translation": "TPT", "passion translation": "TPT", "the passion": "TPT",
+                "the passion version": "TPT", "passion bible": "TPT", "passion": "TPT", "tpt": "TPT",
+                "t p t": "TPT", "p t": "TPT", // "p t" is a common mis-transcript for "TPT"
+
+                // GW - God's Word Translation
+                "god's word translation": "GW", "god's word": "GW", "gw": "GW",
+
+                // KJV21 - 21st Century King James
+                "21st century king james": "KJV21", "kjv 21": "KJV21", "kjv 21st": "KJV21",
+
+                // TLB - The Living Bible
+                "the living bible": "TLB", "living bible": "TLB", "tlb": "TLB", "t l b": "TLB",
+
+                // Other versions
+                "asv": "ASV", "rsv": "RSV", "nrsv": "NRSV", "net": "NET", "isv": "ISV", "erv": "ERV", "icb": "ICB"
             };
 
-            // Sort aliases by length (longest first) to match specific phrases before shorter ones
+            // RISKY ALIASES: Common words that MUST have command context to trigger a switch
+            const RISKY_ALIASES = ["not", "voice", "message", "original", "authorised", "authorized", "classic", "international", "standard", "living", "web", "passion", "net", "tlb"];
+
             const sortedAliases = Object.keys(VERSION_ALIASES).sort((a, b) => b.length - a.length);
             const aliasPattern = sortedAliases.map(k => k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|');
 
-            // Expanded trigger patterns for natural speech:
-            // - "in [version]", "to [version]", "use [version]"
-            // - "let's have/read/see this in [version]"
-            // - "give me [version]", "show me [version]", "can I have [version]"
-            // - "switch to [version]", "change to [version]"
-            // - "[version] version", "[version] please", "the [version]"
+            // Shared command patterns
+            const commandPrefix = `(?:in|to|use|read|switch to|change to|give me|show me|can i have|let's have|have this in|read this in|see this in)\\s+(?:the|a)?\\s*`;
+            const articlePrefix = `(?:the|a)\\s+`;
+            const versionSuffix = `\\s+(?:version|please|translation|bible)`;
+
+            // Combined pattern: (Prefix)? (Alias) (Suffix)?
             const versionRegex = new RegExp(
-                `(?:` +
-                    `(?:in|to|use|read|switch to|change to|give me|show me|can i have|let's have|have this in|read this in|see this in)\\s+(?:the\\s+)?` +
-                `|` +
-                    `(?:the\\s+)` +  // "the Amplified"
-                `)?(${aliasPattern})(?:\\s+(?:version|please|translation))?`,
+                `\\b(?:(${commandPrefix})|(${articlePrefix}))?(${aliasPattern})(?:(${versionSuffix}))?\\b`,
                 'i'
             );
 
             const versionMatch = lowerText.match(versionRegex);
 
-            if (versionMatch && versionMatch[1]) {
-                const matchedTerm = versionMatch[1].toLowerCase();
-                const targetCode = VERSION_ALIASES[matchedTerm];
+            if (versionMatch) {
+                const prefixGroup = versionMatch[1] || versionMatch[2];
+                const alias = versionMatch[3]?.toLowerCase();
+                const suffix = versionMatch[4];
+                const matchedVersion = VERSION_ALIASES[alias];
 
-                if (targetCode) {
-                    console.log('[SmartDetect] FAST TRANSLATION SWITCH:', targetCode, 'from:', matchedTerm);
-                    onDetect([], [{ type: 'switch_translation', version: targetCode }], 'SWITCH', undefined);
-                    wordBufferRef.current = [];
-                    processingRef.current = false;
-                    return;
+                if (matchedVersion) {
+                    // Accuracy Guard: If it's a risky/common word, it MUST have a prefix or suffix
+                    const isRisky = RISKY_ALIASES.includes(alias);
+                    const hasContext = !!(prefixGroup || suffix);
+
+                    if (!isRisky || (isRisky && hasContext)) {
+                        console.log('[AI] Translation switch detected via voice:', matchedVersion, `(Trigger: "${alias}")`);
+                        onDetect([], [{ type: 'switch_translation', version: matchedVersion }], 'SWITCH', 1);
+                        wordBufferRef.current = [];
+                        processingRef.current = false;
+                        return;
+                    } else if (isRisky) {
+                        console.log('[AI] Ignoring risky version alias without context:', alias);
+                    }
                 }
             }
 
@@ -313,36 +324,20 @@ export function useSmartDetection(
             if (chapterContextRef.current) {
                 // Check if text contains a Bible book name - if so, skip relative navigation
                 // and let the full scripture detection handle it
-                const BOOK_PATTERNS = /\b(genesis|exodus|leviticus|numbers|deuteronomy|joshua|judges|ruth|samuel|kings|chronicles|ezra|nehemiah|esther|job|psalms?|proverbs?|ecclesiastes|song of solomon|isaiah|jeremiah|lamentations|ezekiel|daniel|hosea|joel|amos|obadiah|jonah|micah|nahum|habakkuk|zephaniah|haggai|zechariah|malachi|matthew|mark|luke|john|acts|romans|corinthians|galatians|ephesians|philippians|colossians|thessalonians|timothy|titus|philemon|hebrews|james|peter|jude|revelation|gen|exo|lev|num|deut|josh|judg|sam|kgs|chr|neh|est|psa|prov|eccl|isa|jer|lam|ezek|dan|hos|amo|obad|mic|nah|hab|zeph|hag|zech|mal|matt|rom|cor|gal|eph|phil|col|thess|tim|heb|rev)\b/i;
-
                 const hasBookName = BOOK_PATTERNS.test(lowerText);
 
                 // Only do relative verse navigation if NO book name is found
                 if (!hasBookName) {
-                    // Word-to-number mapping for spoken numbers
-                    const WORD_NUMBERS: Record<string, number> = {
-                        'one': 1, 'two': 2, 'three': 3, 'four': 4, 'five': 5,
-                        'six': 6, 'seven': 7, 'eight': 8, 'nine': 9, 'ten': 10,
-                        'eleven': 11, 'twelve': 12, 'thirteen': 13, 'fourteen': 14, 'fifteen': 15,
-                        'sixteen': 16, 'seventeen': 17, 'eighteen': 18, 'nineteen': 19, 'twenty': 20,
-                        'twenty one': 21, 'twenty two': 22, 'twenty three': 23, 'twenty four': 24, 'twenty five': 25,
-                        'twenty six': 26, 'twenty seven': 27, 'twenty eight': 28, 'twenty nine': 29, 'thirty': 30,
-                        'thirty one': 31, 'thirty two': 32, 'thirty three': 33, 'thirty four': 34, 'thirty five': 35,
-                        'forty': 40, 'fifty': 50, 'sixty': 60, 'seventy': 70, 'eighty': 80, 'ninety': 90,
-                        'hundred': 100, 'one hundred': 100
-                    };
-
-                    // Build pattern for word numbers
-                    const wordNumberPattern = Object.keys(WORD_NUMBERS).sort((a, b) => b.length - a.length).join('|');
 
                     // Match: "verse 5", "verse five", "go to verse 10", "let's go to verse five"
                     // Also match ranges: "verse 16 to 17", "verse 16 through 18", "verses 16 and 17"
                     // But NOT "John verse 5" (which has a book name)
 
                     // First check for verse RANGE patterns (e.g., "verse 16 to 17", "verses 5 through 7", "verse 16 and 17")
-                    const rangeNumericMatch = lowerText.match(/(?:verse|verses|go to verse|let's go to verse)\s*(\d+)\s*(?:to|through|and|-)\s*(\d+)/);
+                    // Supports "Verse Number 16"
+                    const rangeNumericMatch = lowerText.match(/(?:verse|verses|go to verse|let's go to verse)(?:\s+(?:number|num|no\.?))?\s*(\d+)\s*(?:to|through|and|-)\s*(\d+)/);
                     const rangeWordMatch = lowerText.match(new RegExp(
-                        `(?:verse|verses|go to verse|let's go to verse)\\s+(${wordNumberPattern})\\s+(?:to|through|and)\\s+(${wordNumberPattern})`,
+                        `(?:verse|verses|go to verse|let's go to verse)(?:\\s+(?:number|num|no\\.?))?\\s+(${WORD_NUMBER_PATTERN})\\s+(?:to|through|and)\\s+(${WORD_NUMBER_PATTERN})`,
                         'i'
                     ));
 
@@ -398,8 +393,9 @@ export function useSmartDetection(
                     }
 
                     // Single verse patterns
-                    const verseNumericMatch = lowerText.match(/(?:verse|go to verse|let's go to verse|jump to verse)\s*(\d+)/);
-                    const verseWordMatch = lowerText.match(new RegExp(`(?:verse|go to verse|let's go to verse|jump to verse)\\s+(${wordNumberPattern})`, 'i'));
+                    // Supports "Verse Number 5"
+                    const verseNumericMatch = lowerText.match(/(?:verse|go to verse|let's go to verse|jump to verse)(?:\s+(?:number|num|no\.?))?\s*(\d+)/);
+                    const verseWordMatch = lowerText.match(new RegExp(`(?:verse|go to verse|let's go to verse|jump to verse)(?:\\s+(?:number|num|no\\.?))?\\s+(${WORD_NUMBER_PATTERN})`, 'i'));
 
                     let targetVerse: number | null = null;
 
@@ -476,11 +472,11 @@ export function useSmartDetection(
 
             const rawInput = textWindow;
             const normInput = normalize(rawInput);
-            const inputTokens = tokenize(rawInput);
 
-            if (rawInput.length > 3) {
+            // Optimization: Only check songs if the input is significant (at least 20 chars)
+            if (rawInput.length > 20) {
                 const getBigrams = (s: string) => { const b = new Set<string>(); for (let i = 0; i < s.length - 1; i++)b.add(s.substring(i, i + 2)); return b; };
-                const dice = (s1: string, s2: string) => { if (!s1 || !s2) return 0; const a = s1.toLowerCase().replace(/[^a-z0-9]/g, ''), b = s2.toLowerCase().replace(/[^a-z0-9]/g, ''); if (a === b) return 1; const ba = getBigrams(a), bb = getBigrams(b); if (!ba.size || !bb.size) return 0; let i = 0; ba.forEach(x => { if (bb.has(x)) i++ }); return (2 * i) / (ba.size + bb.size); };
+                const diceLocal = dice; // Use the global helper
 
                 let bestMatch = { song: null as any, slide: '', score: 0 };
                 for (const song of songLibraryRef.current) {
@@ -507,7 +503,6 @@ export function useSmartDetection(
             const localDetections = detectVersesInText(textWindow);
 
             if (localDetections.length > 0) {
-                console.log('[SmartDetect] FAST PATH MATCH:', localDetections[0].reference);
 
                 // Construct a result object similar to API response
                 const fastScriptures: DetectedScripture[] = [];
@@ -555,13 +550,18 @@ export function useSmartDetection(
 
             let data;
 
-            // USE ELECTRON IPC IF AVAILABLE (OFFLINE / DESKTOP MODE)
+            // Incorporate theme into hints
+            let hints = pastorProfileRef.current ? generateContextHint(pastorProfileRef.current) : '';
+            if (theme) {
+                hints = `[ACTIVE SERMON THEME: ${theme}]\n${hints}`;
+            }
+
             if ((window as any).electronAPI?.smartDetect) {
                 console.log('[SmartDetect] Mode: Electron IPC');
                 data = await (window as any).electronAPI.smartDetect({
                     text: textWindow,
                     context: context,
-                    pastorHints: pastorProfileRef.current ? generateContextHint(pastorProfileRef.current) : undefined,
+                    pastorHints: hints || undefined,
                     currentVerse: currentVerseRef.current,
                     chapterContext: chapterContextRef.current,
                 });
@@ -577,9 +577,7 @@ export function useSmartDetection(
                     body: JSON.stringify({
                         text: textWindow,
                         context: context,
-                        pastorHints: pastorProfileRef.current
-                            ? generateContextHint(pastorProfileRef.current)
-                            : undefined,
+                        pastorHints: hints || undefined,
                         currentVerse: currentVerseRef.current,
                         chapterContext: chapterContextRef.current,
                     }),
@@ -681,8 +679,6 @@ export function useSmartDetection(
                         savePastorProfile(pastorProfileRef.current);
                     }
 
-                    console.log(`[SmartDetect] ✓ ${s.matchType.toUpperCase()} (${s.confidence}%):`, reference);
-
                     // Anchor the context to this chapter
                     chapterContextRef.current = `${s.book} ${s.chapter}`;
                 } else {
@@ -727,15 +723,245 @@ export function useSmartDetection(
 
     /**
      * Add text from transcription
-     * Splits into words and triggers detection when window is ready
+     * Handles cumulative interim results from Deepgram correctly.
      */
-    const addText = useCallback((text: string) => {
-        // Split into words and add to buffer
-        const words = text.trim().split(/\s+/).filter(w => w.length > 0);
-        // Reduce buffer size to prevent old "ghost" detections from re-appearing
-        wordBufferRef.current = [...wordBufferRef.current, ...words].slice(-15);
+    const addText = useCallback((text: string, isFinal: boolean = false) => {
+        if (!text.trim()) return;
 
-        // Debounce processing
+        // Strip previous context if this is a continuation of an interim segment
+        // Deepgram sends: "John", "John 3", "John 3 16"
+        // We only want the FULL latest segment if it's interim, or append if it's final.
+
+        let words: string[] = [];
+        if (isFinal) {
+            // If final, append these words permanently to buffer
+            words = text.trim().split(/\s+/).filter(w => w.length > 0);
+            wordBufferRef.current = [...wordBufferRef.current, ...words].slice(-20);
+        } else {
+            // If interim, we don't append to wordBufferRef yet (it's volatile)
+            // Instead, we just use the current text for immediate detection
+            words = text.trim().split(/\s+/).filter(w => w.length > 0);
+        }
+
+        const currentWindow = isFinal ? wordBufferRef.current : [...wordBufferRef.current, ...words];
+        const lowerFullText = currentWindow.join(' ').toLowerCase();
+
+        // Avoid re-processing if the text hasn't changed enough
+        if (contextRef.current === lowerFullText) return;
+        contextRef.current = lowerFullText;
+
+        // 1. FAST NAVIGATION COMMANDS ("Next Verse", "Previous Verse")
+        if (/\b(?:next verse|next one|go next)\b/.test(lowerFullText)) {
+            console.log('[SmartDetect] ⚡ ZERO LATENCY NAV: Next Verse');
+            onDetect([], [{ type: 'next_verse' }], 'SWITCH', undefined);
+            wordBufferRef.current = [];
+            if (timeoutRef.current) clearTimeout(timeoutRef.current);
+            return;
+        }
+
+        if (/\b(?:previous verse|previous one|go back|last verse)\b/.test(lowerFullText)) {
+            console.log('[SmartDetect] ⚡ ZERO LATENCY NAV: Prev Verse');
+            onDetect([], [{ type: 'prev_verse' }], 'SWITCH', undefined);
+            wordBufferRef.current = [];
+            if (timeoutRef.current) clearTimeout(timeoutRef.current);
+            return;
+        }
+
+        // 2. FAST RELATIVE NAV (Chapter/Verse)
+        // Only if we have an active chapter context AND NO EXPLICIT BOOK NAME
+        const hasBookName = BOOK_PATTERNS.test(lowerFullText);
+
+        if (chapterContextRef.current && !hasBookName) {
+
+            // 2a. RELATIVE CHAPTER ("Chapter 5", "Chapter Number 5")
+            // Supports "Chapter 5", "Chapter Number 5", "Chapter No. 5"
+            let chapMatch = lowerFullText.match(/(?:chapter|go to chapter)(?:\s+(?:number|num|no\.?))?\s*(\d+)(?:\s*(?:verse|v)?\.?\s*(\d+))?/i);
+
+            // Fallback: Check for word numbers ("chapter nine", "chapter number nine")
+            if (!chapMatch) {
+                const wordMatch = lowerFullText.match(new RegExp(
+                    `(?:chapter|go to chapter)(?:\\s+(?:number|num|no\\.?))?\\s+(${WORD_NUMBER_PATTERN})(?:\\s*(?:verse|v)?\\.?\\s*(\\d+|${WORD_NUMBER_PATTERN}))?`,
+                    'i'
+                ));
+                if (wordMatch) {
+                    // Mock the match result structure for consistent processing
+                    const cVal = WORD_NUMBERS[wordMatch[1].toLowerCase()] || parseInt(wordMatch[1]);
+                    const vVal = wordMatch[2] ? (WORD_NUMBERS[wordMatch[2].toLowerCase()] || parseInt(wordMatch[2])) : undefined;
+                    chapMatch = ['mock', String(cVal), String(vVal || '')] as RegExpMatchArray;
+                }
+            }
+
+            if (chapMatch) {
+                const targetChapter = parseInt(chapMatch[1]);
+                const targetVerse = chapMatch[2] ? parseInt(chapMatch[2]) : 1;
+
+                // Extract book from context or FALLBACK TO PASTOR PROFILE
+                const bookMatch = chapterContextRef.current?.match(/^(.+?)\s+\d+$/);
+                let book = bookMatch ? bookMatch[1] : null;
+
+                // --- CONTEXT ENHANCEMENT ---
+                // if no active context, check pastor's top focus books
+                if (!book && pastorProfileRef.current) {
+                    const topBooks = pastorProfileRef.current.sermonContext.focusBooks ||
+                        Object.keys(pastorProfileRef.current.bookPreferences).sort((a, b) => pastorProfileRef.current!.bookPreferences[b] - pastorProfileRef.current!.bookPreferences[a]).slice(0, 1);
+                    if (topBooks.length > 0) {
+                        book = topBooks[0];
+                        console.log('[SmartDetect] Auto-applying focus book context:', book);
+                    }
+                }
+
+                if (book && targetChapter > 0 && targetChapter < 151) {
+                    const key = `${book}-${targetChapter}-${targetVerse}-nav`;
+                    const lastDetected = recentDetectionsRef.current.get(key);
+
+                    if (!lastDetected || Date.now() - lastDetected > 3000) {
+                        console.log('[SmartDetect] ⚡ ZERO LATENCY CHAPTER:', `${book} ${targetChapter}:${targetVerse}`);
+
+                        const processChapterFast = async () => {
+                            const currentVersion = options.version || 'KJV';
+                            let text = await lookupVerseAsync(book, targetChapter, targetVerse, currentVersion);
+
+                            if (text) {
+                                onDetect([{
+                                    book, chapter: targetChapter, verse: targetVerse,
+                                    text,
+                                    reference: `${book} ${targetChapter}:${targetVerse}`,
+                                    confidence: 100,
+                                    matchType: 'exact'
+                                }], [], 'SWITCH', 1);
+
+                                recentDetectionsRef.current.set(key, Date.now());
+                                wordBufferRef.current = [];
+                                if (timeoutRef.current) clearTimeout(timeoutRef.current);
+
+                                // Update Context to new chapter
+                                chapterContextRef.current = `${book} ${targetChapter}`;
+
+                                // PREDICTIVE FETCH for the NEW Chapter
+                                const count = getChapterVerseCount(book, targetChapter);
+                                if (count > 0 && currentVersion !== 'KJV') {
+                                    console.log(`[SmartDetect] 🔮 Prefetching NEW chapter: ${book} ${targetChapter}...`);
+                                    for (let v = 1; v <= count; v++) {
+                                        if (v === targetVerse) continue;
+                                        lookupVerseAsync(book, targetChapter, v, currentVersion);
+                                    }
+                                }
+                            }
+                        };
+                        processChapterFast();
+                        return;
+                    }
+                }
+            }
+
+            // 2b. RELATIVE VERSE ("Verse 7", "Verse Number 7")
+            const relativeMatch = lowerFullText.match(/(?:verse|go to verse|jump to verse)(?:\s+(?:number|num|no\.?))?\s*(\d+)/i);
+
+            // Word-based number match
+            const relativeWordMatch = !relativeMatch ? lowerFullText.match(new RegExp(`(?:verse|go to verse|jump to verse)(?:\\s+(?:number|num|no\\.?))?\\s+(${WORD_NUMBER_PATTERN})`, 'i')) : null;
+
+            let targetVerse: number | null = null;
+            if (relativeMatch) targetVerse = parseInt(relativeMatch[1]);
+            if (relativeWordMatch) targetVerse = WORD_NUMBERS[relativeWordMatch[1].toLowerCase()] || null;
+
+            if (targetVerse && targetVerse > 0 && targetVerse < 177) {
+                const [book, chapterStr] = chapterContextRef.current.split(/ (\d+)$/);
+                const chapter = parseInt(chapterStr);
+
+                // Check if this verse is ALREADY detected recently to avoid loops
+                const key = `${book}-${chapter}-${targetVerse}`;
+                const lastDetected = recentDetectionsRef.current.get(key);
+
+                if (!lastDetected || Date.now() - lastDetected > 2000) {
+                    console.log('[SmartDetect] ⚡ ZERO LATENCY RELATIVE:', `${book} ${chapter}:${targetVerse}`);
+
+                    const processRelativeFast = async () => {
+                        const currentVersion = options.version || 'KJV';
+                        let text = await lookupVerseAsync(book, chapter, targetVerse, currentVersion);
+
+                        if (text) {
+                            onDetect([{
+                                book, chapter, verse: targetVerse,
+                                text,
+                                reference: `${book} ${chapter}:${targetVerse}`,
+                                confidence: 100,
+                                matchType: 'exact'
+                            }], [], 'SWITCH', 1);
+
+                            recentDetectionsRef.current.set(key, Date.now());
+                            wordBufferRef.current = [];
+                            if (timeoutRef.current) clearTimeout(timeoutRef.current);
+                        }
+                    };
+                    processRelativeFast();
+                    return;
+                }
+            }
+        }
+
+        // 3. EXPLICIT FULL REFERENCES ("John 3:16")
+        const fastDetections = detectVersesInText(lowerFullText);
+        if (fastDetections.length > 0) {
+            // Check if this is a "New" detection (not recently fired)
+            const d = fastDetections[0]; // Take primary match
+            const key = `${d.book}-${d.chapter}-${d.verse}`;
+            const lastDetected = recentDetectionsRef.current.get(key);
+
+            // If it's a new, unique detection, fire immediately
+            if (!lastDetected || Date.now() - lastDetected > 3000) {
+                console.log('[SmartDetect] ⚡ ZERO LATENCY MATCH:', d.reference);
+
+                const processFastMatch = async () => {
+                    let text = d.text;
+                    const currentVersion = options.version || 'KJV';
+
+                    // If local regex didn't find text (e.g. version mismatch or range), fetch it
+                    if (!text || (currentVersion !== 'KJV')) {
+                        const fetched = await lookupVerseAsync(d.book, d.chapter, d.verse, currentVersion);
+                        if (fetched) text = fetched;
+                    }
+
+                    if (text) {
+                        const script: DetectedScripture = {
+                            book: d.book,
+                            chapter: d.chapter,
+                            verse: d.verse,
+                            verseEnd: d.verseEnd,
+                            text,
+                            reference: d.reference,
+                            confidence: 100,
+                            matchType: 'exact'
+                        };
+
+                        onDetect([script], [], 'SWITCH', 1);
+                        recentDetectionsRef.current.set(key, Date.now());
+                        chapterContextRef.current = `${d.book} ${d.chapter}`;
+
+                        // Clear buffer and cancel debounce to prevent double-processing
+                        wordBufferRef.current = [];
+                        if (timeoutRef.current) clearTimeout(timeoutRef.current);
+
+                        // --- PREDICTIVE FETCHING ---
+                        // Background fetch the rest of the chapter
+                        const count = getChapterVerseCount(d.book, d.chapter);
+                        if (count > 0 && currentVersion !== 'KJV') {
+                            console.log(`[SmartDetect] 🔮 Prefetching ${d.book} ${d.chapter} (${count} verses)...`);
+                            // Fetch in chunks or parallel to avoid jamming
+                            for (let v = 1; v <= count; v++) {
+                                if (v === d.verse) continue;
+                                // Fire and forget (don't await)
+                                lookupVerseAsync(d.book, d.chapter, v, currentVersion);
+                            }
+                        }
+                    }
+                };
+
+                processFastMatch();
+                return; // Skip the debounce logic entirely
+            }
+        }
+
+        // Debounce processing (Slow Path)
         if (timeoutRef.current) {
             clearTimeout(timeoutRef.current);
         }
@@ -743,7 +969,7 @@ export function useSmartDetection(
         timeoutRef.current = setTimeout(() => {
             processWindow();
         }, debounceMs);
-    }, [processWindow, debounceMs]);
+    }, [processWindow, debounceMs, options.version, onDetect]);
 
     /**
      * Reset detection state

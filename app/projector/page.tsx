@@ -8,6 +8,42 @@ import { useLicense } from '@/hooks/useLicense';
 import DemoWatermark from '@/components/DemoWatermark';
 
 /**
+ * Sanitize and render formatted text (allows only safe tags: b, i, span with style)
+ * Converts newlines to <br> for proper display
+ */
+function renderFormattedText(text: string): string {
+    // First, escape any potentially dangerous content except our allowed tags
+    let safe = text
+        // Preserve our allowed formatting tags
+        .replace(/<b>/gi, '___BOLD_OPEN___')
+        .replace(/<\/b>/gi, '___BOLD_CLOSE___')
+        .replace(/<i>/gi, '___ITALIC_OPEN___')
+        .replace(/<\/i>/gi, '___ITALIC_CLOSE___')
+        .replace(/<span style="color:([^"]+)">/gi, (_, color) => '___SPAN_' + color + '___')
+        .replace(/<\/span>/gi, '___SPAN_CLOSE___');
+
+    // Escape remaining HTML
+    safe = safe
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+
+    // Restore our allowed tags
+    safe = safe
+        .replace(/___BOLD_OPEN___/g, '<b>')
+        .replace(/___BOLD_CLOSE___/g, '</b>')
+        .replace(/___ITALIC_OPEN___/g, '<i>')
+        .replace(/___ITALIC_CLOSE___/g, '</i>')
+        .replace(/___SPAN_([^_]+)___/g, '<span style="color:$1">')
+        .replace(/___SPAN_CLOSE___/g, '</span>');
+
+    // Convert newlines to <br> for display
+    safe = safe.replace(/\n/g, '<br>');
+
+    return safe;
+}
+
+/**
  * Calculate optimal font size based on text length and verse count
  * Returns a multiplier to apply to the base font size
  */
@@ -59,6 +95,7 @@ type ProjectorContent = {
     verses?: { verseNum: number; text: string }[]; // Keep for multi-verse backward compat
     options?: {
         imageMode?: 'contain' | 'cover' | 'stretch';
+        scale?: number;
     };
 };
 
@@ -71,6 +108,9 @@ export default function ProjectorPage() {
     const [activeBackground, setActiveBackground] = useState<string | null>(null);
     const [activeTheme, setActiveTheme] = useState<ProjectorTheme>(DEFAULT_THEMES[0]);
     const [activeAlert, setActiveAlert] = useState<string | null>(null);
+
+    // Video Reference
+    const videoRef = useRef<HTMLVideoElement>(null);
 
     const handleMessage = useCallback((msg: any) => {
         // Handle Legacy SHOW_VERSE -> Convert to Layered Content
@@ -102,6 +142,7 @@ export default function ProjectorPage() {
         // Helper to apply theme background
         else if (msg.type === 'APPLY_THEME') {
             const newTheme = msg.payload as ProjectorTheme;
+            console.log('[Projector] Applying theme:', newTheme.name, newTheme.layout);
             setActiveTheme(newTheme);
             // Apply background if needed (ProjectorView usually layers Background separately)
             // VisualStack probably handles the background state??
@@ -124,6 +165,52 @@ export default function ProjectorPage() {
             setActiveAlert(msg.payload.text);
             setTimeout(() => setActiveAlert(null), msg.payload.duration || 5000);
         }
+        else if (msg.type === 'MEDIA_ACTION') {
+            const { action, value } = msg.payload;
+            if (videoRef.current) {
+                switch (action) {
+                    case 'play':
+                        videoRef.current.play().catch(console.error);
+                        break;
+                    case 'pause':
+                        videoRef.current.pause();
+                        break;
+                    case 'toggle_play':
+                        if (videoRef.current.paused) videoRef.current.play().catch(console.error);
+                        else videoRef.current.pause();
+                        break;
+                    case 'seek':
+                        videoRef.current.currentTime += value;
+                        break;
+                    case 'set_time':
+                        videoRef.current.currentTime = value;
+                        break;
+                    case 'rate':
+                        videoRef.current.playbackRate = value;
+                        break;
+                    case 'set_mode':
+                        setActiveContent(prev => {
+                            if (prev && prev.type === 'media') {
+                                return { ...prev, options: { ...prev.options, imageMode: value } };
+                            }
+                            return prev;
+                        });
+                        break;
+                    case 'set_scale':
+                        setActiveContent(prev => {
+                            if (!prev) return null;
+                            return {
+                                ...prev,
+                                options: {
+                                    ...(prev.options || {}),
+                                    scale: value
+                                }
+                            };
+                        });
+                        break;
+                }
+            }
+        }
     }, []);
 
     useBroadcastChannel('projector_channel', handleMessage);
@@ -135,15 +222,34 @@ export default function ProjectorPage() {
         // Handle Media (Images)
         if (activeContent.type === 'media') {
             const mode = activeContent.options?.imageMode || 'contain';
+            const scale = activeContent.options?.scale || 1;
+            const isFillMode = mode === 'cover' || mode === 'stretch';
             const objectFitClass = mode === 'cover' ? 'object-cover' : mode === 'stretch' ? 'object-fill' : 'object-contain';
 
+            const isVideo = activeContent.body?.match(/\.(mp4|webm|mov|ogg)(\?|$)/i) ||
+                activeContent.body?.startsWith('data:video/') ||
+                activeContent.body?.startsWith('blob:');
+
             return (
-                <div className="z-10 w-full h-full flex flex-col items-center justify-center animate-in fade-in zoom-in-95 duration-500">
-                    <img
-                        src={activeContent.body}
-                        alt={activeContent.title}
-                        className={`max-w-full max-h-full ${mode === 'cover' ? 'w-full h-full' : 'max-h-[85vh]'} ${objectFitClass} drop-shadow-2xl rounded-lg`}
-                    />
+                <div className="z-10 w-full h-full flex flex-col items-center justify-center animate-in fade-in zoom-in-95 duration-500 overflow-hidden">
+                    {isVideo ? (
+                        <video
+                            ref={videoRef}
+                            src={activeContent.body}
+                            className={`max-w-full max-h-full ${isFillMode ? 'w-full h-full' : 'max-h-[85vh]'} ${objectFitClass} drop-shadow-2xl rounded-lg transition-all duration-300`}
+                            style={{ transform: `scale(${scale})` }}
+                            autoPlay
+                            loop
+                            playsInline
+                        />
+                    ) : (
+                        <img
+                            src={activeContent.body}
+                            alt={activeContent.title}
+                            className={`max-w-full max-h-full ${isFillMode ? 'w-full h-full' : 'max-h-[85vh]'} ${objectFitClass} drop-shadow-2xl rounded-lg transition-all duration-300`}
+                            style={{ transform: `scale(${scale})` }}
+                        />
+                    )}
                 </div>
             );
         }
@@ -160,6 +266,8 @@ export default function ProjectorPage() {
 
         const layout = activeTheme.layout || { referencePosition: 'bottom', referenceScale: 1, showVerseNumbers: true };
         const refScale = layout.referenceScale || 1;
+        const verseNumScale = layout.verseNumberScale || 0.5;
+
         const ReferenceComponent = (activeContent.title || activeContent.meta) ? (
             <div className="opacity-90 w-full mb-8 relative z-20" style={{
                 textAlign: activeTheme.styles.textAlign,
@@ -169,11 +277,15 @@ export default function ProjectorPage() {
             }}>
                 <h2 className="uppercase tracking-wider font-bold mb-1" style={{
                     fontFamily: activeTheme.styles.fontFamily,
-                    color: activeTheme.styles.color,
+                    color: layout.referenceColor || activeTheme.styles.color,
                     fontSize: `${0.6 * refScale}em`, // Scalable
                     lineHeight: 1.1
                 }}>{activeContent.title}</h2>
-                {activeContent.meta && <p className="text-sm opacity-70" style={{ color: activeTheme.styles.color }}>{activeContent.meta}</p>}
+                {activeContent.meta && (
+                    <p className="text-sm opacity-70" style={{ color: layout.versionColor || activeTheme.styles.color }}>
+                        {activeContent.meta}
+                    </p>
+                )}
             </div>
         ) : null;
 
@@ -203,7 +315,11 @@ export default function ProjectorPage() {
                                 {activeContent.verses.map((v, idx) => (
                                     <div key={idx} className="flex items-start gap-4" style={{ justifyContent: activeTheme.styles.textAlign === 'center' ? 'center' : activeTheme.styles.textAlign === 'right' ? 'flex-end' : 'flex-start' }}>
                                         {layout.showVerseNumbers && (
-                                            <span className="text-[50%] opacity-60 font-mono mt-2 flex-shrink-0" style={{ color: activeTheme.styles.color }}>{v.verseNum}</span>
+                                            <span className="opacity-60 font-mono mt-2 flex-shrink-0" style={{
+                                                color: layout.verseNumberColor || activeTheme.styles.color,
+                                                fontSize: `${verseNumScale * 100}%`,
+                                                lineHeight: 1.5
+                                            }}>{v.verseNum}</span>
                                         )}
                                         <p style={{
                                             ...themeStyle,
@@ -212,9 +328,9 @@ export default function ProjectorPage() {
                                             textAlign: 'left',
                                             lineHeight: 1.25,
                                             transition: 'font-size 0.3s ease-out'
-                                        }}>
-                                            {v.text}
-                                        </p>
+                                        }}
+                                            dangerouslySetInnerHTML={{ __html: renderFormattedText(v.text) }}
+                                        />
                                     </div>
                                 ))}
                             </div>
@@ -228,19 +344,22 @@ export default function ProjectorPage() {
                         return (
                             <div className="flex items-start gap-4 relative w-full" style={{ justifyContent: activeTheme.styles.textAlign === 'center' ? 'center' : activeTheme.styles.textAlign === 'right' ? 'flex-end' : 'flex-start' }}>
                                 {layout.showVerseNumbers && activeContent.verses && activeContent.verses[0] && (
-                                    <span className="text-[50%] opacity-60 font-mono mt-[0.2em] flex-shrink-0 select-none" style={{ color: activeTheme.styles.color }}>
+                                    <span className="opacity-60 font-mono mt-[0.2em] flex-shrink-0 select-none" style={{
+                                        color: layout.verseNumberColor || activeTheme.styles.color,
+                                        fontSize: `${verseNumScale * 100}%`,
+                                        lineHeight: 1.5
+                                    }}>
                                         {activeContent.verses[0].verseNum}
                                     </span>
                                 )}
                                 <p style={{
                                     ...themeStyle,
                                     fontSize: `${fontScale}em`,
-                                    whiteSpace: 'pre-wrap',
                                     lineHeight: 1.25,
                                     transition: 'font-size 0.3s ease-out'
-                                }}>
-                                    {activeContent.body}
-                                </p>
+                                }}
+                                    dangerouslySetInnerHTML={{ __html: renderFormattedText(activeContent.body) }}
+                                />
                             </div>
                         );
                     })()

@@ -12,6 +12,7 @@ import { useSmartDetection, type DetectionSignal } from '@/hooks/useSmartDetecti
 import { useLicense } from '@/hooks/useLicense';
 import { useUsageTracker } from '@/hooks/useUsageTracker';
 import DeepgramRecognizer from '@/components/DeepgramRecognizer';
+import TranscriptMonitor from '@/components/TranscriptMonitor';
 import { detectVersesInText, lookupVerseAsync, SUPPORTED_VERSIONS } from '@/utils/bible';
 import { DEFAULT_THEMES, ProjectorTheme } from '@/utils/themes';
 import Link from 'next/link';
@@ -20,7 +21,8 @@ import ServiceSchedulePanel from '@/components/ServiceSchedulePanel';
 import ResourceLibraryPanel from '@/components/ResourceLibraryPanel';
 import MediaControls from '@/components/MediaControls';
 import { ScheduleItem, ServiceSchedule, createBlankSchedule, loadSchedule, saveSchedule } from '@/utils/scheduleManager';
-import { ResourceItem } from '@/utils/resourceLibrary';
+import { getThemes, ResourceItem } from '@/utils/resourceLibrary';
+import { loadPastorProfile, PastorProfile, savePastorProfile } from '@/lib/pastorProfile';
 
 /**
  * Render formatted text with allowed HTML tags (b, i, font/span with color)
@@ -98,6 +100,29 @@ const VoiceWave = ({ level, active }: { level: number, active: boolean }) => {
 };
 
 
+/**
+ * Calculate optimal font size for Dashboard Preview based on text length
+ */
+function calculateDashboardFontScale(text: string, verseCount: number = 1): string {
+    const charCount = text.length;
+    let baseSize = 1.5; // Default rem
+
+    if (verseCount === 1) {
+        if (charCount < 100) baseSize = 1.5;
+        else if (charCount < 200) baseSize = 1.3;
+        else if (charCount < 350) baseSize = 1.1;
+        else if (charCount < 500) baseSize = 0.9;
+        else baseSize = 0.7;
+    } else {
+        if (charCount < 250) baseSize = 1.2;
+        else if (charCount < 450) baseSize = 1.0;
+        else if (charCount < 700) baseSize = 0.8;
+        else baseSize = 0.6;
+    }
+
+    return `${baseSize}rem`;
+}
+
 export default function DashboardPage() {
     const [isListening, setIsListening] = useState(false);
     const [isMicLoading, setIsMicLoading] = useState(false);
@@ -110,7 +135,7 @@ export default function DashboardPage() {
     useUsageTracker(isListening, license?.licenseKey || null);
     const [detectedQueue, setDetectedQueue] = useState<DetectedItem[]>([]);
     const [activeItem, setActiveItem] = useState<DetectedItem | null>(null);
-    const [autoMode, setAutoMode] = useState(false);
+    const [autoMode, setAutoMode] = useState(true);
     const [aiStatus, setAiStatus] = useState<'idle' | 'processing' | 'loading'>('idle');
     const [lastSignal, setLastSignal] = useState<DetectionSignal>('WAIT');
     const [confidenceThreshold, setConfidenceThreshold] = useState(85);
@@ -118,6 +143,7 @@ export default function DashboardPage() {
 
     // WebSocket (Deepgram) Status Management
     const [deepgramStatus, setDeepgramStatus] = useState<{ status: string; error?: string | null }>({ status: 'idle' });
+    const [deepgramError, setDeepgramError] = useState<string | null>(null);
     const [selectedVersion, setSelectedVersion] = useState<string>('KJV');
     const [verseCount, setVerseCount] = useState<1 | 2 | 3>(1);
     const [showBibleBrowser, setShowBibleBrowser] = useState(false);
@@ -131,6 +157,7 @@ export default function DashboardPage() {
     const [timerState, setTimerState] = useState({ isRunning: false, isPaused: false });
     const [resetFlash, setResetFlash] = useState(false);
     const [libraryResources, setLibraryResources] = useState<ResourceItem[]>([]);
+    const [pastorProfile, setPastorProfile] = useState<PastorProfile | null>(null);
 
     // Initialize Fuse for Song Detection
     const fuseRef = useRef<Fuse<any> | null>(null);
@@ -236,14 +263,34 @@ export default function DashboardPage() {
     const BIBLE_VERSIONS = SUPPORTED_VERSIONS;
     const VERSE_COUNT_OPTIONS = [1, 2, 3] as const;
 
-    // Load Schedule
+    // Load Schedule, Pastor Profile, and Active Theme
     useEffect(() => {
         const init = async () => {
             const saved = await loadSchedule();
             if (saved) setSchedule(saved);
+
+            const profile = loadPastorProfile();
+            setPastorProfile(profile);
+            console.log('[Dashboard] Loaded Pastor Profile:', profile.name);
+
+            // Restore Active Theme
+            const savedThemeId = localStorage.getItem('activeThemeId');
+            if (savedThemeId) {
+                const themes = await getThemes();
+                const allThemes = [...DEFAULT_THEMES, ...themes];
+                const active = allThemes.find(t => t.id === savedThemeId);
+                if (active) setCurrentTheme(active);
+            }
         };
         init();
     }, []);
+
+    // Save Active Theme ID
+    useEffect(() => {
+        if (currentTheme.id) {
+            localStorage.setItem('activeThemeId', currentTheme.id);
+        }
+    }, [currentTheme]);
 
     // Save Schedule
     useEffect(() => {
@@ -273,14 +320,7 @@ export default function DashboardPage() {
     const selectedVersionRef = useRef(selectedVersion);
     const verseCountRef = useRef(verseCount);
     const confidenceThresholdRef = useRef(confidenceThreshold);
-    const transcriptScrollRef = useRef<HTMLDivElement>(null);
-
-    // Auto-scroll transcript to bottom
-    useEffect(() => {
-        if (transcriptScrollRef.current) {
-            transcriptScrollRef.current.scrollTop = transcriptScrollRef.current.scrollHeight;
-        }
-    }, [transcript, interim]);
+    // Transcript refs for performance isolation in sub-components
 
     // Keep refs in sync
     useEffect(() => {
@@ -295,7 +335,10 @@ export default function DashboardPage() {
 
     // Broadcast Theme Changes
     useEffect(() => {
-        broadcast({ type: 'APPLY_THEME', payload: currentTheme });
+        if (currentTheme) {
+            console.log('[Dashboard] Broadcasting APPLY_THEME:', currentTheme.name, currentTheme.layout);
+            broadcast({ type: 'APPLY_THEME', payload: currentTheme });
+        }
     }, [currentTheme, broadcast]);
 
     // Fetch multiple verses for multi-verse display
@@ -306,24 +349,21 @@ export default function DashboardPage() {
         count: number,
         version: string
     ): Promise<{ verseNum: number; text: string; reference: string }[]> => {
-        const verses: { verseNum: number; text: string; reference: string }[] = [];
+        // Parallelize for zero-latency
+        const verseNumbers = Array.from({ length: count }, (_, i) => startVerse + i);
 
-        for (let i = 0; i < count; i++) {
-            const verseNum = startVerse + i;
-            const text = await lookupVerseAsync(book, chapter, verseNum, version);
-            if (text) {
-                verses.push({
-                    verseNum,
-                    text,
-                    reference: `${book} ${chapter}:${verseNum} `
-                });
-            } else {
-                // Stop if verse doesn't exist (end of chapter)
-                break;
-            }
-        }
+        const versePromises = verseNumbers.map(v =>
+            lookupVerseAsync(book, chapter, v, version).then(text => ({
+                verseNum: v,
+                text,
+                reference: `${book} ${chapter}:${v}`
+            }))
+        );
 
-        return verses;
+        const results = await Promise.all(versePromises);
+
+        // Filter out nulls (verses that don't exist)
+        return results.filter(r => r.text !== null) as { verseNum: number; text: string; reference: string }[];
     }, []);
 
     const handleSlideNavigation = useCallback((direction: 'next' | 'prev') => {
@@ -560,10 +600,12 @@ export default function DashboardPage() {
             setDetectedQueue(prev => [newItem, ...prev].slice(0, 50));
 
             // Auto-push logic: Only Bible verses go live automatically
-            // NEVER auto-push semantic detections or songs
+            // NEVER auto-push semantic detections (paraphrases) or songs
             const isSong = newItem.version === 'SONG';
-            const isSemantic = source === 'semantic';
-            if (autoModeRef.current && !isSong && !isSemantic) {
+            const isSemantic = source === 'semantic' || newItem.matchType === 'paraphrase';
+            const isPartialLowConfidence = newItem.matchType === 'partial' && (newItem.confidence || 0) < 90;
+
+            if (autoModeRef.current && !isSong && !isSemantic && !isPartialLowConfidence) {
                 goLive(newItem);
             }
         }
@@ -728,6 +770,10 @@ export default function DashboardPage() {
                         if (cmd.version && BIBLE_VERSIONS.includes(cmd.version as any)) {
                             console.log('[AI] Switching translation to:', cmd.version);
                             setSelectedVersion(cmd.version);
+                            selectedVersionRef.current = cmd.version; // Keep ref in sync
+                            if (activeItemRef.current?.book && activeItemRef.current.book !== 'Song') {
+                                navigateVerse('jump');
+                            }
                         }
                         break;
                     case 'clear':
@@ -755,11 +801,18 @@ export default function DashboardPage() {
             }
         }, [navigateVerse, navigateChapter, clearProjector, goLive, addToQueue]),
         activeItem?.reference || null,
-        { confidenceThreshold, version: selectedVersion }
+        {
+            confidenceThreshold,
+            version: selectedVersion,
+            theme: pastorProfile?.sermonContext?.theme
+        }
     );
 
     const processTranscript = useCallback(async (text: string) => {
         setTranscript(prev => (prev + " " + text).slice(-1000));
+
+        // 0. Feed to Smart Detection for fuzzy matching and auto-navigation
+        addToSmartDetection(text);
 
         // 1. Fast regex detection - ONLY on the new text to prevent re-triggering old verses
         const matches = detectVersesInText(text);
@@ -852,19 +905,23 @@ export default function DashboardPage() {
         // 4. Semantic search for paraphrased scriptures (requires 15+ words of context)
         if (recentWords.length >= 15 && window.electronAPI?.semanticSearch) {
             try {
-                const semanticText = recentWords.slice(-30).join(' '); // Last 30 words
+                // Incorporate sermon theme if available to bias semantic matching
+                const theme = pastorProfile?.sermonContext?.theme;
+                const baseText = recentWords.slice(-30).join(' ');
+                const semanticText = theme ? `[Theme: ${theme}] ${baseText}` : baseText;
+
                 // Convert threshold from percentage (e.g., 85) to decimal (0.85) for API
                 // Use a lower API threshold to get candidates, then filter by user threshold
                 const apiThreshold = Math.max(0.40, (confidenceThresholdRef.current - 10) / 100);
                 const result = await window.electronAPI.semanticSearch(semanticText, apiThreshold, 5);
 
                 if (result?.results?.length > 0) {
-                    // Filter by user's confidence threshold and take top 3
+                    // Filter by user's confidence threshold and take top 2 (User requested limit)
                     const filteredResults = result.results
                         .filter(m => m.confidence >= confidenceThresholdRef.current)
-                        .slice(0, 3);
+                        .slice(0, 2);
 
-                    // Add semantic matches to queue (1-3 results, highest confidence first)
+                    // Add semantic matches to queue (1-2 results, highest confidence first)
                     for (const match of filteredResults) {
                         // Parse the reference (e.g., "John 3:16" -> book: John, chapter: 3, verse: 16)
                         const refMatch = match.ref.match(/^(.+?)\s+(\d+):(\d+)$/);
@@ -904,6 +961,51 @@ export default function DashboardPage() {
             setLastSignal('WAIT');
         }
     }, [isListening, resetSmartDetection]);
+
+    // Auto-Theme Analysis (Analyze transcript every 60s to detect sermon theme)
+    useEffect(() => {
+        if (!isListening || !transcript) return;
+
+        const interval = setInterval(async () => {
+            if (!window.electronAPI?.smartDetect) return;
+
+            // Analyze the last 200 words for theming
+            const words = transcript.trim().split(/\s+/);
+            if (words.length < 50) return; // Need enough context
+
+            const sample = words.slice(-200).join(' ');
+            console.log('[Theme] Analyzing sermon theme from recent transcript...');
+
+            try {
+                // Use smartDetect with a special thematic signal
+                const result = await window.electronAPI.smartDetect({
+                    text: sample,
+                    context: 'extract_sermon_theme',
+                    pastorHints: 'Return ONLY the core theme of this sermon in 1-3 words (e.g., "Power of God", "Faithfulness", "The Cross"). No other text.'
+                });
+
+                if (result && result.theme && result.theme !== pastorProfile?.sermonContext?.theme) {
+                    console.log('[Theme] Auto-detected new sermon theme:', result.theme);
+                    setPastorProfile(prev => {
+                        if (!prev) return prev;
+                        const updated = {
+                            ...prev,
+                            sermonContext: {
+                                ...prev.sermonContext,
+                                theme: result.theme
+                            }
+                        };
+                        savePastorProfile(updated);
+                        return updated;
+                    });
+                }
+            } catch (err) {
+                console.error('[Theme] Auto-analysis failed:', err);
+            }
+        }, 60000); // Every 60 seconds
+
+        return () => clearInterval(interval);
+    }, [isListening, transcript, pastorProfile?.sermonContext?.theme]);
 
 
 
@@ -1215,118 +1317,77 @@ export default function DashboardPage() {
                     <section className="col-span-3 flex flex-col gap-3 min-h-0 overflow-hidden">
                         {/* TRANSCRIPT CARD */}
                         <div className="flex-1 bg-zinc-900/50 border border-white/5 rounded-2xl p-5 flex flex-col min-h-0 overflow-hidden shadow-sm" style={{ maxHeight: '450px' }}>
-                            <div className="flex items-center justify-between mb-3 flex-shrink-0">
-                                <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest flex items-center gap-2">
-                                    <div className="w-1.5 h-1.5 rounded-full bg-indigo-500" /> Live Transcript
-                                </h3>
-                                <VoiceWave level={voiceLevel} active={isListening} />
-                            </div>
-                            <div
-                                ref={transcriptScrollRef}
-                                className="flex-1 overflow-y-auto font-mono text-[10px] text-zinc-400 leading-relaxed whitespace-pre-wrap transcript-scroll pr-2 scroll-smooth"
-                                style={{
-                                    scrollbarWidth: 'thin',
-                                    scrollbarColor: '#71717a #27272a'
+                            <TranscriptMonitor
+                                isListening={isListening}
+                                onTranscript={(text) => {
+                                    setTranscript(prev => prev + ' ' + text);
+                                    processTranscript(text);
+                                    addToSmartDetection(text, true);
                                 }}
-                            >
-                                {transcript || <span className="text-zinc-600 italic">Waiting for speech...</span>}
-                                {deepgramStatus.error && (
-                                    <div className="mt-2 p-2 bg-red-500/20 border border-red-500/50 rounded text-red-400 text-[10px] font-bold">
-                                        ERROR: {deepgramStatus.error}
-                                    </div>
-                                )}
-                                <span className="text-indigo-400 animate-pulse block mt-1">{interim}</span>
-                            </div>
+                                onInterim={(text, isFinal) => {
+                                    setInterim(text);
+                                    if (text.trim().length > 5) {
+                                        addToSmartDetection(text, isFinal);
+                                    }
+                                }}
+                                onStatusChange={(status, error) => {
+                                    setDeepgramStatus({ status, error });
+                                    if (error) setDeepgramError(error);
+                                }}
+                                voiceLevel={voiceLevel}
+                                setVoiceLevel={setVoiceLevel}
+                                transcript={transcript}
+                                interim={interim}
+                                deepgramError={deepgramError || deepgramStatus.error}
+                            />
 
-                            {/* Mic Controls - Unified Premium Button */}
-                            <div className="flex-shrink-0 pt-2 mt-2 border-t border-white/5">
-                                <DeepgramRecognizer
-                                    isListening={isListening}
-                                    onTranscript={processTranscript}
-                                    onStatusChange={(status, error) => setDeepgramStatus({ status, error })}
-                                    onVolume={setVoiceLevel}
-                                    onInterim={(text) => {
-                                        setInterim(text);
-                                        // Real-time FAST detection on interim results
-                                        if (text.trim().length > 3) {
-                                            // STRICT: Only look at the current interim text. Do NOT look at history.
-                                            // This prevents "Ghosting" where an old verse in history pops up when interim fluctuates.
-                                            const matches = detectVersesInText(text);
-
-                                            if (matches.length > 0) {
-                                                console.log('[INTERIM] Fast Match:', matches[matches.length - 1].reference);
-                                                const match = matches[matches.length - 1];
-                                                let verseText = match.text;
-                                                const currentVersion = selectedVersionRef.current;
-
-                                                (async () => {
-                                                    if (currentVersion !== 'KJV') {
-                                                        const fetchedText = await lookupVerseAsync(match.book, match.chapter, match.verse, currentVersion);
-                                                        if (fetchedText) verseText = fetchedText;
-                                                    }
-                                                    addToQueue({
-                                                        book: match.book,
-                                                        chapter: match.chapter,
-                                                        verse: match.verse,
-                                                        text: verseText,
-                                                        reference: match.reference,
-                                                        confidence: 100,
-                                                        matchType: 'exact'
-                                                    }, 'regex');
-                                                })();
-                                            }
-                                        }
-                                    }}
-                                />
-
-                                <button
-                                    onClick={() => {
-                                        if (!isLicensed) {
-                                            setIsLicenseModalOpen(true);
-                                            return;
-                                        }
-                                        if (isMicLoading) return;
-                                        setIsMicLoading(true);
-                                        setIsListening(!isListening);
-                                        // Auto-unlock after 1.5s to prevent toggle spamming
-                                        setTimeout(() => setIsMicLoading(false), 1500);
-                                    }}
-                                    className={`w-full py-2 rounded-xl font-black text-xs tracking-wider shadow-xl transition-all flex items-center justify-center gap-3 relative overflow-hidden group
+                            <button
+                                onClick={() => {
+                                    if (!isLicensed) {
+                                        setIsLicenseModalOpen(true);
+                                        return;
+                                    }
+                                    if (isMicLoading) return;
+                                    setIsMicLoading(true);
+                                    setIsListening(!isListening);
+                                    // Auto-unlock after 1.5s to prevent toggle spamming
+                                    setTimeout(() => setIsMicLoading(false), 1500);
+                                }}
+                                className={`w-full py-2 rounded-xl font-black text-xs tracking-wider shadow-xl transition-all flex items-center justify-center gap-3 relative overflow-hidden group
                                     ${deepgramStatus.status === 'listening'
-                                            ? 'bg-red-500/10 text-red-400 border border-red-500/50 hover:bg-red-500/20'
-                                            : deepgramStatus.status === 'connecting' || isMicLoading
-                                                ? 'bg-yellow-500/10 text-yellow-400 border border-yellow-500/50 cursor-wait'
-                                                : 'bg-indigo-600 text-white hover:bg-indigo-500 hover:scale-[1.02] active:scale-[0.98]'
-                                        } `}
-                                >
-                                    {deepgramStatus.status === 'listening' ? (
-                                        <>
-                                            <span className="relative flex h-3 w-3">
-                                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
-                                                <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500"></span>
-                                            </span>
-                                            <span>LISTENING...</span>
-                                            <span className="text-[10px] font-normal opacity-60 ml-2">CLICK TO STOP</span>
-                                        </>
-                                    ) : (deepgramStatus.status === 'connecting' || isMicLoading) ? (
-                                        <>
-                                            <div className="w-4 h-4 border-2 border-yellow-400 border-t-transparent rounded-full animate-spin" />
-                                            <span>STARTING MIC...</span>
-                                        </>
-                                    ) : (
-                                        <>
-                                            <div className="p-1.5 bg-white/20 rounded-full group-hover:bg-white/30 transition-colors">
-                                                {isLicensed ? (
-                                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><line x1="12" y1="19" x2="12" y2="23"></line><line x1="8" y1="23" x2="16" y2="23"></line></svg>
-                                                ) : (
-                                                    <Lock size={16} strokeWidth={3} />
-                                                )}
-                                            </div>
-                                            {isLicensed ? 'START LISTENING' : 'ACTIVATE LICENSE TO START'}
-                                        </>
-                                    )}
-                                </button>
-                            </div>
+                                        ? 'bg-red-500/10 text-red-400 border border-red-500/50 hover:bg-red-500/20'
+                                        : deepgramStatus.status === 'connecting' || isMicLoading
+                                            ? 'bg-yellow-500/10 text-yellow-400 border border-yellow-500/50 cursor-wait'
+                                            : 'bg-indigo-600 text-white hover:bg-indigo-500 hover:scale-[1.02] active:scale-[0.98]'
+                                    } `}
+                            >
+                                {deepgramStatus.status === 'listening' ? (
+                                    <>
+                                        <span className="relative flex h-3 w-3">
+                                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                                            <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500"></span>
+                                        </span>
+                                        <span>LISTENING...</span>
+                                        <span className="text-[10px] font-normal opacity-60 ml-2">CLICK TO STOP</span>
+                                    </>
+                                ) : (deepgramStatus.status === 'connecting' || isMicLoading) ? (
+                                    <>
+                                        <div className="w-4 h-4 border-2 border-yellow-400 border-t-transparent rounded-full animate-spin" />
+                                        <span>STARTING MIC...</span>
+                                    </>
+                                ) : (
+                                    <>
+                                        <div className="p-1.5 bg-white/20 rounded-full group-hover:bg-white/30 transition-colors">
+                                            {isLicensed ? (
+                                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><line x1="12" y1="19" x2="12" y2="23"></line><line x1="8" y1="23" x2="16" y2="23"></line></svg>
+                                            ) : (
+                                                <Lock size={16} strokeWidth={3} />
+                                            )}
+                                        </div>
+                                        {isLicensed ? 'START LISTENING' : 'ACTIVATE LICENSE TO START'}
+                                    </>
+                                )}
+                            </button>
                         </div>
 
                         {/* MANUAL INPUT */}
@@ -1360,7 +1421,7 @@ export default function DashboardPage() {
                     </section>
 
                     {/* MIDDLE: QUEUE & HISTORY */}
-                    <section className="col-span-3 flex flex-col gap-4 min-h-0 overflow-hidden">
+                    <section className="col-span-3 flex flex-col gap-4 min-h-0 overflow-hidden" style={{ maxHeight: '450px' }}>
                         <div className="bg-zinc-900/30 border border-white/5 rounded-2xl flex-1 flex flex-col overflow-hidden">
                             <header className="p-4 border-b border-white/5 flex justify-between items-center bg-zinc-900/50">
                                 <h3 className="text-xs font-bold text-zinc-500 uppercase tracking-wider">Detection Queue</h3>
@@ -1435,8 +1496,8 @@ export default function DashboardPage() {
                     </section>
 
                     {/* RIGHT: LIVE PREVIEW */}
-                    <section className="col-span-3 flex flex-col gap-4 min-h-0">
-                        <div className="bg-zinc-900 border border-white/5 rounded-2xl flex-1 flex flex-col relative">
+                    <section className="col-span-3 flex flex-col gap-4 min-h-0 overflow-hidden" style={{ maxHeight: '450px' }}>
+                        <div className="bg-zinc-900 border border-white/5 rounded-2xl flex-1 flex flex-col relative overflow-hidden">
                             <header className="p-4 border-b border-white/5 flex justify-between items-center bg-zinc-950 rounded-t-2xl">
                                 <h3 className="text-xs font-bold text-green-500 uppercase tracking-wider flex items-center gap-2">
                                     <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" /> Live Output
@@ -1444,12 +1505,14 @@ export default function DashboardPage() {
                                 {/* Media Controls (Only show if active item is video) */}
 
                                 <div className="flex items-center gap-2">
-                                    <button
-                                        onClick={() => setShowTimerSettings(!showTimerSettings)}
-                                        className={`p-2 hover:bg-white/10 rounded-full transition-colors relative ${showTimerSettings ? 'text-white bg-white/10' : 'text-zinc-400'}`}
-                                        title="Service Timer Controls"
-                                    >
-                                        <Clock size={20} />
+                                    <div className="relative">
+                                        <button
+                                            onClick={() => setShowTimerSettings(!showTimerSettings)}
+                                            className={`p-2 hover:bg-white/10 rounded-full transition-colors ${showTimerSettings ? 'text-white bg-white/10' : 'text-zinc-400'}`}
+                                            title="Service Timer Controls"
+                                        >
+                                            <Clock size={20} />
+                                        </button>
                                         {showTimerSettings && (
                                             <>
                                                 <div className="fixed inset-0 z-[59]" onClick={() => setShowTimerSettings(false)} />
@@ -1517,7 +1580,7 @@ export default function DashboardPage() {
                                                 </div>
                                             </>
                                         )}
-                                    </button>
+                                    </div>
 
 
 
@@ -1580,7 +1643,7 @@ export default function DashboardPage() {
 
                             {/* PREVIEW CONTAINER */}
                             <div
-                                className="flex-1 flex items-center justify-center p-8 relative group overflow-y-auto rounded-b-2xl"
+                                className="flex-1 flex items-center justify-center p-8 relative group overflow-hidden rounded-b-2xl"
                                 style={{
                                     scrollbarWidth: 'thin',
                                     scrollbarColor: '#71717a #000000',
@@ -1592,22 +1655,30 @@ export default function DashboardPage() {
                                 <div className="absolute inset-0 bg-black/20 pointer-events-none" /> {/* Overlay for readability */}
                                 {activeItem ? (
                                     activeItem.version === 'MEDIA' ? (
-                                        <div className="text-center w-full h-full flex flex-col items-center justify-center relative z-10">
-                                            {activeItem.text?.startsWith('data:video') || activeItem.text?.endsWith('.mp4') || activeItem.text?.endsWith('.webm') ? (
-                                                <video
-                                                    src={activeItem.text}
-                                                    className="max-h-full max-w-full object-contain"
-                                                    autoPlay
-                                                    loop
-                                                    muted
-                                                />
-                                            ) : (
-                                                <img
-                                                    src={activeItem.text}
-                                                    alt={activeItem.reference}
-                                                    className="max-h-full max-w-full object-contain"
-                                                />
-                                            )}
+                                        <div className="text-center w-full h-full flex flex-col items-center justify-center relative z-10 overflow-hidden">
+                                            {(() => {
+                                                const mode = (activeItem as any).options?.imageMode || 'contain';
+                                                const isFillMode = mode === 'cover' || mode === 'stretch';
+                                                const objectFitClass = mode === 'cover' ? 'object-cover' : mode === 'stretch' ? 'object-fill' : 'object-contain';
+
+                                                return (activeItem.text?.startsWith('data:video') || activeItem.text?.endsWith('.mp4') || activeItem.text?.endsWith('.webm')) ? (
+                                                    <video
+                                                        src={activeItem.text}
+                                                        className={`max-w-full max-h-full ${isFillMode ? 'w-full h-full' : 'max-h-full'} ${objectFitClass} transition-transform duration-200`}
+                                                        style={{ transform: `scale(${(activeItem as any).options?.scale || 1})` }}
+                                                        autoPlay
+                                                        loop
+                                                        muted
+                                                    />
+                                                ) : (
+                                                    <img
+                                                        src={activeItem.text}
+                                                        alt={activeItem.reference}
+                                                        className={`max-w-full max-h-full ${isFillMode ? 'w-full h-full' : 'max-h-full'} ${objectFitClass} transition-transform duration-200`}
+                                                        style={{ transform: `scale(${(activeItem as any).options?.scale || 1})` }}
+                                                    />
+                                                );
+                                            })()}
                                         </div>
                                     ) : (
                                         <div
@@ -1623,13 +1694,18 @@ export default function DashboardPage() {
                                             {/* Reference (Top) */}
                                             {(currentTheme?.layout?.referencePosition === 'top' || !currentTheme?.layout) && (
                                                 <div className="opacity-90 mb-8 uppercase tracking-wider font-bold" style={{
-                                                    fontSize: `${0.6 * (currentTheme?.layout?.referenceScale || 1.5)} em`,
+                                                    fontSize: `${0.6 * (currentTheme?.layout?.referenceScale || 1.5)}em`,
                                                     textAlign: currentTheme?.styles.textAlign
                                                 }}>
-                                                    {activeItem.additionalVerses?.length
-                                                        ? `${activeItem.book} ${activeItem.chapter}:${activeItem.verseNum} -${activeItem.additionalVerses[activeItem.additionalVerses.length - 1].verseNum} `
-                                                        : activeItem.reference
-                                                    }
+                                                    <span style={{ color: currentTheme?.layout?.referenceColor || currentTheme?.styles.color }}>
+                                                        {activeItem.additionalVerses?.length
+                                                            ? `${activeItem.book} ${activeItem.chapter}:${activeItem.verseNum}-${activeItem.additionalVerses[activeItem.additionalVerses.length - 1].verseNum}`
+                                                            : activeItem.reference
+                                                        }
+                                                    </span>
+                                                    <span className="ml-2" style={{ color: currentTheme?.layout?.versionColor || currentTheme?.styles.color, opacity: 0.7 }}>
+                                                        [{activeItem.version}]
+                                                    </span>
                                                 </div>
                                             )}
 
@@ -1641,11 +1717,16 @@ export default function DashboardPage() {
                                                     justifyContent: currentTheme?.styles.textAlign === 'left' ? 'flex-start' : currentTheme?.styles.textAlign === 'right' ? 'flex-end' : 'center'
                                                 }}>
                                                     {(currentTheme?.layout?.showVerseNumbers !== false) && (
-                                                        <span className="opacity-60 font-mono text-xs mt-1">{activeItem.verseNum}</span>
+                                                        <span className="opacity-60 font-mono mt-1" style={{
+                                                            color: currentTheme?.layout?.verseNumberColor || currentTheme?.styles.color,
+                                                            fontSize: `${(currentTheme?.layout?.verseNumberScale || 0.5) * 100}%`
+                                                        }}>
+                                                            {activeItem.verseNum}
+                                                        </span>
                                                     )}
                                                     <span style={{
                                                         fontWeight: currentTheme?.styles.fontWeight,
-                                                        fontSize: '1.5rem', // Force smaller size for preview
+                                                        fontSize: calculateDashboardFontScale(activeItem.text, 1), // Dynamic sizing for dashboard
                                                         textShadow: currentTheme?.styles.textShadow,
                                                         lineHeight: 1.2
                                                     }} dangerouslySetInnerHTML={{ __html: renderFormattedText(activeItem.text) }} />
@@ -1659,11 +1740,16 @@ export default function DashboardPage() {
                                                         justifyContent: currentTheme?.styles.textAlign === 'left' ? 'flex-start' : currentTheme?.styles.textAlign === 'right' ? 'flex-end' : 'center'
                                                     }}>
                                                         {(currentTheme?.layout?.showVerseNumbers !== false) && (
-                                                            <span className="opacity-60 font-mono text-xs mt-1">{v.verseNum}</span>
+                                                            <span className="opacity-60 font-mono mt-1" style={{
+                                                                color: currentTheme?.layout?.verseNumberColor || currentTheme?.styles.color,
+                                                                fontSize: `${(currentTheme?.layout?.verseNumberScale || 0.5) * 100}%`
+                                                            }}>
+                                                                {v.verseNum}
+                                                            </span>
                                                         )}
                                                         <span style={{
                                                             fontWeight: currentTheme?.styles.fontWeight,
-                                                            fontSize: '1.5rem', // Force smaller size for preview
+                                                            fontSize: calculateDashboardFontScale(v.text, (activeItem.additionalVerses?.length || 0) + 1),
                                                             textShadow: currentTheme?.styles.textShadow,
                                                             lineHeight: 1.2
                                                         }} dangerouslySetInnerHTML={{ __html: renderFormattedText(v.text) }} />
@@ -1674,13 +1760,18 @@ export default function DashboardPage() {
                                             {/* Reference (Bottom) */}
                                             {currentTheme?.layout?.referencePosition === 'bottom' && (
                                                 <div className="opacity-90 mt-8 uppercase tracking-wider font-bold" style={{
-                                                    fontSize: `${0.6 * (currentTheme?.layout?.referenceScale || 1)} em`,
+                                                    fontSize: `${0.6 * (currentTheme?.layout?.referenceScale || 1.5)}em`,
                                                     textAlign: currentTheme?.styles.textAlign
                                                 }}>
-                                                    {activeItem.additionalVerses?.length
-                                                        ? `${activeItem.book} ${activeItem.chapter}:${activeItem.verseNum} -${activeItem.additionalVerses[activeItem.additionalVerses.length - 1].verseNum} `
-                                                        : activeItem.reference
-                                                    }
+                                                    <span style={{ color: currentTheme?.layout?.referenceColor || currentTheme?.styles.color }}>
+                                                        {activeItem.additionalVerses?.length
+                                                            ? `${activeItem.book} ${activeItem.chapter}:${activeItem.verseNum}-${activeItem.additionalVerses[activeItem.additionalVerses.length - 1].verseNum}`
+                                                            : activeItem.reference
+                                                        }
+                                                    </span>
+                                                    <span className="ml-2" style={{ color: currentTheme?.layout?.versionColor || currentTheme?.styles.color, opacity: 0.7 }}>
+                                                        [{activeItem.version}]
+                                                    </span>
                                                 </div>
                                             )}
                                         </div>
@@ -1692,7 +1783,7 @@ export default function DashboardPage() {
                                 {
                                     /* OVERLAY ACTIONS */
                                 }
-                                <div className="absolute inset-0 z-50 bg-black/80 flex items-center justify-center gap-4 opacity-0 group-hover:opacity-100 transition-opacity backdrop-blur-sm">
+                                <div className="absolute inset-0 z-50 bg-black/80 flex items-center justify-center gap-4 opacity-0 group-hover:opacity-100 transition-opacity backdrop-blur-sm pointer-events-none">
                                     <button
                                         onClick={() => {
                                             if ((window as any).electronAPI?.openProjectorWindow) {
@@ -1701,20 +1792,33 @@ export default function DashboardPage() {
                                                 window.open('/projector', '_blank', 'width=1280,height=720');
                                             }
                                         }}
-                                        className="px-6 py-2 bg-white text-black font-bold rounded-full hover:scale-105 transition-transform"
+                                        className="pointer-events-auto px-6 py-2 bg-white text-black font-bold rounded-full hover:scale-105 transition-transform"
                                     >
                                         Open Projector Window ↗
                                     </button>
                                 </div>
 
-                                {/* Floating Media Controls */}
-                                {activeItem?.text?.startsWith('data:video') && (
-                                    <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-[60] animate-in fade-in slide-in-from-bottom-2 duration-300">
-                                        <MediaControls
-                                            onAction={(action, value) => {
-                                                broadcast({ type: 'MEDIA_ACTION', payload: { action, value } });
-                                            }}
-                                        />
+                                {/* Floating Media Controls - Show for any MEDIA type (Video, Image, PDF Slide) */}
+                                {(activeItem?.version === 'MEDIA' || activeItem?.text?.startsWith('data:video')) && (
+                                    <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-[60] animate-in fade-in slide-in-from-bottom-2 duration-300 max-w-[90%] overflow-visible flex justify-center">
+                                        <div className="scale-90 origin-bottom">
+                                            <MediaControls
+                                                isVideo={activeItem?.text?.startsWith('data:video') || activeItem?.text?.match(/\.(mp4|webm|mov|ogg)(\?|$)/i) !== null}
+                                                onAction={(action, value) => {
+                                                    // Broadcast to Projector
+                                                    broadcast({ type: 'MEDIA_ACTION', payload: { action, value } });
+
+                                                    // Update Local Preview State immediately
+                                                    if (action === 'set_scale' || action === 'set_mode') {
+                                                        setActiveItem(prev => {
+                                                            if (!prev) return null;
+                                                            const key = action === 'set_scale' ? 'scale' : 'imageMode';
+                                                            return { ...prev, options: { ...(prev as any).options, [key]: value } } as DetectedItem;
+                                                        });
+                                                    }
+                                                }}
+                                            />
+                                        </div>
                                     </div>
                                 )}
                             </div>
@@ -1724,14 +1828,16 @@ export default function DashboardPage() {
                 </div> {/* End Grid */}
 
                 {/* Resizer Handle */}
-                {isLibraryOpen && (
-                    <div
-                        onMouseDown={handleMouseDown}
-                        className="h-4 -my-2 flex items-center justify-center cursor-row-resize z-50 group shrink-0 select-none"
-                    >
-                        <div className="w-24 h-1 bg-zinc-800 rounded-full group-hover:bg-indigo-500 transition-colors" />
-                    </div>
-                )}
+                {
+                    isLibraryOpen && (
+                        <div
+                            onMouseDown={handleMouseDown}
+                            className="h-4 -my-2 flex items-center justify-center cursor-row-resize z-50 group shrink-0 select-none"
+                        >
+                            <div className="w-24 h-1 bg-zinc-800 rounded-full group-hover:bg-indigo-500 transition-colors" />
+                        </div>
+                    )
+                }
 
                 {/* Resource Library (Bottom) */}
                 <div
@@ -1860,7 +1966,7 @@ export default function DashboardPage() {
                     </div>
                 </div>
 
-            </div>
+            </div >
 
             <OmniSearch
                 onGoLive={(item: any) => {
@@ -1936,48 +2042,50 @@ export default function DashboardPage() {
                 midi={midi}
             />
             {/* Update Banner */}
-            {updateStatus.type !== 'idle' && updateStatus.type !== 'error' && (
-                <div className="fixed bottom-4 right-4 bg-indigo-600 text-white p-4 rounded-xl shadow-2xl z-50 animate-in slide-in-from-bottom-5 border border-white/10 max-w-sm">
-                    <div className="flex items-start gap-4">
-                        <div className="p-2 bg-white/20 rounded-full">
-                            <Download size={24} className="animate-pulse" />
-                        </div>
-                        <div>
-                            <h4 className="font-bold text-sm">New Update Available</h4>
-                            <p className="text-xs text-indigo-200 mt-1">
-                                {updateStatus.type === 'available' ? `Version ${updateStatus.version} is available.` :
-                                    updateStatus.type === 'downloading' ? 'Downloading update...' : 'Update ready to install!'}
-                            </p>
+            {
+                updateStatus.type !== 'idle' && updateStatus.type !== 'error' && (
+                    <div className="fixed bottom-4 right-4 bg-indigo-600 text-white p-4 rounded-xl shadow-2xl z-50 animate-in slide-in-from-bottom-5 border border-white/10 max-w-sm">
+                        <div className="flex items-start gap-4">
+                            <div className="p-2 bg-white/20 rounded-full">
+                                <Download size={24} className="animate-pulse" />
+                            </div>
+                            <div>
+                                <h4 className="font-bold text-sm">New Update Available</h4>
+                                <p className="text-xs text-indigo-200 mt-1">
+                                    {updateStatus.type === 'available' ? `Version ${updateStatus.version} is available.` :
+                                        updateStatus.type === 'downloading' ? 'Downloading update...' : 'Update ready to install!'}
+                                </p>
 
-                            {updateStatus.type === 'available' && (
-                                <button
-                                    onClick={() => {
-                                        setUpdateStatus(prev => ({ ...prev, type: 'downloading' }));
-                                        (window as any).electronAPI.downloadUpdate();
-                                    }}
-                                    className="mt-3 w-full py-1.5 bg-white text-indigo-600 font-bold rounded text-xs hover:bg-indigo-50 transition-colors"
-                                >
-                                    Update Now
-                                </button>
-                            )}
-                            {updateStatus.type === 'ready' && (
-                                <button
-                                    onClick={() => (window as any).electronAPI.installUpdate()}
-                                    className="mt-3 w-full py-1.5 bg-green-500 text-white font-bold rounded text-xs hover:bg-green-600 transition-colors"
-                                >
-                                    Restart & Install
-                                </button>
-                            )}
+                                {updateStatus.type === 'available' && (
+                                    <button
+                                        onClick={() => {
+                                            setUpdateStatus(prev => ({ ...prev, type: 'downloading' }));
+                                            (window as any).electronAPI.downloadUpdate();
+                                        }}
+                                        className="mt-3 w-full py-1.5 bg-white text-indigo-600 font-bold rounded text-xs hover:bg-indigo-50 transition-colors"
+                                    >
+                                        Update Now
+                                    </button>
+                                )}
+                                {updateStatus.type === 'ready' && (
+                                    <button
+                                        onClick={() => (window as any).electronAPI.installUpdate()}
+                                        className="mt-3 w-full py-1.5 bg-green-500 text-white font-bold rounded text-xs hover:bg-green-600 transition-colors"
+                                    >
+                                        Restart & Install
+                                    </button>
+                                )}
+                            </div>
+                            <button
+                                onClick={() => setUpdateStatus({ type: 'idle' })}
+                                className="text-white/50 hover:text-white"
+                            >
+                                <X size={16} />
+                            </button>
                         </div>
-                        <button
-                            onClick={() => setUpdateStatus({ type: 'idle' })}
-                            className="text-white/50 hover:text-white"
-                        >
-                            <X size={16} />
-                        </button>
                     </div>
-                </div>
-            )}
-        </main >
+                )
+            }
+        </main>
     );
 }

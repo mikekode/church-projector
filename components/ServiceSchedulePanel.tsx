@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import {
     DndContext,
     closestCenter,
@@ -22,6 +23,8 @@ import { GripVertical, Music, BookOpen, Image, Play, Trash2, Eye, Upload, FileTe
 import { ScheduleItem, ServiceSchedule, loadSchedule, saveSchedule, createBlankSchedule } from '@/utils/scheduleManager';
 import { parseLyrics, extractTextFromFile, parsePresentationFile } from '@/utils/lyricsParser';
 import PreviewModal from './PreviewModal';
+import AdvancedSongEditor from './AdvancedSongEditor';
+import { ResourceItem } from '@/utils/resourceLibrary';
 
 interface ServiceScheduleProps {
     onGoLive: (item: ScheduleItem, slideIndex: number) => void;
@@ -190,6 +193,7 @@ export default function ServiceSchedulePanel({ onGoLive, schedule: controlledSch
     };
     const [activeItemId, setActiveItemId] = useState<string | null>(null);
     const [previewItem, setPreviewItem] = useState<ScheduleItem | null>(null);
+    const [editingItem, setEditingItem] = useState<ResourceItem | null>(null);
     const [isUploading, setIsUploading] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -433,7 +437,39 @@ export default function ServiceSchedulePanel({ onGoLive, schedule: controlledSch
                     }}
                     onUpdateItem={handleUpdateItem}
                     onGoLive={handlePreviewGoLive}
+                    onEdit={() => {
+                        // Upgrade ScheduleItem to ResourceItem for editor
+                        const resource: ResourceItem = {
+                            ...previewItem,
+                            category: previewItem.type as any,
+                            dateAdded: Date.now(),
+                            // Ensure meta exists if needed
+                            meta: previewItem.meta || {}
+                        };
+                        setEditingItem(resource);
+                        setPreviewItem(null);
+                    }}
                 />
+            )}
+
+            {/* Song Editor (for Schedule Items) */}
+            {editingItem && createPortal(
+                <div className="fixed inset-0 z-[99999] bg-black/90 backdrop-blur-md animate-in fade-in duration-300">
+                    <AdvancedSongEditor
+                        resource={editingItem}
+                        onSave={(updated) => {
+                            // Convert back to ScheduleItem (mostly compatible)
+                            const updatedScheduleItem: ScheduleItem = {
+                                ...updated,
+                                // Keep original ID if it was a schedule item
+                            };
+                            handleUpdateItem(updatedScheduleItem);
+                            setEditingItem(null);
+                        }}
+                        onCancel={() => setEditingItem(null)}
+                    />
+                </div>,
+                document.body
             )}
         </div>
     );

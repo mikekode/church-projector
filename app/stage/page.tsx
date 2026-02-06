@@ -1,27 +1,81 @@
 "use client";
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback, useLayoutEffect } from 'react';
 import { useBroadcastChannel } from '@/hooks/useBroadcast';
 import { Clock, ChevronRight, Music, BookOpen, Image, AlertCircle } from 'lucide-react';
 import { useLicense } from '@/hooks/useLicense';
 import DemoWatermark from '@/components/DemoWatermark';
+import { ProjectorTheme, DEFAULT_THEMES } from '@/utils/themes';
 
 /**
- * Calculate optimal font size class based on text length
- * Returns Tailwind classes for responsive font sizing
+ * Render formatted text with allowed HTML tags (b, i, font/span with color)
  */
-function getAutoSizeClasses(text: string | undefined): string {
-    const charCount = text?.length || 0;
+function renderFormattedText(text: string | undefined): string {
+    if (!text) return '';
+    let safe = text
+        .replace(/<b>/gi, '___BOLD_OPEN___')
+        .replace(/<\/b>/gi, '___BOLD_CLOSE___')
+        .replace(/<i>/gi, '___ITALIC_OPEN___')
+        .replace(/<\/i>/gi, '___ITALIC_CLOSE___')
+        .replace(/<font color="([^"]+)">/gi, (_, color) => '___FONT_' + color + '___')
+        .replace(/<\/font>/gi, '___FONT_CLOSE___')
+        .replace(/<span style="color:([^"]+)">/gi, (_, color) => '___SPAN_' + color + '___')
+        .replace(/<\/span>/gi, '___SPAN_CLOSE___');
 
-    // More granular sizing for stage display
-    if (charCount < 80) return 'text-5xl md:text-6xl lg:text-7xl';
-    if (charCount < 150) return 'text-4xl md:text-5xl lg:text-6xl';
-    if (charCount < 250) return 'text-3xl md:text-4xl lg:text-5xl';
-    if (charCount < 350) return 'text-2xl md:text-3xl lg:text-4xl';
-    if (charCount < 500) return 'text-xl md:text-2xl lg:text-3xl';
-    if (charCount < 700) return 'text-lg md:text-xl lg:text-2xl';
-    if (charCount < 900) return 'text-base md:text-lg lg:text-xl';
-    return 'text-sm md:text-base lg:text-lg';
+    safe = safe
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+
+    safe = safe
+        .replace(/___BOLD_OPEN___/g, '<b>')
+        .replace(/___BOLD_CLOSE___/g, '</b>')
+        .replace(/___ITALIC_OPEN___/g, '<i>')
+        .replace(/___ITALIC_CLOSE___/g, '</i>')
+        .replace(/___FONT_([^_]+)___/g, '<span style="color:$1">')
+        .replace(/___FONT_CLOSE___/g, '</span>')
+        .replace(/___SPAN_([^_]+)___/g, '<span style="color:$1">')
+        .replace(/___SPAN_CLOSE___/g, '</span>');
+
+    safe = safe.replace(/\n/g, '<br>');
+    return safe;
+}
+
+/**
+ * Calculate optimal font size based on text length and optional verse count
+ * Returns a multiplier to apply to the base font size
+ */
+function calculateFontScale(text: string | undefined, verseCount: number = 1): number {
+    if (!text) return 1;
+    const charCount = text.length;
+
+    // Stage display scale thresholds (more generous than projector for visibility)
+    let scale = 1;
+
+    if (verseCount === 1) {
+        if (charCount < 100) scale = 1;
+        else if (charCount < 200) scale = 0.95;
+        else if (charCount < 300) scale = 0.85;
+        else if (charCount < 450) scale = 0.75;
+        else if (charCount < 600) scale = 0.65;
+        else if (charCount < 800) scale = 0.55;
+        else scale = 0.45;
+    } else if (verseCount === 2) {
+        if (charCount < 250) scale = 0.9;
+        else if (charCount < 400) scale = 0.8;
+        else if (charCount < 600) scale = 0.7;
+        else if (charCount < 800) scale = 0.6;
+        else scale = 0.5;
+    } else {
+        // 3+ verses
+        if (charCount < 350) scale = 0.8;
+        else if (charCount < 550) scale = 0.7;
+        else if (charCount < 750) scale = 0.6;
+        else if (charCount < 1000) scale = 0.5;
+        else scale = 0.42;
+    }
+
+    return scale;
 }
 
 interface StageContent {
@@ -34,6 +88,10 @@ interface StageContent {
     nextSlide?: string;
     slideIndex?: number;
     totalSlides?: number;
+    scale?: number;
+    imageMode?: 'contain' | 'cover' | 'stretch';
+    verses?: { verseNum: number; text: string }[];
+    background?: string;
 }
 
 export default function StageDisplayPage() {
@@ -48,11 +106,140 @@ export default function StageDisplayPage() {
     const [elapsedTime, setElapsedTime] = useState('00:00:00');
     // RESTORED STATE
     const [notes, setNotes] = useState('');
+    const [timerAlert, setTimerAlert] = useState<string | null>(null);
     const [showHint, setShowHint] = useState(true);
     const [isFullscreen, setIsFullscreen] = useState(false);
+    const [activeTheme, setActiveTheme] = useState<ProjectorTheme>(DEFAULT_THEMES[0]);
+
+    // Video and Layout References
+    const videoRef = useRef<HTMLVideoElement>(null);
+    const containerRef = useRef<HTMLDivElement>(null);
+    const contentRef = useRef<HTMLDivElement>(null);
+    const [fitScale, setFitScale] = useState(1);
 
     // Broadcast Subscription
-    const { subscribe, broadcast } = useBroadcastChannel('projector_channel');
+    const { broadcast } = useBroadcastChannel('projector_channel');
+    const { subscribe } = useBroadcastChannel('projector_channel', (message: any) => {
+        if (message.type === 'SHOW_VERSE') {
+            setContent({
+                type: 'verse',
+                reference: message.payload.reference,
+                text: message.payload.text,
+                version: message.payload.version,
+                verses: message.payload.verses,
+            });
+            setFitScale(1); // Reset scale on new content
+        } else if (message.type === 'SHOW_CONTENT') {
+            const payload = message.payload;
+            if (payload.type === 'song') {
+                setContent({
+                    type: 'song',
+                    title: payload.title,
+                    currentSlide: payload.body,
+                    nextSlide: payload.nextSlide,
+                    slideIndex: payload.slideIndex,
+                    totalSlides: payload.totalSlides,
+                    background: payload.background,
+                });
+                setFitScale(1); // Reset scale on new content
+            } else if (payload.type === 'media') {
+                setContent({
+                    type: 'media',
+                    title: payload.title,
+                    currentSlide: payload.body,
+                    scale: payload.options?.scale || 1,
+                    imageMode: payload.options?.imageMode || 'contain'
+                });
+            }
+        } else if (message.type === 'CLEAR') {
+            setContent({ type: 'clear' });
+        } else if (message.type === 'STAGE_NOTES') {
+            setNotes(message.payload.notes || '');
+        } else if (message.type === 'MEDIA_ACTION') {
+            // Sync Media Controls
+            const { action, value } = message.payload;
+            if (videoRef.current) {
+                switch (action) {
+                    case 'play':
+                        videoRef.current.play().catch(console.error);
+                        break;
+                    case 'pause':
+                        videoRef.current.pause();
+                        break;
+                    case 'toggle_play':
+                        if (videoRef.current.paused) videoRef.current.play().catch(console.error);
+                        else videoRef.current.pause();
+                        break;
+                    case 'seek':
+                        videoRef.current.currentTime += value;
+                        break;
+                    case 'set_time':
+                        videoRef.current.currentTime = value;
+                        break;
+                    case 'rate':
+                        videoRef.current.playbackRate = value;
+                        break;
+                    case 'set_mode':
+                        setContent(prev => {
+                            if (prev && prev.type === 'media') {
+                                return { ...prev, imageMode: value };
+                            }
+                            return prev;
+                        });
+                        break;
+                }
+            }
+        }
+        // TIMER CONTROLS
+        else if (message.type === 'TIMER_ACTION') {
+            const { action, value, mode, alert } = message.payload;
+            if (action === 'set') {
+                setTimerMode(mode || 'countup');
+                setTargetSeconds(value || 0);
+                setElapsedTime(
+                    new Date((value || 0) * 1000).toISOString().substr(11, 8)
+                );
+                setIsRunning(false);
+                setStartTime(null);
+                setPausedAt(null);
+                setTimerAlert(alert || null);
+            } else if (action === 'start') {
+                if (!isRunning) {
+                    const now = Date.now();
+                    // Resume or Start
+                    if (pausedAt && startTime) {
+                        // Shift start time forward by pause duration
+                        const pauseDuration = now - pausedAt;
+                        setStartTime(startTime + pauseDuration);
+                    } else {
+                        setStartTime(now);
+                    }
+                    setIsRunning(true);
+                    setPausedAt(null);
+                }
+            } else if (action === 'pause') {
+                if (isRunning) {
+                    setIsRunning(false);
+                    setPausedAt(Date.now());
+                }
+            } else if (action === 'reset') {
+                setIsRunning(false);
+                setStartTime(null);
+                setPausedAt(null);
+                setElapsedTime('00:00:00');
+                if (timerMode === 'countdown') {
+                    const total = targetSeconds;
+                    const h = Math.floor(total / 3600);
+                    const m = Math.floor((total % 3600) / 60);
+                    const s = total % 60;
+                    setElapsedTime(`${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`);
+                }
+            }
+        } else if (message.type === 'APPLY_THEME') {
+            console.log('[Stage] Applying new theme:', message.payload.name);
+            setActiveTheme(message.payload);
+        }
+    });
 
     // Sync Status to Dashboard
     useEffect(() => {
@@ -64,7 +251,7 @@ export default function StageDisplayPage() {
                 elapsedTime // Optional sync
             }
         });
-    }, [isRunning, pausedAt, broadcast]);
+    }, [isRunning, pausedAt, broadcast, elapsedTime]);
 
     // Clock Update (Time of Day)
     useEffect(() => {
@@ -107,88 +294,6 @@ export default function StageDisplayPage() {
 
     // Cleanup interval just in case
 
-    // Subscribe
-    useEffect(() => {
-        const unsubscribe = subscribe((message: any) => {
-            if (message.type === 'SHOW_VERSE') {
-                setContent({
-                    type: 'verse',
-                    reference: message.payload.reference,
-                    text: message.payload.text,
-                    version: message.payload.version,
-                });
-            } else if (message.type === 'SHOW_CONTENT') {
-                const payload = message.payload;
-                if (payload.type === 'song') {
-                    setContent({
-                        type: 'song',
-                        title: payload.title,
-                        currentSlide: payload.body,
-                        nextSlide: payload.nextSlide,
-                        slideIndex: payload.slideIndex,
-                        totalSlides: payload.totalSlides,
-                    });
-                } else if (payload.type === 'media') {
-                    setContent({
-                        type: 'media',
-                        title: payload.title,
-                        currentSlide: payload.body,
-                    });
-                }
-            } else if (message.type === 'CLEAR') {
-                setContent({ type: 'clear' });
-            } else if (message.type === 'STAGE_NOTES') {
-                setNotes(message.payload.notes || '');
-            }
-            // TIMER CONTROLS
-            else if (message.type === 'TIMER_ACTION') {
-                const { action, value, mode } = message.payload;
-                if (action === 'set') {
-                    setTimerMode(mode || 'countup');
-                    setTargetSeconds(value || 0);
-                    setElapsedTime(
-                        new Date((value || 0) * 1000).toISOString().substr(11, 8)
-                    );
-                    setIsRunning(false);
-                    setStartTime(null);
-                    setPausedAt(null);
-                } else if (action === 'start') {
-                    if (!isRunning) {
-                        const now = Date.now();
-                        // Resume or Start
-                        if (pausedAt && startTime) {
-                            // Shift start time forward by pause duration
-                            const pauseDuration = now - pausedAt;
-                            setStartTime(startTime + pauseDuration);
-                        } else {
-                            setStartTime(now);
-                        }
-                        setIsRunning(true);
-                        setPausedAt(null);
-                    }
-                } else if (action === 'pause') {
-                    if (isRunning) {
-                        setIsRunning(false);
-                        setPausedAt(Date.now());
-                    }
-                } else if (action === 'reset') {
-                    setIsRunning(false);
-                    setStartTime(null);
-                    setPausedAt(null);
-                    setElapsedTime('00:00:00');
-                    if (timerMode === 'countdown') {
-                        const total = targetSeconds;
-                        const h = Math.floor(total / 3600);
-                        const m = Math.floor((total % 3600) / 60);
-                        const s = total % 60;
-                        setElapsedTime(`${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`);
-                    }
-                }
-            }
-        });
-        return unsubscribe;
-    }, [subscribe, isRunning, startTime, pausedAt, targetSeconds, timerMode]);
-
     // Fullscreen toggle
     const toggleFullscreen = () => {
         if (!document.fullscreenElement) {
@@ -209,19 +314,61 @@ export default function StageDisplayPage() {
         });
     };
 
+    // Resilient Auto-Fitting Logic
+    useLayoutEffect(() => {
+        if (!containerRef.current || !contentRef.current || !content) return;
+
+        const checkFit = () => {
+            const container = containerRef.current!;
+            const contentEl = contentRef.current!;
+
+            // Allow small buffer (20px) to prevent scroll flickering
+            const isOverflowing = contentEl.scrollHeight > container.clientHeight - 20;
+
+            if (isOverflowing && fitScale > 0.2) {
+                // Iteratively shrink by a larger step if way off, smaller if close
+                const overflowArea = contentEl.scrollHeight / container.clientHeight;
+                const step = overflowArea > 1.3 ? 0.08 : 0.03;
+                setFitScale(prev => Math.max(0.2, prev - step));
+            }
+        };
+
+        // Small delay to ensure styles are applied
+        const timer = setTimeout(checkFit, 30);
+        return () => clearTimeout(timer);
+    }, [content, fitScale, activeTheme]);
+
     return (
         <div
-            className="h-screen w-screen bg-black text-white font-sans overflow-hidden select-none"
+            className="h-screen w-screen text-white font-sans overflow-hidden select-none relative"
             onDoubleClick={toggleFullscreen}
+            style={{
+                backgroundColor: activeTheme.background?.type === 'color' ? activeTheme.background.value : 'black',
+                backgroundImage: activeTheme.background?.type === 'image' ? `url(${activeTheme.background.value})` :
+                    activeTheme.background?.type === 'gradient' ? activeTheme.background.value : 'none',
+                backgroundSize: 'cover',
+                backgroundPosition: 'center',
+                transition: 'all 0.5s ease-in-out'
+            }}
         >
+            {/* Background Overlay */}
+            {activeTheme.background?.overlayOpacity > 0 && (
+                <div
+                    className="absolute inset-0 z-0"
+                    style={{
+                        backgroundColor: `rgba(0,0,0,${activeTheme.background.overlayOpacity})`,
+                        backdropFilter: activeTheme.background.blur ? `blur(${activeTheme.background.blur}px)` : 'none'
+                    }}
+                />
+            )}
             {/* Top Bar - Clock & Timer */}
-            <div className="fixed top-0 left-0 right-0 bg-zinc-900/90 backdrop-blur border-b border-white/10 px-6 py-4 flex justify-between items-center z-50">
+            <div className="fixed top-0 left-0 right-0 bg-zinc-900/80 backdrop-blur-md border-b border-white/10 px-6 py-4 flex justify-between items-center z-50">
                 <div className="flex items-center gap-8">
                     {/* Current Time */}
                     <div className="text-center">
                         <p className="text-xs text-zinc-500 uppercase tracking-wider">Current Time</p>
                         <p className="text-3xl font-mono font-bold text-white">
-                            {currentTime ? formatTime(currentTime) : '--:--:--'}
+                            {currentTime ? formatTime(currentTime) : '--:----'}
                         </p>
                     </div>
 
@@ -264,28 +411,133 @@ export default function StageDisplayPage() {
             </div>
 
             {/* Main Content Area */}
-            <div className="pt-24 pb-8 px-8 flex-1 h-full flex flex-col overflow-hidden">
+            <div ref={containerRef} className="pt-24 pb-8 px-8 flex-1 h-full flex flex-col overflow-hidden relative z-10">
                 {/* Current Content - Large Display */}
-                <div className="flex-1 flex items-center justify-center">
+                <div
+                    ref={contentRef}
+                    className="flex-1 flex items-center justify-center w-full"
+                    style={{
+                        fontSize: activeTheme.styles.fontSize,
+                        transform: `scale(${fitScale})`,
+                        transformOrigin: 'center center',
+                    }}
+                >
                     {content?.type === 'verse' && (
-                        <div className="text-center max-w-5xl px-4">
-                            <p className="text-lg text-indigo-400 font-semibold mb-4 tracking-wide">
-                                {content.reference} • {content.version}
+                        <div
+                            className="text-center max-w-7xl w-full px-4 flex flex-col"
+                            style={{
+                                alignItems: activeTheme.styles.alignItems || 'center',
+                                justifyContent: activeTheme.styles.justifyContent || 'center',
+                            }}
+                        >
+                            <p
+                                className="font-bold mb-4 tracking-wide uppercase"
+                                style={{
+                                    fontFamily: activeTheme.styles.fontFamily,
+                                    color: activeTheme.layout?.referenceColor || activeTheme.styles.color,
+                                    fontSize: `${0.6 * (activeTheme.layout?.referenceScale || 1)}em`,
+                                    textAlign: activeTheme.styles.textAlign
+                                }}
+                            >
+                                {content.reference}
+                                {content.version && (
+                                    <span className="ml-2 opacity-70" style={{ color: activeTheme.layout?.versionColor || activeTheme.layout?.referenceColor || activeTheme.styles.color }}>
+                                        [{content.version}]
+                                    </span>
+                                )}
                             </p>
-                            <p className={`font-bold leading-tight transition-all duration-300 ${getAutoSizeClasses(content.text)}`}>
-                                {content.text}
-                            </p>
+                            <div
+                                className={`font-bold leading-tight transition-all duration-300 w-full`}
+                                style={{
+                                    fontFamily: activeTheme.styles.fontFamily,
+                                    color: activeTheme.styles.color === '#ffffff' ? 'white' : activeTheme.styles.color,
+                                    textShadow: activeTheme.styles.textShadow || '0 2px 4px rgba(0,0,0,0.5)',
+                                    textTransform: activeTheme.styles.textTransform,
+                                    letterSpacing: activeTheme.styles.letterSpacing,
+                                }}
+                            >
+                                {content.verses && content.verses.length > 1 ? (
+                                    (() => {
+                                        const totalText = content.verses.map(v => v.text).join(' ');
+                                        const fontScale = calculateFontScale(totalText, content.verses.length);
+                                        return (
+                                            <div className="space-y-4 w-full">
+                                                {content.verses.map((v, idx) => (
+                                                    <div key={idx} className="flex items-start gap-4" style={{ justifyContent: activeTheme.styles.textAlign === 'center' ? 'center' : activeTheme.styles.textAlign === 'right' ? 'flex-end' : 'flex-start' }}>
+                                                        {(activeTheme.layout?.showVerseNumbers !== false) && (
+                                                            <span className="opacity-60 font-mono mt-1 flex-shrink-0" style={{
+                                                                color: activeTheme.layout?.verseNumberColor || activeTheme.styles.color,
+                                                                fontSize: `${(activeTheme.layout?.verseNumberScale || 0.5) * 100}%`
+                                                            }}>
+                                                                {v.verseNum}
+                                                            </span>
+                                                        )}
+                                                        <div
+                                                            className="text-left transition-all duration-300"
+                                                            style={{ fontSize: `${fontScale}em` }}
+                                                            dangerouslySetInnerHTML={{ __html: renderFormattedText(v.text) }}
+                                                        />
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        );
+                                    })()
+                                ) : (
+                                    (() => {
+                                        const fontScale = calculateFontScale(content.text, 1);
+                                        return (
+                                            <div className="flex items-start gap-4" style={{ justifyContent: activeTheme.styles.textAlign === 'center' ? 'center' : activeTheme.styles.textAlign === 'right' ? 'flex-end' : 'flex-start' }}>
+                                                {(activeTheme.layout?.showVerseNumbers !== false) && content.reference && (
+                                                    <span className="opacity-60 font-mono mt-2 flex-shrink-0" style={{
+                                                        color: activeTheme.layout?.verseNumberColor || activeTheme.styles.color,
+                                                        fontSize: `${(activeTheme.layout?.verseNumberScale || 0.5) * 100}%`
+                                                    }}>
+                                                        {content.reference.split(':').pop()?.trim()}
+                                                    </span>
+                                                )}
+                                                <div
+                                                    className="transition-all duration-300"
+                                                    style={{ fontSize: `${fontScale}em` }}
+                                                    dangerouslySetInnerHTML={{ __html: renderFormattedText(content.text) }}
+                                                />
+                                            </div>
+                                        );
+                                    })()
+                                )}
+                            </div>
                         </div>
                     )}
 
                     {content?.type === 'song' && (
-                        <div className="text-center max-w-5xl w-full px-4">
-                            <p className="text-lg text-purple-400 font-semibold mb-4 tracking-wide">
+                        <div
+                            className="text-center max-w-7xl w-full px-4"
+                            style={{
+                                alignItems: activeTheme.styles.alignItems || 'center',
+                                justifyContent: activeTheme.styles.justifyContent || 'center',
+                            }}
+                        >
+                            <p
+                                className="font-semibold mb-4 tracking-wide uppercase"
+                                style={{
+                                    color: activeTheme.layout?.referenceColor || 'rgb(192 132 252)' /* purple-400 fallback */,
+                                    fontSize: `${0.6 * (activeTheme.layout?.referenceScale || 1)}em`
+                                }}
+                            >
                                 {content.title} • Slide {(content.slideIndex || 0) + 1}/{content.totalSlides || 1}
                             </p>
-                            <p className={`font-bold leading-tight whitespace-pre-line transition-all duration-300 ${getAutoSizeClasses(content.currentSlide)}`}>
-                                {content.currentSlide}
-                            </p>
+                            <p
+                                className={`font-bold leading-tight transition-all duration-300`}
+                                style={{
+                                    fontFamily: activeTheme.styles.fontFamily,
+                                    color: activeTheme.styles.color === '#ffffff' ? 'white' : activeTheme.styles.color,
+                                    textShadow: activeTheme.styles.textShadow || '0 2px 4px rgba(0,0,0,0.5)',
+                                    textTransform: activeTheme.styles.textTransform,
+                                    letterSpacing: activeTheme.styles.letterSpacing,
+                                    textAlign: activeTheme.styles.textAlign,
+                                    fontSize: `${calculateFontScale(content.currentSlide, 1)}em`
+                                }}
+                                dangerouslySetInnerHTML={{ __html: renderFormattedText(content.currentSlide) }}
+                            />
 
                             {/* Next Slide Preview */}
                             {content.nextSlide && (
@@ -294,18 +546,49 @@ export default function StageDisplayPage() {
                                         <ChevronRight size={20} />
                                         <span className="text-sm uppercase tracking-wider">Next</span>
                                     </div>
-                                    <p className={`text-zinc-400 whitespace-pre-line transition-all duration-300 ${getAutoSizeClasses(content.nextSlide)}`} style={{ fontSize: '60%' }}>
-                                        {content.nextSlide}
-                                    </p>
+                                    <p
+                                        className={`text-zinc-400 transition-all duration-300`}
+                                        style={{ fontSize: `${calculateFontScale(content.nextSlide, 1) * 0.6}em` }}
+                                        dangerouslySetInnerHTML={{ __html: renderFormattedText(content.nextSlide) }}
+                                    />
                                 </div>
                             )}
                         </div>
                     )}
 
                     {content?.type === 'media' && (
-                        <div className="text-center">
-                            <p className="text-xl text-amber-400 font-semibold">{content.title}</p>
-                            <p className="text-3xl text-zinc-400 mt-4">Media displayed on projector</p>
+                        <div className="w-full h-full flex items-center justify-center p-8">
+                            {(() => {
+                                const mediaUrl = content.text || content.currentSlide;
+                                const isVideo = mediaUrl?.match(/\.(mp4|webm|mov|ogg)(\?|$)/i) ||
+                                    mediaUrl?.startsWith('data:video/') ||
+                                    mediaUrl?.startsWith('blob:');
+
+                                const mode = content.imageMode || 'contain';
+                                const isFillMode = mode === 'cover' || mode === 'stretch';
+                                const objectFitClass = mode === 'cover' ? 'object-cover' : mode === 'stretch' ? 'object-fill' : 'object-contain';
+
+                                return isVideo ? (
+                                    <video
+                                        key={mediaUrl}
+                                        ref={videoRef}
+                                        src={mediaUrl}
+                                        className={`max-w-full max-h-full ${isFillMode ? 'w-full h-full' : 'max-h-[70vh]'} ${objectFitClass} rounded-lg shadow-2xl border border-white/10 transition-all duration-300`}
+                                        style={{ transform: `scale(${content.scale || 1})` }}
+                                        autoPlay
+                                        muted
+                                        loop
+                                        playsInline
+                                    />
+                                ) : (
+                                    <img
+                                        src={mediaUrl}
+                                        alt={content.title}
+                                        className={`max-w-full max-h-full ${isFillMode ? 'w-full h-full' : 'max-h-[70vh]'} ${objectFitClass} rounded-lg shadow-2xl border border-white/10 transition-all duration-300`}
+                                        style={{ transform: `scale(${content.scale || 1})` }}
+                                    />
+                                );
+                            })()}
                         </div>
                     )}
 

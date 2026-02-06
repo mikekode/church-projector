@@ -1,10 +1,12 @@
 import { useState, useEffect, useRef } from 'react';
-import { saveResource, getResources, deleteResource, ResourceItem, saveCollection, getCollections, deleteCollection, ResourceCollection, saveTheme, getThemes, deleteTheme } from '@/utils/resourceLibrary';
+import { createPortal } from 'react-dom';
+import { ResourceItem, saveResource, getResources, deleteResource, getCollections, saveCollection, deleteCollection, ResourceCollection, getThemes, saveTheme, deleteTheme, ProjectorTheme } from '@/utils/resourceLibrary';
+import AdvancedSongEditor from './AdvancedSongEditor';
 import { getBibleBooks, getChapterVerseCount, lookupVerseAsync, SUPPORTED_VERSIONS } from '@/utils/bible';
-import { DEFAULT_THEMES, GOOGLE_FONTS, ProjectorTheme } from '@/utils/themes';
+import { DEFAULT_THEMES, GOOGLE_FONTS, DEFAULT_LAYOUT } from '@/utils/themes';
 import { ScheduleItem } from '@/utils/scheduleManager';
 import { extractTextFromFile, parseLyrics, isCcliCopy, parseCcliCopy, parsePresentationFile } from '@/utils/lyricsParser';
-import { Search, Music, Monitor, FileText, Image as ImageIcon, Book, Plus, Play, Trash2, Folder, FolderPlus, X, Video, Check, Eye, ImagePlus } from 'lucide-react';
+import { Search, Music, Monitor, FileText, Image as ImageIcon, Book, Plus, Play, Trash2, Folder, FolderPlus, X, Video, Check, Eye, ImagePlus, Bold, Italic } from 'lucide-react';
 import PreviewModal from './PreviewModal';
 import SongImportModal from './SongImportModal';
 import { MOTION_BACKGROUNDS } from '@/utils/motionBackgrounds';
@@ -293,7 +295,7 @@ export default function ResourceLibraryPanel({
 
                 const type = file.type.startsWith('image/') ? 'media' :
                     file.type.startsWith('video/') ? 'media' :
-                        isDoc ? 'song' : 'song';
+                        isDoc ? 'song' : 'song'; // Default to song for unknown text types
 
                 let newItem: ResourceItem;
 
@@ -340,7 +342,7 @@ export default function ResourceLibraryPanel({
             }
             await loadData();
         } catch (err) {
-            console.error(err);
+            console.error("[Upload] Error:", err);
         } finally {
             setIsUploading(false);
             if (fileInputRef.current) fileInputRef.current.value = '';
@@ -371,59 +373,9 @@ export default function ResourceLibraryPanel({
 
     // Resource Editing State
     const [editingResource, setEditingResource] = useState<ResourceItem | null>(null);
-    const [editText, setEditText] = useState('');
 
     const openEditModal = (res: ResourceItem) => {
         setEditingResource(res);
-        // Combine slides back into text for editing
-        setEditText(res.slides.map(s => s.content).join('\n\n'));
-    };
-
-    const handleSaveResourceEdit = async () => {
-        if (!editingResource) return;
-
-        let newSlides: any[] = [];
-        let newMeta = { ...editingResource.meta };
-        let newTitle = editingResource.title;
-
-        // Check for Smart Parsing (CCLI / SongSelect)
-        if (isCcliCopy(editText)) {
-            const { slides, meta } = parseCcliCopy(editText);
-            newSlides = slides;
-
-            // Update metadata if found
-            if (meta.author) newMeta.author = meta.author;
-            if (meta.ccliNumber) newMeta.ccli = meta.ccliNumber;
-            // Only update title if the current title is placeholder or generic
-            if (meta.title && (newTitle.startsWith('New Song') || newTitle.includes('Unknown'))) {
-                newTitle = meta.title;
-            }
-        } else {
-            // Standard Parser
-            newSlides = parseLyrics(editText);
-        }
-
-        // Fallback if parser returns empty (shouldn't happen if text exists)
-        if (newSlides.length === 0 && editText.trim()) {
-            newSlides = editText.split(/\n\n+/).map((txt, i) => ({
-                id: String(i + 1),
-                content: txt.trim(),
-                label: `Slide ${i + 1} `
-            }));
-        }
-
-        const updatedRes: ResourceItem = {
-            ...editingResource,
-            title: newTitle,
-            slides: newSlides,
-            meta: newMeta,
-            dateAdded: Date.now()
-        };
-
-        await saveResource(updatedRes);
-        await loadData();
-        setEditingResource(null);
-        setEditText('');
     };
 
     const renderCard = (resource: ResourceItem) => {
@@ -439,6 +391,15 @@ export default function ResourceLibraryPanel({
                 <div className="flex-1 bg-zinc-950/50 relative overflow-hidden">
                     {typeof resource.meta?.background === 'object' && resource.meta.background.type === 'image' ? (
                         <div className="absolute inset-0 opacity-50 bg-cover bg-center" style={{ backgroundImage: `url(${resource.meta.background.value})` }} />
+                    ) : resource.slides[0]?.content?.startsWith('data:video') || resource.slides[0]?.content?.endsWith('.mp4') || resource.slides[0]?.content?.endsWith('.webm') ? (
+                        <video
+                            src={resource.slides[0].content}
+                            className="absolute inset-0 w-full h-full object-cover"
+                            muted
+                            loop
+                            onMouseEnter={(e) => (e.target as HTMLVideoElement).play()}
+                            onMouseLeave={(e) => { (e.target as HTMLVideoElement).pause(); (e.target as HTMLVideoElement).currentTime = 0; }}
+                        />
                     ) : resource.slides[0]?.content?.startsWith('data:image') ? (
                         <div className="absolute inset-0 bg-cover bg-center" style={{ backgroundImage: `url(${resource.slides[0].content})` }} />
                     ) : (
@@ -468,13 +429,15 @@ export default function ResourceLibraryPanel({
                                 >
                                     <Plus size={14} />
                                 </button>
-                                <button
-                                    onClick={(e) => { e.stopPropagation(); openEditModal(resource); }}
-                                    className="p-2 bg-white/10 hover:bg-zinc-600 rounded-full text-white hover:scale-110 transition-all backdrop-blur-md"
-                                    title="Edit"
-                                >
-                                    <FileText size={14} />
-                                </button>
+                                {resource.type === 'song' && (
+                                    <button
+                                        onClick={(e) => { e.stopPropagation(); openEditModal(resource); }}
+                                        className="p-2 bg-white/10 hover:bg-zinc-600 rounded-full text-white hover:scale-110 transition-all backdrop-blur-md"
+                                        title="Edit"
+                                    >
+                                        <FileText size={14} />
+                                    </button>
+                                )}
                                 <button
                                     onClick={(e) => handleDelete(resource.id, e)}
                                     className="p-2 bg-white/10 hover:bg-red-500 rounded-full text-white hover:scale-110 transition-all backdrop-blur-md"
@@ -526,36 +489,7 @@ export default function ResourceLibraryPanel({
         )
     };
 
-    const renderEditModal = () => (
-        editingResource ? (
-            <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
-                <div className="bg-zinc-900 border border-white/10 rounded-2xl w-full max-w-2xl shadow-2xl flex flex-col max-h-[90vh]">
-                    <div className="p-4 border-b border-white/10 flex justify-between items-center bg-zinc-950/50 rounded-t-2xl">
-                        <h3 className="font-bold text-lg text-white">Edit Song: {editingResource.title}</h3>
-                        <button onClick={() => setEditingResource(null)} className="text-zinc-500 hover:text-white"><X size={20} /></button>
-                    </div>
-                    <div className="p-6 flex-1 overflow-y-auto">
-                        <div className="space-y-4">
-                            <div>
-                                <label className="text-xs font-bold text-zinc-500 uppercase mb-2 block">Content (Lyrics)</label>
-                                <p className="text-[10px] text-zinc-400 mb-2">Separate slides with double newlines (Enter key twice).</p>
-                                <textarea
-                                    value={editText}
-                                    onChange={(e) => setEditText(e.target.value)}
-                                    className="w-full h-96 bg-zinc-950 border border-white/10 rounded-xl p-4 text-sm font-mono leading-relaxed text-zinc-300 focus:outline-none focus:border-indigo-500 resize-none"
-                                    placeholder="Paste lyrics here..."
-                                />
-                            </div>
-                        </div>
-                    </div>
-                    <div className="p-4 border-t border-white/10 bg-zinc-950/50 flex justify-end gap-3 rounded-b-2xl">
-                        <button onClick={() => setEditingResource(null)} className="px-4 py-2 rounded text-sm font-bold text-zinc-400 hover:text-white transition-colors">Cancel</button>
-                        <button onClick={handleSaveResourceEdit} className="px-6 py-2 rounded bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-bold shadow-lg shadow-indigo-500/20">Save Changes</button>
-                    </div>
-                </div>
-            </div>
-        ) : null
-    );
+
 
 
     const handleAddNew = () => {
@@ -570,7 +504,6 @@ export default function ResourceLibraryPanel({
                 dateAdded: Date.now(),
                 meta: { author: '', ccli: '' }
             });
-            setEditText('');
         } else {
             fileInputRef.current?.click();
         }
@@ -580,6 +513,7 @@ export default function ResourceLibraryPanel({
         saveResource(song);
         setResources(prev => [song, ...prev]);
         setIsImportModalOpen(false);
+        setEditingResource(song);
     };
 
     const renderAddCard = () => (
@@ -817,7 +751,8 @@ export default function ResourceLibraryPanel({
     };
 
     const handleSaveTheme = async (theme: ProjectorTheme) => {
-        const themeToSave = { ...theme };
+        // Deep copy ensure no reactive state persists in IndexedDB record
+        const themeToSave = JSON.parse(JSON.stringify(theme));
 
         let createdNew = false;
         // If it's a built-in theme (not marked custom), Force-Clone it to a new ID
@@ -835,14 +770,16 @@ export default function ResourceLibraryPanel({
             await loadData();
 
             // UX Improvement: Immediately select/apply the new theme so user sees results
+            // Find the freshly loaded theme from customThemes to ensure we have the DB version
             onApplyTheme?.(themeToSave);
 
             if (createdNew) {
-                alert(`Theme saved as new custom theme: "${themeToSave.name}"`);
+                alert(`Theme "${themeToSave.name}" saved to your library.`);
             }
-        } catch (e) {
+        } catch (e: any) {
             console.error("Save failed", e);
-            alert("Failed to save theme. Please try again.");
+            alert(`Failed to save theme: ${e.message || "Unknown error"}. If multiple tabs are open (Projector/Stage), please close them and try again.`);
+            return; // Don't close modal on failure
         }
 
         setIsThemeModalOpen(false);
@@ -866,11 +803,12 @@ export default function ResourceLibraryPanel({
                     <button
                         onClick={() => {
                             setEditingTheme({
-                                id: `theme - ${Date.now()} `,
+                                id: `theme-${Date.now()}`,
                                 name: 'New Custom Theme',
                                 isCustom: true,
                                 styles: { fontFamily: 'Inter', fontSize: '4rem', fontWeight: '700', color: '#ffffff', textAlign: 'center', justifyContent: 'center', alignItems: 'center', textShadow: '0 2px 10px rgba(0,0,0,0.5)' },
-                                background: { type: 'color', value: '#111827', overlayOpacity: 0, blur: 0 }
+                                background: { type: 'color', value: '#111827', overlayOpacity: 0, blur: 0 },
+                                layout: { ...DEFAULT_LAYOUT, referenceColor: '#ffffff', versionColor: '#ffffff', verseNumberColor: '#ffffff' }
                             });
                             setIsThemeModalOpen(true);
                         }}
@@ -929,7 +867,13 @@ export default function ResourceLibraryPanel({
                                 <button
                                     onClick={(e) => {
                                         e.stopPropagation();
-                                        setEditingTheme({ ...theme, isCustom: true, id: theme.isCustom ? theme.id : `copy-${Date.now()}` });
+                                        // Deep clone to isolate editing state
+                                        const themeCopy = JSON.parse(JSON.stringify(theme));
+                                        setEditingTheme({
+                                            ...themeCopy,
+                                            isCustom: true,
+                                            id: theme.isCustom ? theme.id : `custom-theme-${Date.now()}`
+                                        });
                                         setIsThemeModalOpen(true);
                                     }}
                                     className="p-1.5 bg-indigo-600 rounded-full text-white hover:scale-110 transition-transform shadow-lg"
@@ -1134,13 +1078,33 @@ export default function ResourceLibraryPanel({
                                         <label className="text-xs font-bold text-zinc-500 uppercase">Reference Position</label>
                                         <div className="flex bg-zinc-950 rounded border border-white/10 p-1 gap-1">
                                             <button
-                                                onClick={() => setEditingTheme({ ...editingTheme, layout: { ...(editingTheme.layout || { referenceScale: 1, showVerseNumbers: true }), referencePosition: 'top' } })}
+                                                onClick={() => setEditingTheme({
+                                                    ...editingTheme,
+                                                    layout: {
+                                                        ...DEFAULT_LAYOUT,
+                                                        referenceColor: editingTheme.styles.color,
+                                                        versionColor: editingTheme.styles.color,
+                                                        verseNumberColor: editingTheme.styles.color,
+                                                        ...editingTheme.layout,
+                                                        referencePosition: 'top'
+                                                    }
+                                                })}
                                                 className={`flex-1 py-1 rounded text-xs transition-colors ${(!editingTheme.layout || editingTheme.layout.referencePosition === 'top') ? 'bg-indigo-600 text-white shadow-sm' : 'text-zinc-500 hover:text-white hover:bg-zinc-800'} `}
                                             >
                                                 TOP
                                             </button>
                                             <button
-                                                onClick={() => setEditingTheme({ ...editingTheme, layout: { ...(editingTheme.layout || { referenceScale: 1, showVerseNumbers: true }), referencePosition: 'bottom' } })}
+                                                onClick={() => setEditingTheme({
+                                                    ...editingTheme,
+                                                    layout: {
+                                                        ...DEFAULT_LAYOUT,
+                                                        referenceColor: editingTheme.styles.color,
+                                                        versionColor: editingTheme.styles.color,
+                                                        verseNumberColor: editingTheme.styles.color,
+                                                        ...editingTheme.layout,
+                                                        referencePosition: 'bottom'
+                                                    }
+                                                })}
                                                 className={`flex-1 py-1 rounded text-xs transition-colors ${(editingTheme.layout?.referencePosition === 'bottom') ? 'bg-indigo-600 text-white shadow-sm' : 'text-zinc-500 hover:text-white hover:bg-zinc-800'} `}
                                             >
                                                 BOTTOM
@@ -1153,22 +1117,182 @@ export default function ResourceLibraryPanel({
                                         <input
                                             type="range" min="0.5" max="3" step="0.1"
                                             value={editingTheme.layout?.referenceScale || 1.5}
-                                            onChange={(e) => setEditingTheme({ ...editingTheme, layout: { ...(editingTheme.layout || { referencePosition: 'top', showVerseNumbers: true }), referenceScale: parseFloat(e.target.value) } })}
+                                            onChange={(e) => setEditingTheme({
+                                                ...editingTheme,
+                                                layout: {
+                                                    ...DEFAULT_LAYOUT,
+                                                    referenceColor: editingTheme.styles.color,
+                                                    versionColor: editingTheme.styles.color,
+                                                    verseNumberColor: editingTheme.styles.color,
+                                                    ...editingTheme.layout,
+                                                    referenceScale: parseFloat(e.target.value)
+                                                }
+                                            })}
                                             className="w-full accent-indigo-500"
                                         />
-                                        <div className="text-[10px] text-right text-zinc-500">{(editingTheme.layout?.referenceScale || 1.5).toFixed(1)}x</div>
+                                        <div className="text-[10px] text-zinc-500 text-right">{(editingTheme.layout?.referenceScale || 1.5).toFixed(1)}x</div>
                                     </div>
                                 </div>
-                                <div className="mt-3">
-                                    <label className="flex items-center gap-2 cursor-pointer">
-                                        <input
-                                            type="checkbox"
-                                            checked={editingTheme.layout?.showVerseNumbers !== false}
-                                            onChange={(e) => setEditingTheme({ ...editingTheme, layout: { ...(editingTheme.layout || { referencePosition: 'top', referenceScale: 1.5 }), showVerseNumbers: e.target.checked } })}
-                                            className="rounded bg-zinc-800 border-zinc-700 text-indigo-500 focus:ring-indigo-500/20"
-                                        />
-                                        <span className="text-xs text-zinc-300">Show Verse Numbers</span>
-                                    </label>
+
+                                <div className="mt-6 pt-4 border-t border-white/5 space-y-4">
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div className="space-y-2">
+                                            <label className="text-[10px] font-bold text-zinc-500 uppercase">Reference Color</label>
+                                            <div className="flex items-center gap-2">
+                                                <input
+                                                    type="color"
+                                                    value={editingTheme.layout?.referenceColor || editingTheme.styles.color}
+                                                    onChange={e => setEditingTheme({
+                                                        ...editingTheme,
+                                                        layout: {
+                                                            ...DEFAULT_LAYOUT,
+                                                            referenceColor: editingTheme.styles.color,
+                                                            versionColor: editingTheme.styles.color,
+                                                            verseNumberColor: editingTheme.styles.color,
+                                                            ...editingTheme.layout,
+                                                            referenceColor: e.target.value
+                                                        }
+                                                    })}
+                                                    className="bg-transparent h-6 w-6 cursor-pointer border-none p-0 rounded-full"
+                                                />
+                                                <input
+                                                    type="text"
+                                                    value={editingTheme.layout?.referenceColor || editingTheme.styles.color}
+                                                    onChange={e => setEditingTheme({
+                                                        ...editingTheme,
+                                                        layout: {
+                                                            ...DEFAULT_LAYOUT,
+                                                            referenceColor: editingTheme.styles.color,
+                                                            versionColor: editingTheme.styles.color,
+                                                            verseNumberColor: editingTheme.styles.color,
+                                                            ...editingTheme.layout,
+                                                            referenceColor: e.target.value
+                                                        }
+                                                    })}
+                                                    className="bg-zinc-950 border border-white/10 rounded px-2 py-1 text-[10px] text-white w-20 outline-none font-mono"
+                                                />
+                                            </div>
+                                        </div>
+                                        <div className="space-y-2">
+                                            <label className="text-[10px] font-bold text-zinc-500 uppercase">Version Color</label>
+                                            <div className="flex items-center gap-2">
+                                                <input
+                                                    type="color"
+                                                    value={editingTheme.layout?.versionColor || editingTheme.styles.color}
+                                                    onChange={e => setEditingTheme({
+                                                        ...editingTheme,
+                                                        layout: {
+                                                            ...DEFAULT_LAYOUT,
+                                                            referenceColor: editingTheme.styles.color,
+                                                            versionColor: editingTheme.styles.color,
+                                                            verseNumberColor: editingTheme.styles.color,
+                                                            ...editingTheme.layout,
+                                                            versionColor: e.target.value
+                                                        }
+                                                    })}
+                                                    className="bg-transparent h-6 w-6 cursor-pointer border-none p-0 rounded-full"
+                                                />
+                                                <input
+                                                    type="text"
+                                                    value={editingTheme.layout?.versionColor || editingTheme.styles.color}
+                                                    onChange={e => setEditingTheme({
+                                                        ...editingTheme,
+                                                        layout: {
+                                                            ...DEFAULT_LAYOUT,
+                                                            referenceColor: editingTheme.styles.color,
+                                                            versionColor: editingTheme.styles.color,
+                                                            verseNumberColor: editingTheme.styles.color,
+                                                            ...editingTheme.layout,
+                                                            versionColor: e.target.value
+                                                        }
+                                                    })}
+                                                    className="bg-zinc-950 border border-white/10 rounded px-2 py-1 text-[10px] text-white w-20 outline-none font-mono"
+                                                />
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div className="space-y-2">
+                                            <label className="text-[10px] font-bold text-zinc-500 uppercase">Verse # Color</label>
+                                            <div className="flex items-center gap-2">
+                                                <input
+                                                    type="color"
+                                                    value={editingTheme.layout?.verseNumberColor || editingTheme.styles.color}
+                                                    onChange={e => setEditingTheme({
+                                                        ...editingTheme,
+                                                        layout: {
+                                                            ...DEFAULT_LAYOUT,
+                                                            referenceColor: editingTheme.styles.color,
+                                                            versionColor: editingTheme.styles.color,
+                                                            verseNumberColor: editingTheme.styles.color,
+                                                            ...editingTheme.layout,
+                                                            verseNumberColor: e.target.value
+                                                        }
+                                                    })}
+                                                    className="bg-transparent h-6 w-6 cursor-pointer border-none p-0 rounded-full"
+                                                />
+                                                <input
+                                                    type="text"
+                                                    value={editingTheme.layout?.verseNumberColor || editingTheme.styles.color}
+                                                    onChange={e => setEditingTheme({
+                                                        ...editingTheme,
+                                                        layout: {
+                                                            ...DEFAULT_LAYOUT,
+                                                            referenceColor: editingTheme.styles.color,
+                                                            versionColor: editingTheme.styles.color,
+                                                            verseNumberColor: editingTheme.styles.color,
+                                                            ...editingTheme.layout,
+                                                            verseNumberColor: e.target.value
+                                                        }
+                                                    })}
+                                                    className="bg-zinc-950 border border-white/10 rounded px-2 py-1 text-[10px] text-white w-20 outline-none font-mono"
+                                                />
+                                            </div>
+                                        </div>
+                                        <div className="space-y-2">
+                                            <label className="text-[10px] font-bold text-zinc-500 uppercase">Verse # Size</label>
+                                            <input
+                                                type="range" min="0.2" max="1.5" step="0.05"
+                                                value={editingTheme.layout?.verseNumberScale || 0.5}
+                                                onChange={(e) => setEditingTheme({
+                                                    ...editingTheme,
+                                                    layout: {
+                                                        ...DEFAULT_LAYOUT,
+                                                        referenceColor: editingTheme.styles.color,
+                                                        versionColor: editingTheme.styles.color,
+                                                        verseNumberColor: editingTheme.styles.color,
+                                                        ...editingTheme.layout,
+                                                        verseNumberScale: parseFloat(e.target.value)
+                                                    }
+                                                })}
+                                                className="w-full accent-indigo-500"
+                                            />
+                                            <div className="text-[10px] text-right text-zinc-500">{(editingTheme.layout?.verseNumberScale || 0.5).toFixed(2)}x</div>
+                                        </div>
+                                    </div>
+
+                                    <div className="mt-3">
+                                        <label className="flex items-center gap-2 cursor-pointer">
+                                            <input
+                                                type="checkbox"
+                                                checked={editingTheme.layout?.showVerseNumbers !== false}
+                                                onChange={(e) => setEditingTheme({
+                                                    ...editingTheme,
+                                                    layout: {
+                                                        ...DEFAULT_LAYOUT,
+                                                        referenceColor: editingTheme.styles.color,
+                                                        versionColor: editingTheme.styles.color,
+                                                        verseNumberColor: editingTheme.styles.color,
+                                                        ...editingTheme.layout,
+                                                        showVerseNumbers: e.target.checked
+                                                    }
+                                                })}
+                                                className="rounded bg-zinc-800 border-zinc-700 text-indigo-500 focus:ring-indigo-500/20"
+                                            />
+                                            <span className="text-xs text-zinc-300">Show Verse Numbers</span>
+                                        </label>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -1192,9 +1316,44 @@ export default function ResourceLibraryPanel({
                                             fontWeight: editingTheme.styles.fontWeight,
                                             textAlign: editingTheme.styles.textAlign,
                                             textTransform: editingTheme.styles.textTransform || 'none',
+                                            display: 'flex',
+                                            flexDirection: 'column',
+                                            alignItems: editingTheme.styles.alignItems
                                         }}>
-                                            <h1 className="text-4xl leading-tight mb-4">Amazing Grace</h1>
-                                            <p className="text-2xl opacity-80">How sweet the sound<br />That saved a wretch like me</p>
+                                            <div className="w-full" style={{
+                                                order: editingTheme.layout?.referencePosition === 'top' ? -1 : 1,
+                                                marginBottom: editingTheme.layout?.referencePosition === 'top' ? '1rem' : 0,
+                                                marginTop: editingTheme.layout?.referencePosition === 'bottom' ? '1rem' : 0
+                                            }}>
+                                                <div style={{
+                                                    color: editingTheme.layout?.referenceColor || editingTheme.styles.color,
+                                                    fontSize: `${0.6 * (editingTheme.layout?.referenceScale || 1.5)}em`,
+                                                    fontWeight: 'bold',
+                                                    textTransform: 'uppercase'
+                                                }}>
+                                                    John 3:16
+                                                </div>
+                                                <div style={{
+                                                    color: editingTheme.layout?.versionColor || editingTheme.styles.color,
+                                                    fontSize: '0.4em',
+                                                    opacity: 0.7
+                                                }}>
+                                                    KJV
+                                                </div>
+                                            </div>
+                                            <div className="flex items-start gap-2">
+                                                {editingTheme.layout?.showVerseNumbers !== false && (
+                                                    <span style={{
+                                                        color: editingTheme.layout?.verseNumberColor || editingTheme.styles.color,
+                                                        fontSize: `${(editingTheme.layout?.verseNumberScale || 0.5) * 100}%`,
+                                                        opacity: 0.6,
+                                                        lineHeight: 1.5
+                                                    }}>
+                                                        16
+                                                    </span>
+                                                )}
+                                                <p className="text-2xl leading-tight">For God so loved the world, that he gave his only begotten Son...</p>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
@@ -1208,6 +1367,26 @@ export default function ResourceLibraryPanel({
                     </div>
                 </div>
             </div>
+        );
+    };
+
+    const renderEditModal = () => {
+        if (!editingResource) return null;
+        if (typeof window === 'undefined') return null;
+
+        return createPortal(
+            <div className="fixed inset-0 z-[99999] bg-black/90 backdrop-blur-md animate-in fade-in duration-300">
+                <AdvancedSongEditor
+                    resource={editingResource}
+                    onSave={async (updated) => {
+                        await saveResource(updated);
+                        await loadData();
+                        setEditingResource(null);
+                    }}
+                    onCancel={() => setEditingResource(null)}
+                />
+            </div>,
+            document.body
         );
     };
 
@@ -1263,7 +1442,6 @@ export default function ResourceLibraryPanel({
                                 dateAdded: Date.now(),
                                 meta: { author: '', ccli: '' }
                             });
-                            setEditText('');
                         }}
                         className="bg-zinc-800 hover:bg-zinc-700 text-zinc-300 p-1.5 rounded-lg transition-colors mr-1"
                         title="Create Blank Song (or Paste CCLI)"
@@ -1459,7 +1637,7 @@ export default function ResourceLibraryPanel({
                 </div>
             </div>
             {isThemeModalOpen && renderThemeModal()}
-            {editingResource && renderEditModal()}
+            {renderEditModal()}
             {previewItem && (
                 <PreviewModal
                     item={previewItem}
@@ -1471,6 +1649,16 @@ export default function ResourceLibraryPanel({
                     onUpdateItem={(updated) => setPreviewItem(updated)}
                     onGoLive={(idx) => {
                         onGoLive({ ...previewItem, activeSlideIndex: idx });
+                        setPreviewItem(null);
+                    }}
+                    onEdit={() => {
+                        const resource: ResourceItem = {
+                            ...previewItem,
+                            category: previewItem.type as any,
+                            dateAdded: Date.now(),
+                            meta: previewItem.meta || {}
+                        };
+                        setEditingResource(resource);
                         setPreviewItem(null);
                     }}
                 />

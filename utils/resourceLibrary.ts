@@ -3,13 +3,23 @@ import { ScheduleItem } from '@/utils/scheduleManager';
 const DB_NAME = 'church-projector-library';
 const STORE_NAME = 'resources';
 
-const DB_VERSION = 3;
+const DB_VERSION = 4;
 
 function openDB(): Promise<IDBDatabase> {
     return new Promise((resolve, reject) => {
         const request = indexedDB.open(DB_NAME, DB_VERSION);
         request.onerror = () => reject(request.error);
-        request.onsuccess = () => resolve(request.result);
+        request.onsuccess = () => {
+            const db = request.result;
+            db.onversionchange = () => {
+                db.close();
+                if (typeof window !== 'undefined') {
+                    // Page refresh might be needed, but at least we close the connection to allow the upgrade
+                    console.warn("Database connection closed due to version change. Please refresh.");
+                }
+            };
+            resolve(db);
+        };
         request.onupgradeneeded = (event) => {
             const db = (event.target as any).result;
             if (!db.objectStoreNames.contains(STORE_NAME)) {
@@ -21,6 +31,11 @@ function openDB(): Promise<IDBDatabase> {
             if (!db.objectStoreNames.contains('themes')) {
                 db.createObjectStore('themes', { keyPath: 'id' });
             }
+        };
+        request.onblocked = () => {
+            console.warn("Database upgrade blocked. Please close other tabs.");
+            // We can't strictly reject here because it might unblock later,
+            // but for user experience, a warning is good.
         };
     });
 }
@@ -126,23 +141,53 @@ export interface ProjectorTheme {
     id: string;
     name: string;
     isCustom?: boolean;
-    styles: any;
-    background: any;
-    layout?: any;
+    styles: {
+        fontFamily: string;
+        fontSize: string;
+        fontWeight: string;
+        color: string;
+        textAlign: 'left' | 'center' | 'right';
+        justifyContent: 'center' | 'flex-start' | 'flex-end';
+        alignItems: 'center' | 'flex-start' | 'flex-end';
+        textShadow?: string;
+        textTransform?: 'none' | 'uppercase' | 'lowercase' | 'capitalize';
+        letterSpacing?: string;
+        lineHeight?: string;
+    };
+    background: {
+        type: 'color' | 'image' | 'gradient';
+        value: string;
+        overlayOpacity: number;
+        blur: number;
+    };
+    layout?: {
+        referencePosition: 'top' | 'bottom';
+        referenceScale: number;
+        showVerseNumbers: boolean;
+        referenceColor?: string;
+        versionColor?: string;
+        verseNumberColor?: string;
+        verseNumberScale?: number;
+    };
 }
 
-export async function saveTheme(theme: ProjectorTheme): Promise<void> {
-    if (typeof window === 'undefined') return;
+export async function saveTheme(theme: ProjectorTheme): Promise<boolean> {
+    if (typeof window === 'undefined') return false;
     try {
         const db = await openDB();
+        if (!db.objectStoreNames.contains('themes')) {
+            throw new Error("Themes storage not initialized (DB upgrade might be blocked)");
+        }
         const tx = db.transaction('themes', 'readwrite');
-        tx.objectStore('themes').put(theme);
+        const store = tx.objectStore('themes');
+        store.put(theme);
         return new Promise((resolve, reject) => {
-            tx.oncomplete = () => resolve();
+            tx.oncomplete = () => resolve(true);
             tx.onerror = () => reject(tx.error);
         });
     } catch (e) {
-        console.error("Failed to save theme", e);
+        console.error("Failed to save theme:", e);
+        throw e; // Throw so UI can catch and show alert
     }
 }
 

@@ -1,9 +1,92 @@
-﻿
-> church-projector@0.1.0 dev
-> next dev -p 3334
 
-   Ôû▓ Next.js 14.1.0
-   - Local:        http://localhost:3334
+> creenly@2.1.6 dev
+> next dev
+
+ ⚠ Specified "redirects" will not automatically work with "output: export". See more info here: https://nextjs.org/docs/messages/export-no-custom-routes
+ ⚠ Specified "redirects" will not automatically work with "output: export". See more info here: https://nextjs.org/docs/messages/export-no-custom-routes
+   ▲ Next.js 14.1.0
+   - Local:        http://localhost:3000
    - Environments: .env.local
 
- Ô£ô Ready in 6.6s
+ ⚠ Specified "redirects" will not automatically work with "output: export". See more info here: https://nextjs.org/docs/messages/export-no-custom-routes
+ ⚠ Specified "redirects" will not automatically work with "output: export". See more info here: https://nextjs.org/docs/messages/export-no-custom-routes
+ ✓ Ready in 2.9s
+ ○ Compiling /dashboard ...
+ ⨯ ./app/dashboard/page.tsx
+Error: 
+  [31mx[0m You are attempting to export "metadata" from a component marked with "use client", which is disallowed. Either remove the export, or the "use client" directive. Read more: https://nextjs.org/
+  [31m|[0m docs/getting-started/react-essentials#the-use-client-directive
+  [31m|[0m 
+  [31m|[0m 
+    ,-[[36;1;4mC:\Users\MICHAEL\Scale AX W.Space1 (DOE)\webapp\church-projector\app\dashboard\page.tsx[0m:58:1]
+ [2m58[0m |     );
+ [2m59[0m | };
+ [2m60[0m | 
+ [2m61[0m | export const metadata = {
+    : [31;1m             ^^^^^^^^[0m
+ [2m62[0m |     title: "Creenly Dashboard",
+ [2m63[0m |     robots: { index: false }
+ [2m63[0m | };
+    `----
+
+Import trace for requested module:
+./app/dashboard/page.tsx
+ ⨯ ./app/dashboard/page.tsx
+Error: 
+  [31mx[0m You are attempting to export "metadata" from a component marked with "use client", which is disallowed. Either remove the export, or the "use client" directive. Read more: https://nextjs.org/
+  [31m|[0m docs/getting-started/react-essentials#the-use-client-directive
+  [31m|[0m 
+  [31m|[0m 
+    ,-[[36;1;4mC:\Users\MICHAEL\Scale AX W.Space1 (DOE)\webapp\church-projector\app\dashboard\page.tsx[0m:58:1]
+ [2m58[0m |     );
+ [2m59[0m | };
+ [2m60[0m | 
+ [2m61[0m | export const metadata = {
+    : [31;1m             ^^^^^^^^[0m
+ [2m62[0m |     title: "Creenly Dashboard",
+ [2m63[0m |     robots: { index: false }
+ [2m63[0m | };
+    `----
+
+Import trace for requested module:
+./app/dashboard/page.tsx
+ ⨯ ./app/dashboard/page.tsx
+Error: 
+  [31mx[0m You are attempting to export "metadata" from a component marked with "use client", which is disallowed. Either remove the export, or the "use client" directive. Read more: https://nextjs.org/
+  [31m|[0m docs/getting-started/react-essentials#the-use-client-directive
+  [31m|[0m 
+  [31m|[0m 
+    ,-[[36;1;4mC:\Users\MICHAEL\Scale AX W.Space1 (DOE)\webapp\church-projector\app\dashboard\page.tsx[0m:58:1]
+ [2m58[0m |     );
+ [2m59[0m | };
+ [2m60[0m | 
+ [2m61[0m | export const metadata = {
+    : [31;1m             ^^^^^^^^[0m
+ [2m62[0m |     title: "Creenly Dashboard",
+ [2m63[0m |     robots: { index: false }
+ [2m63[0m | };
+    `----
+
+Import trace for requested module:
+./app/dashboard/page.tsx
+ ⨯ ./app/dashboard/page.tsx
+Error: 
+  [31mx[0m You are attempting to export "metadata" from a component marked with "use client", which is disallowed. Either remove the export, or the "use client" directive. Read more: https://nextjs.org/
+  [31m|[0m docs/getting-started/react-essentials#the-use-client-directive
+  [31m|[0m 
+  [31m|[0m 
+    ,-[[36;1;4mC:\Users\MICHAEL\Scale AX W.Space1 (DOE)\webapp\church-projector\app\dashboard\page.tsx[0m:58:1]
+ [2m58[0m |     );
+ [2m59[0m | };
+ [2m60[0m | 
+ [2m61[0m | export const metadata = {
+    : [31;1m             ^^^^^^^^[0m
+ [2m62[0m |     title: "Creenly Dashboard",
+ [2m63[0m |     robots: { index: false }
+ [2m63[0m | };
+    `----
+
+Import trace for requested module:
+./app/dashboard/page.tsx
+ ✓ Compiled /_error in 2.5s (484 modules)
+^C^C

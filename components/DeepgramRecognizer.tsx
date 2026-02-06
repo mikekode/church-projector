@@ -5,7 +5,7 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 type Props = {
     isListening: boolean;
     onTranscript: (text: string) => void;
-    onInterim?: (text: string) => void;
+    onInterim?: (text: string, isFinal: boolean) => void;
     onVolume?: (level: number) => void;
 };
 
@@ -124,8 +124,12 @@ export default function DeepgramRecognizer({ isListening, onTranscript, onInteri
                         // Normalize (0 to 1 scaling, boosted)
                         const level = Math.min(1, rms * 8);
 
-                        // Callback for visualization
-                        onVolumeRef.current?.(level);
+                        // Optimization: Only update if change is significant (> 0.02)
+                        // This prevents excessive re-renders of the entire dashboard
+                        if (Math.abs(level - (processorRef.current as any)._lastLevel || 0) > 0.02) {
+                            (processorRef.current as any)._lastLevel = level;
+                            onVolumeRef.current?.(level);
+                        }
 
                         const pcmData = floatTo16BitPCM(inputData);
                         ws.send(pcmData);
@@ -139,19 +143,16 @@ export default function DeepgramRecognizer({ isListening, onTranscript, onInteri
             ws.onmessage = (event) => {
                 try {
                     const data = JSON.parse(event.data);
-                    console.log("Deepgram message:", data.type, data.is_final ? "(final)" : "(interim)");
 
                     if (data.type === 'Results' && data.channel?.alternatives?.[0]) {
                         const transcript = data.channel.alternatives[0].transcript;
 
                         if (transcript && transcript.trim()) {
                             if (data.is_final) {
-                                console.log("FINAL:", transcript);
                                 onTranscriptRef.current(transcript);
-                                if (onInterimRef.current) onInterimRef.current('');
+                                if (onInterimRef.current) onInterimRef.current('', true);
                             } else {
-                                console.log("INTERIM:", transcript);
-                                if (onInterimRef.current) onInterimRef.current(transcript);
+                                if (onInterimRef.current) onInterimRef.current(transcript, false);
                             }
                         }
                     }

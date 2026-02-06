@@ -288,17 +288,23 @@ async function extractTextFromPdf(file: File): Promise<string> {
     try {
         const arrayBuffer = await file.arrayBuffer();
 
-        // Dynamic import to avoid build issues
+        // Load PDF.js (Dynamic)
         const pdfjsModule = await import('pdfjs-dist');
         const pdfjs = (pdfjsModule as any).default || pdfjsModule;
 
-        const version = pdfjs.version || '5.4.530';
-
-        if (pdfjs.GlobalWorkerOptions) {
-            pdfjs.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${version}/build/pdf.worker.min.mjs`;
+        // Use CDN worker for maximum stability in Electron/Next.js environment
+        // This avoids 404s on local worker files and webpack bundling errors
+        if (typeof window !== 'undefined' && !pdfjs.GlobalWorkerOptions.workerSrc) {
+            pdfjs.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
         }
 
-        const pdf = await pdfjs.getDocument(arrayBuffer).promise;
+        const pdf = await pdfjs.getDocument({
+            data: arrayBuffer,
+            useWorkerFetch: false,
+            isEvalSupported: false,
+            useSystemFonts: true
+        }).promise;
+
         let fullText = '';
 
         for (let i = 1; i <= pdf.numPages; i++) {
@@ -385,23 +391,36 @@ async function extractSlidesFromPptx(file: File): Promise<LyricSlide[]> {
  */
 async function renderPdfToSlides(file: File): Promise<LyricSlide[]> {
     try {
+        console.log("[PDF] Starting renderPdfToSlides...");
         const arrayBuffer = await file.arrayBuffer();
+        console.log(`[PDF] Loaded file buffer: ${arrayBuffer.byteLength} bytes`);
 
-        // Load PDF.js (Dynamic)
-        // Note: In Next.js/Webpack, allow dynamic import
-        const pdfjsModule = await import('pdfjs-dist');
-        const pdfjs = (pdfjsModule as any).default || pdfjsModule;
-
-        // Define Worker Source if needed (CDN Fallback)
-        if (pdfjs.GlobalWorkerOptions && !pdfjs.GlobalWorkerOptions.workerSrc) {
-            const version = pdfjs.version || '5.4.530';
-            pdfjs.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${version}/build/pdf.worker.min.mjs`;
+        // Use CDN worker for maximum stability in Electron/Next.js environment
+        // This avoids 404s on local worker files and webpack bundling errors
+        const pdfjs = await import('pdfjs-dist');
+        if (typeof window !== 'undefined' && !pdfjs.GlobalWorkerOptions.workerSrc) {
+            pdfjs.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
         }
 
-        const pdf = await pdfjs.getDocument(arrayBuffer).promise;
+        console.log("[PDF] Calling getDocument...");
+        const loadingTask = pdfjs.getDocument({
+            data: arrayBuffer,
+            useWorkerFetch: false,
+            isEvalSupported: false,
+            useSystemFonts: true,
+            disableFontFace: false
+        });
+
+        const pdf = await loadingTask.promise;
+        console.log(`[PDF] Document loaded. Pages: ${pdf.numPages}`);
+
         const slides: LyricSlide[] = [];
 
         for (let i = 1; i <= pdf.numPages; i++) {
+            // Yield to main thread to keep UI responsive
+            await new Promise(resolve => setTimeout(resolve, 0));
+
+            console.log(`[PDF] Rendering page ${i}/${pdf.numPages}...`);
             const page = await pdf.getPage(i);
             const viewport = page.getViewport({ scale: 1.5 }); // Good Quality
 
@@ -411,23 +430,39 @@ async function renderPdfToSlides(file: File): Promise<LyricSlide[]> {
             const context = canvas.getContext('2d');
 
             if (context) {
-                await page.render({
+                const renderContext = {
                     canvasContext: context,
                     viewport: viewport
-                }).promise;
+                };
+                await page.render(renderContext).promise;
+
+                const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+                console.log(`[PDF] Page ${i} rendered. DataURL length: ${dataUrl.length}`);
 
                 slides.push({
                     id: `slide-${i}-${Date.now()}`,
-                    content: canvas.toDataURL('image/jpeg', 0.85),
+                    content: dataUrl,
                     label: `Page ${i}`
                 });
+            } else {
+                console.error("[PDF] Failed to get canvas context");
             }
         }
 
+        console.log(`[PDF] Finished rendering. Total slides: ${slides.length}`);
         return slides;
     } catch (e) {
-        console.error("PDF Render Error", e);
+        console.error("PDF Render Error:", e);
         // Fallback to text extraction if rendering fails
+        try {
+            const text = await extractTextFromPdf(file);
+            if (text.trim()) {
+                console.log("PDF render failed, falling back to text extraction");
+                return parseLyrics(text);
+            }
+        } catch (textError) {
+            console.error("PDF text extraction also failed:", textError);
+        }
         return [];
     }
 }

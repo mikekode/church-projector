@@ -214,8 +214,30 @@ export function lookupVerse(bookStr: string, chapter: number | string, verse: nu
     return lookupVerseBase(bookKey, Number(chapter), Number(verse));
 }
 
-// Simple in-memory cache: version -> book -> chapter -> verse -> text
-const VERSE_CACHE: Record<string, Record<string, Record<number, Record<number, string>>>> = {};
+// Persistent Cache with LocalStorage support
+let VERSE_CACHE: Record<string, Record<string, Record<number, Record<number, string>>>> = {};
+
+// Initialize Cache from Storage (Client-side only)
+if (typeof window !== 'undefined') {
+    try {
+        const saved = localStorage.getItem('bible_cache_v1');
+        if (saved) {
+            VERSE_CACHE = JSON.parse(saved);
+        }
+    } catch (e) {
+        console.warn('Failed to load bible cache', e);
+    }
+}
+
+const saveCache = () => {
+    if (typeof window !== 'undefined') {
+        try {
+            localStorage.setItem('bible_cache_v1', JSON.stringify(VERSE_CACHE));
+        } catch (e) {
+            // Quota exceeded or disabled
+        }
+    }
+};
 
 /**
  * Async verse lookup with version support
@@ -287,6 +309,7 @@ export async function lookupVerseAsync(
                 if (!VERSE_CACHE[version][canonicalBook]) VERSE_CACHE[version][canonicalBook] = {};
                 if (!VERSE_CACHE[version][canonicalBook][c]) VERSE_CACHE[version][canonicalBook][c] = {};
                 VERSE_CACHE[version][canonicalBook][c][v] = result.text;
+                saveCache();
                 return result.text;
             }
         } catch (e) {
@@ -311,6 +334,7 @@ export async function lookupVerseAsync(
                 if (!VERSE_CACHE[version][canonicalBook][c]) VERSE_CACHE[version][canonicalBook][c] = {};
 
                 VERSE_CACHE[version][canonicalBook][c][v] = data.text;
+                saveCache();
                 return data.text;
             }
         }
@@ -378,6 +402,6 @@ export function getChapterVerseCount(bookKey: string, chapter: number): number {
 }
 
 export const SUPPORTED_VERSIONS = [
-    'KJV', 'NKJV', 'ESV', 'NIV', 'NASB', 'CSB', 'NLT',
+    'KJV', 'NKJV', 'ESV', 'NIV', 'NASB', 'CSB', 'NLT', 'TLB',
     'ASV', 'RSV', 'AMP', 'AMPC', 'MSG', 'WEB', 'GW', 'KJV21', 'TPT'
 ] as const;

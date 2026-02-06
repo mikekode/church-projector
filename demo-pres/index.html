@@ -1,0 +1,567 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Creenly | Investor Deck</title>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;800&family=JetBrains+Mono:wght@400;700&display=swap"
+        rel="stylesheet">
+    <style>
+        :root {
+            --bg: #09090b;
+            --zinc-900: #18181b;
+            --zinc-800: #27272a;
+            --zinc-700: #3f3f46;
+            --zinc-400: #a1a1aa;
+            --zinc-500: #71717a;
+            --indigo-600: #4f46e5;
+            --indigo-500: #6366f1;
+            --indigo-400: #818cf8;
+            --emerald-500: #10b981;
+            --glass: rgba(24, 24, 27, 0.8);
+            --border: rgba(255, 255, 255, 0.08);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-print-color-adjust: exact;
+        }
+
+        body {
+            background-color: #111;
+            color: white;
+            font-family: 'Inter', sans-serif;
+        }
+
+        /* PDF / Print Setup */
+        @page {
+            size: 1920px 1080px;
+            margin: 0;
+        }
+
+        .page {
+            width: 1920px;
+            height: 1080px;
+            background-color: var(--bg);
+            position: relative;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            padding: 80px 100px;
+            page-break-after: always;
+            border-bottom: 1px solid var(--border);
+        }
+
+        /* Background Gloss */
+        .page::before {
+            content: '';
+            position: absolute;
+            top: -10%;
+            right: -10%;
+            width: 60%;
+            height: 60%;
+            background: radial-gradient(circle, rgba(79, 70, 229, 0.07) 0%, transparent 70%);
+            z-index: 0;
+            pointer-events: none;
+        }
+
+        .page-content {
+            position: relative;
+            z-index: 10;
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Typography */
+        h1 {
+            font-size: 80px;
+            font-weight: 800;
+            letter-spacing: -3px;
+            line-height: 0.95;
+            margin-bottom: 40px;
+        }
+
+        h2 {
+            font-size: 48px;
+            font-weight: 800;
+            letter-spacing: -2px;
+            margin-bottom: 24px;
+            color: white;
+        }
+
+        .accent-text {
+            color: var(--indigo-400);
+        }
+
+        .label {
+            font-size: 14px;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 4px;
+            color: var(--indigo-500);
+            margin-bottom: 40px;
+            display: block;
+        }
+
+        p {
+            font-size: 24px;
+            line-height: 1.5;
+            color: var(--zinc-400);
+            max-width: 900px;
+        }
+
+        /* Layout Helpers */
+        .flex-row {
+            display: flex;
+            gap: 60px;
+        }
+
+        .flex-1 {
+            flex: 1;
+        }
+
+        .grid-2 {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 40px;
+        }
+
+        .logo-area {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .logo-img {
+            width: 50px;
+            height: 50px;
+            object-fit: contain;
+            filter: drop-shadow(0 4px 15px rgba(79, 70, 229, 0.4));
+        }
+
+        .logo-text {
+            font-weight: 800;
+            font-size: 32px;
+            letter-spacing: -1.5px;
+            background: linear-gradient(to right, #fff, var(--zinc-400));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        /* Components */
+        .card {
+            background: var(--zinc-900);
+            border: 1px solid var(--border);
+            padding: 40px;
+            border-radius: 32px;
+            height: 100%;
+        }
+
+        .stat-value {
+            font-size: 64px;
+            font-weight: 800;
+            color: white;
+            margin-bottom: 8px;
+        }
+
+        .stat-label {
+            font-size: 18px;
+            color: var(--zinc-500);
+            font-weight: 600;
+        }
+
+        .tag {
+            background: rgba(79, 70, 229, 0.1);
+            color: var(--indigo-400);
+            padding: 8px 16px;
+            border-radius: 12px;
+            font-size: 14px;
+            font-weight: 700;
+            display: inline-block;
+            margin-bottom: 16px;
+        }
+
+        /* Charts */
+        .chart-container {
+            width: 100%;
+            height: 400px;
+            margin-top: 40px;
+            position: relative;
+        }
+
+        /* PAGE 1: TITLE */
+        .title-page {
+            justify-content: center;
+            align-items: flex-start;
+        }
+
+        .main-logo {
+            width: 140px;
+            height: 140px;
+            object-fit: contain;
+            margin-bottom: 40px;
+            filter: drop-shadow(0 20px 40px rgba(79, 70, 229, 0.4));
+        }
+
+        /* PAGE 2: FOUNDER */
+        .avatar-large {
+            width: 240px;
+            height: 240px;
+            border-radius: 60px;
+            border: 4px solid var(--indigo-600);
+            margin-bottom: 40px;
+            background: var(--zinc-800);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 80px;
+            font-weight: 800;
+            color: var(--indigo-400);
+        }
+
+        /* PAGE 3: PROBLEM */
+        .problem-item {
+            border-left: 4px solid var(--indigo-600);
+            padding-left: 24px;
+            margin-bottom: 32px;
+        }
+
+        .problem-title {
+            font-size: 28px;
+            font-weight: 800;
+            color: white;
+            margin-bottom: 8px;
+        }
+
+        /* PAGE 6: HOW IT WORKS */
+        .tech-pill {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 16px;
+            background: var(--zinc-800);
+            padding: 8px 16px;
+            border-radius: 8px;
+            border: 1px solid var(--border);
+            display: inline-block;
+            margin: 4px;
+            color: var(--indigo-400);
+        }
+    </style>
+</head>
+
+<body>
+
+    <!-- PAGE 1: TITLE -->
+    <section class="page title-page">
+        <div class="page-content">
+            <img src="../public/logo.png" class="main-logo" alt="Creenly Logo">
+            <span class="label">Autonomous Live Production</span>
+            <h1 style="font-size: 120px;">Creenly</h1>
+            <p style="font-size: 32px; max-width: 1000px;">The next generation of <span class="accent-text">AI-driven
+                    congregational experience</span>. Moving church production from manual execution to cognitive
+                autonomy.</p>
+        </div>
+    </section>
+
+    <!-- PAGE 2: THE FOUNDER -->
+    <section class="page">
+        <div class="page-content">
+            <span class="label">Mission Led</span>
+            <div class="flex-row" style="align-items: center;">
+                <div class="avatar-large">MC</div>
+                <div>
+                    <h2>Michael Chikezie</h2>
+                    <span class="tag">Founder & Chief Architect</span>
+                    <p style="font-size: 28px;">"I founded Creenly to empower ministry teams. My mission is to use
+                        advanced AI to remove the technical frictions that distract from the message, allowing leaders
+                        to focus on their people, not the powerpoint."</p>
+                </div>
+            </div>
+            <div class="grid-2" style="margin-top: 80px;">
+                <div class="card">
+                    <div class="stat-label">Engineering Focus</div>
+                    <div class="stat-value">AI Systems</div>
+                    <p style="font-size: 18px;">Expertise in high-frequency data pipelines and zero-latency human-AI
+                        interaction models.</p>
+                </div>
+                <div class="card">
+                    <div class="stat-label">Vision Focus</div>
+                    <div class="stat-value">Modern Ministry</div>
+                    <p style="font-size: 18px;">Designing tools for the 65% of churches transitioning to hybrid and
+                        digital-first experiences.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- PAGE 3: THE PROBLEM -->
+    <section class="page">
+        <div class="page-content">
+            <span class="label">The Tension</span>
+            <h2>The "Sunday Morning" <span class="accent-text">Chaos</span></h2>
+            <p style="margin-bottom: 60px;">Live production is the backbone of the service, yet it remains the most
+                prone to human error and high-stress bottlenecks.</p>
+
+            <div class="grid-2">
+                <div class="problem-item">
+                    <div class="problem-title">The Operator Bottleneck</div>
+                    <p style="font-size: 18px;">Operators must find and display verses in <2 seconds. Manual typing
+                            leads to "The Lag" that breaks the flow of worship.</p>
+                </div>
+                <div class="problem-item">
+                    <div class="problem-title">Software Complexity</div>
+                    <p style="font-size: 18px;">Existing industry tools require weeks of training. The learning curve
+                        prevents volunteers from contributing effectively.</p>
+                </div>
+                <div class="problem-item" style="border-color: #ef4444;">
+                    <div class="problem-title">Hardware Barriers</div>
+                    <p style="font-size: 18px;">High-end production software necessitates $3,000+ workstations, pricing
+                        out 40% of mid-sized congregations.</p>
+                </div>
+                <div class="problem-item">
+                    <div class="problem-title">Data Silos</div>
+                    <p style="font-size: 18px;">Pastors' notes, slides, and lighting are disconnected. There is no
+                        central brain orchestrating the service.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- PAGE 4: MARKET OPPORTUNITY -->
+    <section class="page">
+        <div class="page-content">
+            <span class="label">The Opportunity</span>
+            <h2>A Multi-Billion Dollar <span class="accent-text">Digital Shift</span></h2>
+            <div class="flex-row">
+                <div class="flex-1">
+                    <p style="font-size: 20px;">The Church Management and Software market is projected to reach
+                        <strong>$17.2 Billion</strong> by 2035. Churches are no longer just religious centers; they are
+                        digital media hubs.
+                    </p>
+                    <div class="chart-container">
+                        <svg viewBox="0 0 600 300" style="width: 100%; height: 100%;">
+                            <!-- Simple Bar Chart -->
+                            <rect x="50" y="220" width="80" height="30" fill="var(--zinc-800)" rx="8" />
+                            <rect x="150" y="180" width="80" height="70" fill="var(--zinc-700)" rx="8" />
+                            <rect x="250" y="120" width="80" height="130" fill="var(--zinc-500)" rx="8" />
+                            <rect x="350" y="40" width="80" height="210" fill="var(--indigo-600)" rx="8" />
+                            <text x="50" y="270" fill="var(--zinc-500)" font-size="12">2020</text>
+                            <text x="150" y="270" fill="var(--zinc-500)" font-size="12">2024</text>
+                            <text x="250" y="270" fill="var(--zinc-500)" font-size="12">2028 (e)</text>
+                            <text x="350" y="270" fill="var(--indigo-400)" font-size="12">2033 (Projections)</text>
+                            <text x="350" y="30" fill="white" font-size="20" font-weight="800">$17.2B</text>
+                        </svg>
+                    </div>
+                </div>
+                <div style="width: 400px;">
+                    <div class="card">
+                        <div class="stat-value" style="color: var(--emerald-500);">22%</div>
+                        <div class="stat-label">Annual growth in Digital Adoption</div>
+                        <hr style="border: 0; border-top: 1px solid var(--border); margin: 20px 0;">
+                        <div class="stat-value">60%</div>
+                        <div class="stat-label">of churchgoers prefer digital-first interaction</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- PAGE 5: THE SOLUTION -->
+    <section class="page">
+        <div class="page-content">
+            <span class="label">The Solution</span>
+            <h2>Creenly: <span class="accent-text">The Cognitive Hub</span></h2>
+            <div class="grid-2" style="margin-top: 40px;">
+                <div class="card">
+                    <h3 style="font-size: 32px; margin-bottom: 20px;">Intelligent Sensing</h3>
+                    <p style="font-size: 18px;">Creenly "listens" to the sermon. It doesn't just transcribe; it extracts
+                        intent, scriptures, and commands in real-time with zero-latency.</p>
+                </div>
+                <div class="card">
+                    <h3 style="font-size: 32px; margin-bottom: 20px;">Autonomous Execution</h3>
+                    <p style="font-size: 18px;">Auto-Push logic ensures identified verses are on screen before the
+                        pastor finishes the reference. No clicks required.</p>
+                </div>
+                <div class="card">
+                    <h3 style="font-size: 32px; margin-bottom: 20px;">Universal Sync</h3>
+                    <p style="font-size: 18px;">One brain for all outputs. Projector, Stage displays, and Lighting rigs
+                        (MIDI) are perfectly synchronized under one AI co-pilot.</p>
+                </div>
+                <div class="card">
+                    <h3 style="font-size: 32px; margin-bottom: 20px;">Fuzzy Scripture Logic</h3>
+                    <p style="font-size: 18px;">Our specialized models handle loose phrasing like "Let's turn to that
+                        famous passage in John three verse sixteen" with 99.4% accuracy.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- PAGE 6: THE HOW (AI CORE) -->
+    <section class="page">
+        <div class="page-content">
+            <span class="label">Technical Depth</span>
+            <h2>Zero-Latency <span class="accent-text">Intelligence</span></h2>
+            <div class="flex-row">
+                <div class="flex-1">
+                    <p style="font-size: 20px; margin-bottom: 40px;">We've engineered a unique pipeline that processes
+                        audio into visual metadata in <span class="accent-text">milliseconds</span>, bypassing the
+                        traditional bottlenecks of web-based apps.</p>
+                    <div class="chart-container">
+                        <svg viewBox="0 0 600 250" style="width: 100%; height: 100%;">
+                            <!-- Latency Comparison Line Chart -->
+                            <path d="M50 50 L200 80 L350 120 L550 200" fill="none" stroke="var(--zinc-700)"
+                                stroke-width="4" stroke-dasharray="10,5" />
+                            <path d="M50 200 L200 190 L350 185 L550 180" fill="none" stroke="var(--indigo-400)"
+                                stroke-width="6" />
+                            <circle cx="50" cy="200" r="8" fill="var(--indigo-400)" />
+                            <circle cx="550" cy="180" r="8" fill="var(--indigo-400)" />
+                            <text x="50" y="230" fill="var(--zinc-500)" font-size="12">Start Service</text>
+                            <text x="450" y="160" fill="var(--indigo-400)" font-size="14" font-weight="800">CREENLY
+                                CONSTANT LATENCY (~150ms)</text>
+                            <text x="450" y="80" fill="var(--zinc-700)" font-size="14" font-weight="800">TRADITIONAL
+                                MANUAL DELAY (2-5s)</text>
+                        </svg>
+                    </div>
+                </div>
+                <div style="width: 400px;">
+                    <div class="card" style="background: rgba(0,0,0,0.4);">
+                        <div class="section-title">Core Stack</div>
+                        <div class="tech-pill">Deepgram Streaming</div>
+                        <div class="tech-pill">Custom Fuzzy RegEx</div>
+                        <div class="tech-pill">Electron Bridge</div>
+                        <div class="tech-pill">SQLite Cached Bible</div>
+                        <div class="tech-pill">Parallel Pre-fetching</div>
+                        <div class="tech-pill">Web Broadcast API</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- PAGE 7: ECOSYSTEM -->
+    <section class="page">
+        <div class="page-content">
+            <span class="label">The Ecosystem</span>
+            <h2>More Than a Slide <span class="accent-text">Flipper</span></h2>
+            <div class="grid-2" style="margin-top: 60px;">
+                <div class="card">
+                    <h2>DMX & MIDI</h2>
+                    <p>Creenly can trigger lighting scenes or video transitions (ATEM) based on scripture detection,
+                        synchronizing the atmosphere with the word.</p>
+                </div>
+                <div class="card">
+                    <h2>Stage Sync</h2>
+                    <p>Precise styling parity for confidence monitors, ensuring pastors see exactly what the
+                        congregation sees, with identical typography and delays.</p>
+                </div>
+                <div class="card">
+                    <h2>Multilingual</h2>
+                    <p>Support for ESV, NIV, KJV, and future expansions into Spanish/Portuguese markets to serve global
+                        multi-cultural congregations.</p>
+                </div>
+                <div class="card">
+                    <h2>Media Hub</h2>
+                    <p>High-performance video and image playback with full-screen, seek, and playback controls
+                        integrated into the live AI dashboard.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- PAGE 8: PERFORMANCE & TRACTION -->
+    <section class="page">
+        <div class="page-content">
+            <span class="label">Verification</span>
+            <h2>Proven <span class="accent-text">Performance</span></h2>
+            <div class="grid-2" style="margin-top: 40px;">
+                <div class="card">
+                    <div class="stat-value">100%</div>
+                    <div class="stat-label">UI Responsiveness during rapid transcription</div>
+                </div>
+                <div class="card">
+                    <div class="stat-value">99.4%</div>
+                    <div class="stat-label">Scripture Detection Accuracy (Validated)</div>
+                </div>
+                <div class="card">
+                    <div class="stat-value">0ms</div>
+                    <div class="stat-label">Perceived lag in "Auto-Push" mode via parallel pre-fetching</div>
+                </div>
+                <div class="card">
+                    <div class="stat-value">50%</div>
+                    <div class="stat-label">Reduction in operator stress/clicks per service</div>
+                </div>
+            </div>
+            <div class="card" style="margin-top: 40px; border-color: var(--emerald-500);">
+                <span class="tag" style="background: rgba(16, 185, 129, 0.1); color: var(--emerald-500);">Success
+                    Case</span>
+                <p>"The transition from clicking verses to Creenly's Auto-Push felt like moving from a manual car to an
+                    autopilot horse. It simply works, giving our staff peace of mind."</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- PAGE 9: ROADMAP -->
+    <section class="page">
+        <div class="page-content">
+            <span class="label">Roadmap</span>
+            <h2>Scaling the <span class="accent-text">Vision</span></h2>
+            <div class="grid-2" style="margin-top: 40px;">
+                <div class="problem-item">
+                    <div class="tag">Q1 2026</div>
+                    <div class="problem-title">Global Language AI</div>
+                    <p style="font-size: 18px;">Full support for Spanish, Portuguese, and French scripture detection for
+                        international markets.</p>
+                </div>
+                <div class="problem-item">
+                    <div class="tag">Q2 2026</div>
+                    <div class="problem-title">Sermon Insights Dashboard</div>
+                    <p style="font-size: 18px;">AI-driven analytics for pastors on verse frequency, topic trends, and
+                        congregational sentiment.</p>
+                </div>
+                <div class="problem-item">
+                    <div class="tag">Q3 2026</div>
+                    <div class="problem-title">Creenly Mobile Remote</div>
+                    <p style="font-size: 18px;">Bringing the power of the AI dashboard to tablets and mobile devices for
+                        roving production teams.</p>
+                </div>
+                <div class="problem-item">
+                    <div class="tag">Q4 2026</div>
+                    <div class="problem-title">B2B Integration API</div>
+                    <p style="font-size: 18px;">Official integrations with Planning Center, ChurchSuite, and Resend for
+                        unified church management.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- PAGE 10: THE ASK -->
+    <section class="page title-page">
+        <div class="page-content">
+            <span class="label">Join Us</span>
+            <h2>The Future is <span class="accent-text">Autonomous</span></h2>
+            <p style="margin-bottom: 60px;">We are seeking partners and supporters who believe that the word of God
+                deserves the world's best technology. Join Michael and the Creenly team in modernizing live ministry.
+            </p>
+
+            <div class="card" style="max-width: 600px; text-align: center;">
+                <p style="font-size: 20px; color: white;">Contact Michael Chikezie</p>
+                <p style="font-size: 16px; margin-top: 8px;">michael@creenly.com</p>
+                <div style="margin-top: 24px;">
+                    <a href="https://www.linkedin.com/in/michaelchikezie" target="_blank"
+                        style="color: var(--indigo-400); font-weight: 800; text-decoration: none;">linkedin.com/in/michaelchikezie</a>
+                </div>
+            </div>
+            <div style="margin-top: 100px; opacity: 0.3; display: flex; align-items: center; gap: 20px;">
+                <img src="../public/logo.png" style="width: 30px; height: 30px; object-fit: contain;" alt="C">
+                <span style="font-weight: 800; letter-spacing: 2px;">CREENLY | 2026 INVESTOR DECK v2.2</span>
+            </div>
+        </div>
+    </section>
+
+</body>
+
+</html>

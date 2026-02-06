@@ -1,15 +1,7 @@
 import { useState, useEffect } from 'react';
 import { X, Server, Radio, Monitor, CheckCircle, AlertCircle } from 'lucide-react';
 
-declare global {
-    interface Window {
-        electronAPI?: {
-            connectAtem: (ip: string) => Promise<{ success: boolean; error?: string }>;
-            performAtemAction: (action: string, input?: number) => Promise<{ success: boolean; error?: string }>;
-            onAtemStatus: (callback: (status: string) => void) => () => void;
-        };
-    }
-}
+
 
 interface HardwareModalProps {
     isOpen: boolean;

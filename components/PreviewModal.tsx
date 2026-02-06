@@ -2,8 +2,37 @@
 
 import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { X, ChevronLeft, ChevronRight, Image as ImageIcon, Trash2, Upload } from 'lucide-react';
+import { X, ChevronLeft, ChevronRight, Image as ImageIcon, Trash2, Upload, Edit } from 'lucide-react';
 import { ScheduleItem } from '@/utils/scheduleManager';
+
+/**
+ * Render formatted text with allowed HTML tags (b, i, span with color style)
+ */
+function renderFormattedText(text: string): string {
+    let safe = text
+        .replace(/<b>/gi, '___BOLD_OPEN___')
+        .replace(/<\/b>/gi, '___BOLD_CLOSE___')
+        .replace(/<i>/gi, '___ITALIC_OPEN___')
+        .replace(/<\/i>/gi, '___ITALIC_CLOSE___')
+        .replace(/<span style="color:#[A-Fa-f0-9]{6}">/gi, (match) => '___SPAN_' + match.slice(13, -2) + '___')
+        .replace(/<\/span>/gi, '___SPAN_CLOSE___');
+
+    safe = safe
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+
+    safe = safe
+        .replace(/___BOLD_OPEN___/g, '<b>')
+        .replace(/___BOLD_CLOSE___/g, '</b>')
+        .replace(/___ITALIC_OPEN___/g, '<i>')
+        .replace(/___ITALIC_CLOSE___/g, '</i>')
+        .replace(/___SPAN_(color:#[A-Fa-f0-9]{6})___/g, '<span style="$1">')
+        .replace(/___SPAN_CLOSE___/g, '</span>');
+
+    safe = safe.replace(/\n/g, '<br>');
+    return safe;
+}
 
 interface PreviewModalProps {
     item: ScheduleItem;
@@ -12,6 +41,7 @@ interface PreviewModalProps {
     onSlideSelect: (slideIndex: number) => void;
     onUpdateItem: (updatedItem: ScheduleItem) => void;
     onGoLive: (slideIndex: number) => void;
+    onEdit?: () => void;
 }
 
 export default function PreviewModal({
@@ -20,7 +50,8 @@ export default function PreviewModal({
     onClose,
     onSlideSelect,
     onUpdateItem,
-    onGoLive
+    onGoLive,
+    onEdit
 }: PreviewModalProps) {
     const [selectedSlideIndex, setSelectedSlideIndex] = useState(0);
     const [showBackgroundPicker, setShowBackgroundPicker] = useState(false);
@@ -112,6 +143,16 @@ export default function PreviewModal({
                                 </button>
                             </div>
                         )}
+                        {!isImage && item.type === 'song' && onEdit && (
+                            <button
+                                onClick={onEdit}
+                                className="px-3 py-2 bg-indigo-600 hover:bg-indigo-500 rounded-lg text-xs font-medium text-white flex items-center gap-2 mr-2 shadow-lg shadow-indigo-500/20"
+                            >
+                                <Edit size={14} />
+                                Edit Song
+                            </button>
+                        )}
+
                         <button
                             onClick={() => setShowBackgroundPicker(true)}
                             className="px-3 py-2 bg-zinc-800 hover:bg-zinc-700 rounded-lg text-xs font-medium text-zinc-300 flex items-center gap-2"
@@ -183,19 +224,43 @@ export default function PreviewModal({
                             {/* Content */}
                             <div className="relative z-10 text-center p-8 max-w-full">
                                 {isImage ? (
-                                    <img
-                                        src={currentSlide?.content}
-                                        alt={item.title}
-                                        className={`rounded-lg transition-all duration-300 ${item.meta?.imageMode === 'cover'
-                                            ? 'w-full h-full object-cover absolute inset-0'
-                                            : 'max-w-full max-h-[50vh] object-contain relative'
-                                            }`}
-                                    />
+                                    (() => {
+                                        const contentUrl = currentSlide?.content;
+                                        const isVideo = contentUrl?.match(/\.(mp4|webm|mov|ogg)(\?|$)/i) ||
+                                            contentUrl?.startsWith('data:video/') ||
+                                            contentUrl?.startsWith('blob:');
+
+                                        if (isVideo) {
+                                            return (
+                                                <video
+                                                    src={contentUrl}
+                                                    controls
+                                                    autoPlay
+                                                    className={`rounded-lg transition-all duration-300 ${item.meta?.imageMode === 'cover'
+                                                        ? 'w-full h-full object-cover absolute inset-0'
+                                                        : 'max-w-full max-h-[50vh] object-contain relative'
+                                                        }`}
+                                                />
+                                            );
+                                        }
+
+                                        return (
+                                            <img
+                                                src={contentUrl}
+                                                alt={item.title}
+                                                className={`rounded-lg transition-all duration-300 ${item.meta?.imageMode === 'cover'
+                                                    ? 'w-full h-full object-cover absolute inset-0'
+                                                    : 'max-w-full max-h-[50vh] object-contain relative'
+                                                    }`}
+                                            />
+                                        );
+                                    })()
                                 ) : (
                                     <>
-                                        <p className="text-2xl md:text-3xl font-serif text-white leading-relaxed whitespace-pre-wrap drop-shadow-lg">
-                                            {currentSlide?.content}
-                                        </p>
+                                        <p
+                                            className="text-2xl md:text-3xl font-serif text-white leading-relaxed drop-shadow-lg"
+                                            dangerouslySetInnerHTML={{ __html: renderFormattedText(currentSlide?.content || '') }}
+                                        />
                                         <p className="text-amber-300/80 mt-6 text-sm uppercase tracking-widest">
                                             {currentSlide?.label}
                                         </p>

@@ -290,6 +290,9 @@ function createWindow() {
             if (input.key === 'F12') event.preventDefault();
         });
     }
+
+    // FORCE OPEN DEVTOOLS FOR DEBUGGING (REMOVED)
+    // mainWindow.webContents.openDevTools();
 }
 
 // Projector Window Management
@@ -593,7 +596,8 @@ ipcMain.handle('lookup-verse-online', async (event, { book, chapter, verse, vers
             'NLT': 'NLT',
             'NIV': 'NIV',
             'NKJV': 'NKJV',
-            'ESV': 'ESV'
+            'ESV': 'ESV',
+            'TLB': 'TLB'
         };
         const searchVersion = versionMap[v] || v;
 

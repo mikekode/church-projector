@@ -26,6 +26,10 @@ export interface ProjectorTheme {
         referencePosition: 'top' | 'bottom';
         referenceScale: number; // 1 = normal, 1.5 = large
         showVerseNumbers: boolean;
+        referenceColor?: string;
+        versionColor?: string;
+        verseNumberColor?: string;
+        verseNumberScale?: number; // Default 0.5
     };
 }
 
@@ -35,6 +39,13 @@ export const GOOGLE_FONTS = [
     "Lora", "Playfair Display", "Poppins", "Ubuntu", "Roboto Slab",
     "Nunito", "Titillium Web", "Rubik", "Mukta", "Work Sans"
 ];
+
+export const DEFAULT_LAYOUT = {
+    referencePosition: 'top' as const,
+    referenceScale: 1.5,
+    showVerseNumbers: true,
+    verseNumberScale: 0.5
+};
 
 const createTheme = (id: string, name: string, bg: string, font: string, align: 'center' | 'left' = 'center', color = '#ffffff'): ProjectorTheme => ({
     id, name,
@@ -58,7 +69,11 @@ const createTheme = (id: string, name: string, bg: string, font: string, align: 
     layout: {
         referencePosition: 'top',
         referenceScale: 1.5,
-        showVerseNumbers: true
+        showVerseNumbers: true,
+        referenceColor: color,
+        versionColor: color,
+        verseNumberColor: color,
+        verseNumberScale: 0.5
     }
 });
 
