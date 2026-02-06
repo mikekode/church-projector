@@ -16,17 +16,15 @@ resources/app
 
 # OS files
 .DS_Store
-*.log
 
 # Vercel
 .vercel
 
-# Temporary files
-check_git.txt
-deploy_log.txt
-vercel_deploy_out.txt
-vercel_list.txt
-*_out.txt
+# Temporary/debug files
+*.log
+*.txt
+!LICENSE.txt
+!public/robots.txt
 
 # Credentials (SENSITIVE)
 credentials.json

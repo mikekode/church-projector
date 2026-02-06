@@ -1,5 +1,0 @@
-Vercel CLI 50.9.5
-Retrieving project…
-Deploying creenly/church-projector
-Uploading [--------------------] (0.0B/568.2MB)
-Terminate batch job (Y/N)? Terminate batch job (Y/N)? 

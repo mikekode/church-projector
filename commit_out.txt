@@ -1,4 +1,0 @@
-error: pathspec 'chore:' did not match any file(s) known to git
-error: pathspec 'kick' did not match any file(s) known to git
-error: pathspec 'vercel' did not match any file(s) known to git
-error: pathspec 'build\ ' did not match any file(s) known to git
