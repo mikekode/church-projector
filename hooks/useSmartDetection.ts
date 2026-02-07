@@ -37,13 +37,13 @@ export type OnDetectCallback = (
     signal: DetectionSignal,
     verseCount?: number
 ) => void;
-
 type SmartDetectionOptions = {
     confidenceThreshold?: number;  // Minimum confidence to trigger (default: 70)
     windowSize?: number;           // Words per window (default: 15)
     debounceMs?: number;           // Debounce delay (default: 300)
     version?: string;              // Bible version (default: 'KJV')
     theme?: string;                // Current sermon theme
+    strictMode?: boolean;          // If true, commands require "Projector" or "Creenly" wake-word
 };
 
 // Word-to-number mapping for spoken numbers (Shared across all detection logic)
@@ -55,8 +55,96 @@ const WORD_NUMBERS: Record<string, number> = {
     'twenty one': 21, 'twenty two': 22, 'twenty three': 23, 'twenty four': 24, 'twenty five': 25,
     'twenty six': 26, 'twenty seven': 27, 'twenty eight': 28, 'twenty nine': 29, 'thirty': 30,
     'thirty one': 31, 'thirty two': 32, 'thirty three': 33, 'thirty four': 34, 'thirty five': 35,
-    'forty': 40, 'fifty': 50, 'sixty': 60, 'seventy': 70, 'eighty': 80, 'ninety': 90,
-    'hundred': 100, 'one hundred': 100
+    'thirty six': 36, 'thirty seven': 37, 'thirty eight': 38, 'thirty nine': 39,
+    'forty': 40, 'forty one': 41, 'forty two': 42, 'forty three': 43, 'forty four': 44, 'forty five': 45,
+    'forty six': 46, 'forty seven': 47, 'forty eight': 48, 'forty nine': 49,
+    'fifty': 50, 'fifty one': 51, 'fifty two': 52, 'fifty three': 53, 'fifty four': 54, 'fifty five': 55,
+    'fifty six': 56, 'fifty seven': 57, 'fifty eight': 58, 'fifty nine': 59,
+    'sixty': 60, 'sixty one': 61, 'sixty two': 62, 'sixty three': 63, 'sixty four': 64, 'sixty five': 65,
+    'sixty six': 66, 'sixty seven': 67, 'sixty eight': 68, 'sixty nine': 69,
+    'seventy': 70, 'seventy one': 71, 'seventy two': 72, 'seventy three': 73, 'seventy four': 74, 'seventy five': 75,
+    'seventy six': 76, 'seventy seven': 77, 'seventy eight': 78, 'seventy nine': 79,
+    'eighty': 80, 'eighty one': 81, 'eighty two': 82, 'eighty three': 83, 'eighty four': 84, 'eighty five': 85,
+    'eighty six': 86, 'eighty seven': 87, 'eighty eight': 88, 'eighty nine': 89,
+    'ninety': 90, 'ninety one': 91, 'ninety two': 92, 'ninety three': 93, 'ninety four': 94, 'ninety five': 95,
+    'ninety six': 96, 'ninety seven': 97, 'ninety eight': 98, 'ninety nine': 99,
+    'one hundred': 100, 'hundred': 100,
+    'one hundred and one': 101, 'one hundred one': 101,
+    'one hundred and two': 102, 'one hundred two': 102,
+    'one hundred and three': 103, 'one hundred three': 103,
+    'one hundred and four': 104, 'one hundred four': 104,
+    'one hundred and five': 105, 'one hundred five': 105,
+    'one hundred and six': 106, 'one hundred six': 106,
+    'one hundred and seven': 107, 'one hundred seven': 107,
+    'one hundred and eight': 108, 'one hundred eight': 108,
+    'one hundred and nine': 109, 'one hundred nine': 109,
+    'one hundred and ten': 110, 'one hundred ten': 110,
+    'one hundred and eleven': 111, 'one hundred eleven': 111,
+    'one hundred and twelve': 112, 'one hundred twelve': 112,
+    'one hundred and thirteen': 113, 'one hundred thirteen': 113,
+    'one hundred and fourteen': 114, 'one hundred fourteen': 114,
+    'one hundred and fifteen': 115, 'one hundred fifteen': 115,
+    'one hundred and sixteen': 116, 'one hundred sixteen': 116,
+    'one hundred and seventeen': 117, 'one hundred seventeen': 117,
+    'one hundred and eighteen': 118, 'one hundred eighteen': 118,
+    'one hundred and nineteen': 119, 'one hundred nineteen': 119,
+    'one hundred and twenty': 120, 'one hundred twenty': 120,
+    'one hundred and twenty one': 121, 'one hundred twenty one': 121,
+    'one hundred and twenty two': 122, 'one hundred twenty two': 122,
+    'one hundred and twenty three': 123, 'one hundred twenty three': 123,
+    'one hundred and twenty four': 124, 'one hundred twenty four': 124,
+    'one hundred and twenty five': 125, 'one hundred twenty five': 125,
+    'one hundred and twenty six': 126, 'one hundred twenty six': 126,
+    'one hundred and twenty seven': 127, 'one hundred twenty seven': 127,
+    'one hundred and twenty eight': 128, 'one hundred twenty eight': 128,
+    'one hundred and twenty nine': 129, 'one hundred twenty nine': 129,
+    'one hundred and thirty': 130, 'one hundred thirty': 130,
+    'one hundred and thirty one': 131, 'one hundred thirty one': 131,
+    'one hundred and thirty two': 132, 'one hundred thirty two': 132,
+    'one hundred and thirty three': 133, 'one hundred thirty three': 133,
+    'one hundred and thirty four': 134, 'one hundred thirty four': 134,
+    'one hundred and thirty five': 135, 'one hundred thirty five': 135,
+    'one hundred and thirty six': 136, 'one hundred thirty six': 136,
+    'one hundred and thirty seven': 137, 'one hundred thirty seven': 137,
+    'one hundred and thirty eight': 138, 'one hundred thirty eight': 138,
+    'one hundred and thirty nine': 139, 'one hundred thirty nine': 139,
+    'one hundred and forty': 140, 'one hundred forty': 140,
+    'one hundred and forty one': 141, 'one hundred forty one': 141,
+    'one hundred and forty two': 142, 'one hundred forty two': 142,
+    'one hundred and forty three': 143, 'one hundred forty three': 143,
+    'one hundred and forty four': 144, 'one hundred forty four': 144,
+    'one hundred and forty five': 145, 'one hundred forty five': 145,
+    'one hundred and forty six': 146, 'one hundred forty six': 146,
+    'one hundred and forty seven': 147, 'one hundred forty seven': 147,
+    'one hundred and forty eight': 148, 'one hundred forty eight': 148,
+    'one hundred and forty nine': 149, 'one hundred forty nine': 149,
+    'one hundred and fifty': 150, 'one hundred fifty': 150,
+    'one hundred and fifty one': 151, 'one hundred fifty one': 151,
+    'one hundred and fifty two': 152, 'one hundred fifty two': 152,
+    'one hundred and fifty three': 153, 'one hundred fifty three': 153,
+    'one hundred and fifty four': 154, 'one hundred fifty four': 154,
+    'one hundred and fifty five': 155, 'one hundred fifty five': 155,
+    'one hundred and fifty six': 156, 'one hundred fifty six': 156,
+    'one hundred and fifty seven': 157, 'one hundred fifty seven': 157,
+    'one hundred and fifty eight': 158, 'one hundred fifty eight': 158,
+    'one hundred and fifty nine': 159, 'one hundred fifty nine': 159,
+    'one hundred and sixty': 160, 'one hundred sixty': 160,
+    'one hundred and sixty one': 161, 'one hundred sixty one': 161,
+    'one hundred and sixty two': 162, 'one hundred sixty two': 162,
+    'one hundred and sixty three': 163, 'one hundred sixty three': 163,
+    'one hundred and sixty four': 164, 'one hundred sixty four': 164,
+    'one hundred and sixty five': 165, 'one hundred sixty five': 165,
+    'one hundred and sixty six': 166, 'one hundred sixty six': 166,
+    'one hundred and sixty seven': 167, 'one hundred sixty seven': 167,
+    'one hundred and sixty eight': 168, 'one hundred sixty eight': 168,
+    'one hundred and sixty nine': 169, 'one hundred sixty nine': 169,
+    'one hundred and seventy': 170, 'one hundred seventy': 170,
+    'one hundred and seventy one': 171, 'one hundred seventy one': 171,
+    'one hundred and seventy two': 172, 'one hundred seventy two': 172,
+    'one hundred and seventy three': 173, 'one hundred seventy three': 173,
+    'one hundred and seventy four': 174, 'one hundred seventy four': 174,
+    'one hundred and seventy five': 175, 'one hundred seventy five': 175,
+    'one hundred and seventy six': 176, 'one hundred seventy six': 176
 };
 
 // Comprehensive Bible Book patterns for quick detection (Shared)
@@ -103,9 +191,10 @@ export function useSmartDetection(
     const {
         confidenceThreshold = 70,
         windowSize = 15,
-        debounceMs = 300,
+        debounceMs = 200,
         version = 'KJV',
         theme = '',
+        strictMode = false,
     } = options;
 
     // State refs
@@ -114,6 +203,7 @@ export function useSmartDetection(
     const processingRef = useRef<boolean>(false);
     const timeoutRef = useRef<NodeJS.Timeout | null>(null);
     const recentDetectionsRef = useRef<Map<string, number>>(new Map());
+    const recentCommandsRef = useRef<Map<string, number>>(new Map()); // Command Cooldown (Deduplication)
     const pastorProfileRef = useRef<PastorProfile | null>(null);
     const currentVerseRef = useRef<string | null>(currentVerse);
     const chapterContextRef = useRef<string | null>(null);
@@ -137,7 +227,6 @@ export function useSmartDetection(
         }
     }, [currentVerse]);
 
-    // Load pastor profile and Songs on mount
     useEffect(() => {
         pastorProfileRef.current = loadPastorProfile();
         getResources().then(resources => {
@@ -146,14 +235,31 @@ export function useSmartDetection(
         });
     }, []);
 
+    /**
+     * Check if a command is in cooldown (to prevent repetitive triggers for emphasis)
+     * Returns true if it should be IGNORED.
+     */
+    const checkCommandCooldown = useCallback((type: string, payload?: any) => {
+        const key = payload ? `${type}_${JSON.stringify(payload)}` : type;
+        const lastExecuted = recentCommandsRef.current.get(key);
+        const cooldownMs = 2500; // 2.5 seconds for emphasis/repetition protection
+
+        if (lastExecuted && Date.now() - lastExecuted < cooldownMs) {
+            console.log(`[SmartDetect] Cooldown active for: ${key}. Ignoring repetitive command.`);
+            return true;
+        }
+
+        recentCommandsRef.current.set(key, Date.now());
+        return false;
+    }, []);
+
     const processWindow = useCallback(async () => {
         if (processingRef.current) {
             pendingRetryRef.current = true;
             return;
         }
 
-        if (wordBufferRef.current.length < 2) return;
-
+        // REMOVED: wordBufferRef.current.length < 2 restriction to allow single-number verse jumping
         processingRef.current = true;
 
         // Get the text window (last N words)
@@ -167,18 +273,35 @@ export function useSmartDetection(
             // Navigation operates on what's currently on the LIVE OUTPUT (tracked by currentVerseRef/chapterContextRef)
 
             // Next verse patterns - require explicit navigation intent
-            if (/\b(?:next verse|next one|go next|move forward|go forward|advance|the next)\b/.test(lowerText)) {
-                console.log('[SmartDetect] FAST NAV: next_verse (context:', chapterContextRef.current, ')');
-                onDetect([], [{ type: 'next_verse' }], 'SWITCH', undefined);
+            // Optimized to avoid false positives on common teaching phrases
+            const nextPattern = strictMode
+                ? /\b(?:projector|creenly)\b.*\b(?:next verse|next one|go next|move forward)\b/i
+                : /\b(?:next verse|next one|go next|move forward|advance|the next)\b/i;
+
+            if (nextPattern.test(lowerText)) {
+                if (!checkCommandCooldown('next_verse')) {
+                    console.log('[SmartDetect] FAST NAV: next_verse');
+                    onDetect([], [{ type: 'next_verse' }], 'SWITCH', undefined);
+                }
                 wordBufferRef.current = [];
                 processingRef.current = false;
                 return;
             }
 
             // Previous verse patterns - require explicit navigation intent
-            if (/\b(?:previous verse|previous one|go back|back up|last verse|go backward|step back|back one)\b/.test(lowerText)) {
-                console.log('[SmartDetect] FAST NAV: prev_verse (context:', chapterContextRef.current, ')');
-                onDetect([], [{ type: 'prev_verse' }], 'SWITCH', undefined);
+            // Added negative lookahead/checks for "let me", "let's" to protect conversational speech
+            const prevPattern = strictMode
+                ? /\b(?:projector|creenly)\b.*\b(?:previous verse|go back|back up|last verse)\b/i
+                : /(?<!let me |let's |let us )\b(?:previous verse|previous one|go back to (?:the )?(?:last|previous) verse|back up to the last|last verse|step back one)\b/i;
+
+            // Manual check for "go back" since JS regex lookbehind is sometimes finicky across engines
+            const isConversationalBack = /\b(?:let me|let's|let us|we will)\s+go back\b/.test(lowerText);
+
+            if (prevPattern.test(lowerText) && (!isConversationalBack || strictMode)) {
+                if (!checkCommandCooldown('prev_verse')) {
+                    console.log('[SmartDetect] FAST NAV: prev_verse');
+                    onDetect([], [{ type: 'prev_verse' }], 'SWITCH', undefined);
+                }
                 wordBufferRef.current = [];
                 processingRef.current = false;
                 return;
@@ -193,6 +316,10 @@ export function useSmartDetection(
                 chapterContextRef.current = null;
                 return;
             }
+
+            // REMOVED: PRIORITY 1C from Slow Path.
+            // This was too broad and triggered on conversational numbers like "there were 7 of them".
+            // Sequential jumping is now handled exclusively by the anchored Fast Path in addText.
 
             // PRIORITY 1B: Translation Switching - Check EARLY before song/scripture detection
             // Comprehensive aliases for all Bible translations including phonetic/speech variations
@@ -248,7 +375,7 @@ export function useSmartDetection(
                 // NLT - New Living Translation
                 "new living translation": "NLT", "new living": "NLT", "nlt": "NLT",
                 "n l t": "NLT", "n.l.t": "NLT", "the nlt": "NLT", "nlt version": "NLT",
-                "living translation": "NLT", "not": "NLT", "nl tea": "NLT", "en l t": "NLT",
+                "living translation": "NLT", "nl tea": "NLT", "en l t": "NLT",
 
                 // VOICE - The Voice
                 "the voice": "VOICE", "voice bible": "VOICE", "voice": "VOICE",
@@ -277,13 +404,13 @@ export function useSmartDetection(
             };
 
             // RISKY ALIASES: Common words that MUST have command context to trigger a switch
-            const RISKY_ALIASES = ["not", "voice", "message", "original", "authorised", "authorized", "classic", "international", "standard", "living", "web", "passion", "net", "tlb"];
+            const RISKY_ALIASES = ["voice", "message", "original", "authorised", "authorized", "classic", "international", "standard", "living", "web", "passion", "net", "tlb"];
 
             const sortedAliases = Object.keys(VERSION_ALIASES).sort((a, b) => b.length - a.length);
             const aliasPattern = sortedAliases.map(k => k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|');
 
             // Shared command patterns
-            const commandPrefix = `(?:in|to|use|read|switch to|change to|give me|show me|can i have|let's have|have this in|read this in|see this in)\\s+(?:the|a)?\\s*`;
+            const commandPrefix = `(?:use|read|switch to|change to|give me|show me|can i have|let's have|have this in|read this in|see this in)\\s+(?:the|a)?\\s*`;
             const articlePrefix = `(?:the|a)\\s+`;
             const versionSuffix = `\\s+(?:version|please|translation|bible)`;
 
@@ -302,18 +429,23 @@ export function useSmartDetection(
                 const matchedVersion = VERSION_ALIASES[alias];
 
                 if (matchedVersion) {
-                    // Accuracy Guard: If it's a risky/common word, it MUST have a prefix or suffix
-                    const isRisky = RISKY_ALIASES.includes(alias);
-                    const hasContext = !!(prefixGroup || suffix);
+                    // Accuracy Guard: If it's a risky/common word, it MUST have a command prefix or a version suffix
+                    // Articles (the/a) are in prefixGroup 2, while explicit commands are in prefixGroup 1.
+                    // Risky words like "message" or "voice" should NOT trigger on just "the message" or "a voice".
+                    const isRisky = RISKY_ALIASES.some(r => alias.includes(r));
+                    const hasExplicitCommand = !!(versionMatch[1] || suffix);
+                    const hasAnyContext = !!(prefixGroup || suffix);
 
-                    if (!isRisky || (isRisky && hasContext)) {
-                        console.log('[AI] Translation switch detected via voice:', matchedVersion, `(Trigger: "${alias}")`);
-                        onDetect([], [{ type: 'switch_translation', version: matchedVersion }], 'SWITCH', 1);
+                    if (!isRisky || hasExplicitCommand) {
+                        if (!checkCommandCooldown('switch_translation', matchedVersion)) {
+                            console.log('[AI] Translation switch detected via voice:', matchedVersion, `(Trigger: "${alias}")`);
+                            onDetect([], [{ type: 'switch_translation', version: matchedVersion }], 'SWITCH', 1);
+                        }
                         wordBufferRef.current = [];
                         processingRef.current = false;
                         return;
                     } else if (isRisky) {
-                        console.log('[AI] Ignoring risky version alias without context:', alias);
+                        console.log('[AI] Ignoring risky version alias without explicit command context:', alias);
                     }
                 }
             }
@@ -750,18 +882,81 @@ export function useSmartDetection(
         if (contextRef.current === lowerFullText) return;
         contextRef.current = lowerFullText;
 
+        // 0. QUICK SEQUENTIAL VERSE JUMPING ("17", "now 18", "verse 19", "seventeen", "And 18.")
+        // SAFETY: Only trigger if the ENTIRE text window is just the number/command.
+        // Stripping punctuation like '.' or ',' which Deepgram often appends to short segments.
+        if (chapterContextRef.current) {
+            // Clean text: strip trailing punctuation and extra spaces
+            const cleanFullText = lowerFullText.replace(/[.,!?]$/, '').trim();
+
+            // Regex matches: "7", "now 7", "verse 7", "and 7", "the 7", "then 7", "seventeen"
+            // Supported Segues: now, then, and, the, verse, go to, look at, page
+            // SAFETY: In Strict Mode, even sequential jumps require the wake-word to prevent accidental triggers during teaching.
+            const wakeWordPrefix = strictMode ? '(?:projector|creenly)\\s+.*?' : '';
+            const seguePattern = `(?:now|then|and|the|verse|go to|look at|page|verses)`;
+            const seqRegex = new RegExp(`^${wakeWordPrefix}(?:${seguePattern}\\s+)?(?:${seguePattern}\\s+)?(\\d{1,3}|${WORD_NUMBER_PATTERN})$`, 'i');
+
+            const standaloneMatch = cleanFullText.match(seqRegex);
+            if (standaloneMatch) {
+                const matchedVal = standaloneMatch[1].toLowerCase();
+                const targetVerse = WORD_NUMBERS[matchedVal] || parseInt(matchedVal);
+
+                if (targetVerse > 0 && targetVerse <= 176) {
+                    const [book, chapterStr] = chapterContextRef.current.split(/ (\d+)$/);
+                    const chapter = parseInt(chapterStr);
+                    const key = `${book}-${chapter}-${targetVerse}-fast-seq`;
+
+                    if (!checkCommandCooldown('jump_to_verse', targetVerse)) {
+                        console.log('[SmartDetect] ⚡ FAST SEQUENTIAL JUMP:', `${book} ${chapter}:${targetVerse} (from "${cleanFullText}")`);
+                        const processFastSeq = async () => {
+                            const currentVersion = options.version || 'KJV';
+                            const text = await lookupVerseAsync(book, chapter, targetVerse, currentVersion);
+                            if (text) {
+                                onDetect([{
+                                    book, chapter, verse: targetVerse,
+                                    text,
+                                    reference: `${book} ${chapter}:${targetVerse}`,
+                                    confidence: 100,
+                                    matchType: 'exact'
+                                }], [], 'SWITCH', 1);
+                                recentDetectionsRef.current.set(key, Date.now());
+
+                                // CLEAR BUFFER IMMEDIATELY to prevent double-firing
+                                wordBufferRef.current = [];
+                                if (timeoutRef.current) clearTimeout(timeoutRef.current);
+                            }
+                        };
+                        processFastSeq();
+                        return;
+                    }
+                }
+            }
+        }
+
         // 1. FAST NAVIGATION COMMANDS ("Next Verse", "Previous Verse")
-        if (/\b(?:next verse|next one|go next)\b/.test(lowerFullText)) {
-            console.log('[SmartDetect] ⚡ ZERO LATENCY NAV: Next Verse');
-            onDetect([], [{ type: 'next_verse' }], 'SWITCH', undefined);
+        const nextRegex = strictMode
+            ? /\b(?:projector|creenly)\b.*\b(?:next verse|next one|go next)\b/i
+            : /\b(?:next verse|next one|go next)\b/i;
+
+        if (nextRegex.test(lowerFullText)) {
+            if (!checkCommandCooldown('next_verse')) {
+                console.log('[SmartDetect] ⚡ ZERO LATENCY NAV: Next Verse');
+                onDetect([], [{ type: 'next_verse' }], 'SWITCH', undefined);
+            }
             wordBufferRef.current = [];
             if (timeoutRef.current) clearTimeout(timeoutRef.current);
             return;
         }
 
-        if (/\b(?:previous verse|previous one|go back|last verse)\b/.test(lowerFullText)) {
-            console.log('[SmartDetect] ⚡ ZERO LATENCY NAV: Prev Verse');
-            onDetect([], [{ type: 'prev_verse' }], 'SWITCH', undefined);
+        const prevRegex = strictMode
+            ? /\b(?:projector|creenly)\b.*\b(?:previous verse|previous one|go back|last verse)\b/i
+            : /\b(?:previous verse|previous one|go back|last verse)\b/i;
+
+        if (prevRegex.test(lowerFullText)) {
+            if (!checkCommandCooldown('prev_verse')) {
+                console.log('[SmartDetect] ⚡ ZERO LATENCY NAV: Prev Verse');
+                onDetect([], [{ type: 'prev_verse' }], 'SWITCH', undefined);
+            }
             wordBufferRef.current = [];
             if (timeoutRef.current) clearTimeout(timeoutRef.current);
             return;
@@ -775,12 +970,15 @@ export function useSmartDetection(
 
             // 2a. RELATIVE CHAPTER ("Chapter 5", "Chapter Number 5")
             // Supports "Chapter 5", "Chapter Number 5", "Chapter No. 5"
-            let chapMatch = lowerFullText.match(/(?:chapter|go to chapter)(?:\s+(?:number|num|no\.?))?\s*(\d+)(?:\s*(?:verse|v)?\.?\s*(\d+))?/i);
+            // In Strict Mode, relative navigation ALSO requires the wake-word.
+            const wakePrefix = strictMode ? '\\b(?:projector|creenly)\\b.*?\\b' : '\\b';
+
+            let chapMatch = lowerFullText.match(new RegExp(`${wakePrefix}(?:chapter|go to chapter)(?:\\s+(?:number|num|no\\.?))?\\s*(\\d+)(?:\\s*(?:verse|v)?\\.?\\s*(\\d+))?`, 'i'));
 
             // Fallback: Check for word numbers ("chapter nine", "chapter number nine")
             if (!chapMatch) {
                 const wordMatch = lowerFullText.match(new RegExp(
-                    `(?:chapter|go to chapter)(?:\\s+(?:number|num|no\\.?))?\\s+(${WORD_NUMBER_PATTERN})(?:\\s*(?:verse|v)?\\.?\\s*(\\d+|${WORD_NUMBER_PATTERN}))?`,
+                    `${wakePrefix}(?:chapter|go to chapter)(?:\\s+(?:number|num|no\\.?))?\\s+(${WORD_NUMBER_PATTERN})(?:\\s*(?:verse|v)?\\.?\\s*(\\d+|${WORD_NUMBER_PATTERN}))?`,
                     'i'
                 ));
                 if (wordMatch) {

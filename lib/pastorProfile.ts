@@ -34,6 +34,7 @@ export type PastorProfile = {
         falsePositives: number;
         missed: number;
     };
+    strictCommandMode?: boolean;  // If true, navigation requires wake-word
     createdAt: string;
     updatedAt: string;
 };
@@ -62,6 +63,7 @@ const DEFAULT_PROFILE: PastorProfile = {
         falsePositives: 0,
         missed: 0,
     },
+    strictCommandMode: false,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
 };

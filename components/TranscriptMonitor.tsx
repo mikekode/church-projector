@@ -17,15 +17,39 @@ type Props = {
 
 // Pulsating Voice Wave Component (Isolated)
 const VoiceWave = ({ level, active }: { level: number, active: boolean }) => {
+    // 9 bars for a fuller, more professional wave look
+    const sensitivities = [0.3, 0.4, 0.7, 0.9, 1.0, 0.9, 0.7, 0.4, 0.3];
+
     return (
-        <div className="flex items-center gap-1 h-4">
-            {[0.5, 0.8, 1.0, 0.8, 0.5].map((sensitivity, i) => {
-                const height = active ? Math.max(3, level * 24 * sensitivity) : 2;
+        <div className="flex items-center gap-[4px] h-6 px-1">
+            {sensitivities.map((sensitivity, i) => {
+                // Energetic scaling: use a higher multiplier (40) and scaleY for smoothness
+                const scale = active ? Math.max(0.1, level * sensitivity * 2.5) : 0.05;
+                const baseHeight = 24; // Full container height
+
+                let bgColor = 'bg-indigo-500';
+                let glow = '';
+
+                // Energy States based on level
+                if (active) {
+                    if (level > 0.6) {
+                        bgColor = 'bg-white';
+                        glow = 'shadow-[0_0_12px_rgba(255,255,255,0.8)]';
+                    } else if (level > 0.3) {
+                        bgColor = 'bg-cyan-400';
+                        glow = 'shadow-[0_0_8px_rgba(34,211,238,0.5)]';
+                    }
+                }
+
                 return (
                     <div
                         key={i}
-                        className={`w-1 bg-indigo-500 rounded-full transition-all duration-75 ease-out ${active ? 'opacity-100' : 'opacity-20'}`}
-                        style={{ height: `${height}px` }}
+                        className={`w-[4px] rounded-full transition-all duration-75 ease-out ${bgColor} ${glow} ${active ? 'opacity-100' : 'opacity-20'}`}
+                        style={{
+                            height: `${baseHeight}px`,
+                            transform: `scaleY(${scale})`,
+                            transformOrigin: 'center'
+                        }}
                     />
                 );
             })}

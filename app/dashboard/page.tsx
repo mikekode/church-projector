@@ -77,27 +77,7 @@ type DetectedItem = {
     sourceType?: 'regex' | 'ai' | 'song' | 'semantic';
 };
 
-// Pulsating Voice Wave Component
-const VoiceWave = ({ level, active }: { level: number, active: boolean }) => {
-    // 5 bars with different sensitivities
-    // We use CSS transitions for smooth motion
-    return (
-        <div className="flex items-center gap-1 h-4">
-            {[0.5, 0.8, 1.0, 0.8, 0.5].map((sensitivity, i) => {
-                // Calculate height: Base 2px + Level * Multiplier
-                // When not active (mic off), flat line.
-                const height = active ? Math.max(3, level * 24 * sensitivity) : 2;
-                return (
-                    <div
-                        key={i}
-                        className={`w-1 bg-indigo-500 rounded-full transition-all duration-75 ease-out ${active ? 'opacity-100' : 'opacity-20'}`}
-                        style={{ height: `${height}px` }}
-                    />
-                );
-            })}
-        </div>
-    );
-};
+
 
 
 /**
@@ -807,7 +787,8 @@ export default function DashboardPage() {
         {
             confidenceThreshold,
             version: selectedVersion,
-            theme: pastorProfile?.sermonContext?.theme
+            theme: pastorProfile?.sermonContext?.theme,
+            strictMode: pastorProfile?.strictCommandMode
         }
     );
 
@@ -1401,23 +1382,49 @@ export default function DashboardPage() {
                         </div>
 
                         {/* CONFIDENCE THRESHOLD */}
-                        <div className="flex-shrink-0 bg-zinc-900/50 border border-white/5 rounded-xl p-3">
-                            <div className="flex items-center justify-between mb-1">
-                                <span className="text-xs font-bold text-zinc-500 uppercase">Confidence Threshold</span>
-                                <span className="text-xs font-mono text-indigo-400">{confidenceThreshold}%</span>
+                        <div className="flex-shrink-0 bg-zinc-900/50 border border-white/5 rounded-xl p-3 space-y-3">
+                            <div>
+                                <div className="flex items-center justify-between mb-1">
+                                    <span className="text-xs font-bold text-zinc-500 uppercase">Confidence Threshold</span>
+                                    <span className="text-xs font-mono text-indigo-400">{confidenceThreshold}%</span>
+                                </div>
+                                <input
+                                    type="range"
+                                    min="50"
+                                    max="95"
+                                    step="5"
+                                    value={confidenceThreshold}
+                                    onChange={(e) => setConfidenceThreshold(parseInt(e.target.value))}
+                                    className="w-full accent-indigo-500"
+                                />
+                                <div className="flex justify-between text-[10px] text-zinc-600 mt-1">
+                                    <span>Sensitive</span>
+                                    <span>Strict</span>
+                                </div>
                             </div>
-                            <input
-                                type="range"
-                                min="50"
-                                max="95"
-                                step="5"
-                                value={confidenceThreshold}
-                                onChange={(e) => setConfidenceThreshold(parseInt(e.target.value))}
-                                className="w-full accent-indigo-500"
-                            />
-                            <div className="flex justify-between text-[10px] text-zinc-600 mt-1">
-                                <span>Sensitive</span>
-                                <span>Strict</span>
+
+                            <div className="pt-2 border-t border-white/5">
+                                <label className="flex items-center justify-between cursor-pointer group">
+                                    <div className="flex flex-col">
+                                        <span className="text-xs font-bold text-zinc-400 uppercase tracking-wider group-hover:text-white transition-colors">Strict Commands</span>
+                                        <span className="text-[9px] text-zinc-600">Requires "Projector" wake-word</span>
+                                    </div>
+                                    <div className="relative inline-flex items-center">
+                                        <input
+                                            type="checkbox"
+                                            className="sr-only peer"
+                                            checked={pastorProfile?.strictCommandMode || false}
+                                            onChange={(e) => {
+                                                if (pastorProfile) {
+                                                    const updated = { ...pastorProfile, strictCommandMode: e.target.checked };
+                                                    setPastorProfile(updated);
+                                                    savePastorProfile(updated);
+                                                }
+                                            }}
+                                        />
+                                        <div className="w-8 h-4 bg-zinc-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-zinc-400 after:border-zinc-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-green-600 peer-checked:after:bg-white" />
+                                    </div>
+                                </label>
                             </div>
                         </div>
                     </section>
@@ -1498,8 +1505,8 @@ export default function DashboardPage() {
                     </section>
 
                     {/* RIGHT: LIVE PREVIEW */}
-                    <section className="col-span-3 flex flex-col gap-4 min-h-0 overflow-hidden" style={{ maxHeight: '450px' }}>
-                        <div className="bg-zinc-900 border border-white/5 rounded-2xl flex-1 flex flex-col relative overflow-hidden">
+                    <section className="col-span-3 flex flex-col gap-4 min-h-0" style={{ maxHeight: '450px' }}>
+                        <div className="bg-zinc-900 border border-white/5 rounded-2xl flex-1 flex flex-col relative">
                             <header className="p-4 border-b border-white/5 flex justify-between items-center bg-zinc-950 rounded-t-2xl">
                                 <h3 className="text-xs font-bold text-green-500 uppercase tracking-wider flex items-center gap-2">
                                     <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" /> Live Output
@@ -1518,7 +1525,7 @@ export default function DashboardPage() {
                                         {showTimerSettings && (
                                             <>
                                                 <div className="fixed inset-0 z-[59]" onClick={() => setShowTimerSettings(false)} />
-                                                <div className="absolute top-full right-0 mt-2 bg-zinc-900 border border-white/10 rounded-xl shadow-2xl p-4 w-64 z-[60]" onClick={e => e.stopPropagation()}>
+                                                <div className="absolute top-full right-0 mt-2 bg-zinc-900 border border-white/10 rounded-xl shadow-2xl p-4 w-72 z-[60] isolate" onClick={e => e.stopPropagation()}>
                                                     <h4 className="text-xs font-bold text-zinc-500 uppercase mb-3">Timer Settings</h4>
 
                                                     {/* Mode & Time */}

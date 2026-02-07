@@ -104,22 +104,47 @@ export default function DeepgramRecognizer({ isListening, onTranscript, onInteri
                 throw new Error("Missing Deepgram API Key - configure API proxy or NEXT_PUBLIC_DEEPGRAM_API_KEY");
             }
 
+            // 2.5 Advanced Keyword Boosting with Weighting (Robustness Upgrade)
+            // Books are boosted highly (3.0), concepts moderately (2.0)
+            // Including phonetic mis-transcriptions as aliases
+            const weightedKeywords = [
+                // Books (Weighted 3)
+                "Genesis:3", "Exodus:3", "Leviticus:3", "Numbers:3", "Deuteronomy:3", "Joshua:3", "Judges:3", "Ruth:3", "Samuel:3", "Kings:3", "Chronicles:3", "Ezra:3", "Nehemiah:3", "Esther:3", "Job:3", "Psalms:3", "Proverbs:3", "Ecclesiastes:3", "Isaiah:3", "Jeremiah:3", "Lamentations:3", "Ezekiel:3", "Daniel:3", "Hosea:3", "Joel:3", "Amos:3", "Obadiah:3", "Jonah:3", "Micah:3", "Nahum:3", "Habakkuk:3", "Zephaniah:3", "Haggai:3", "Zechariah:3", "Malachi:3",
+                "Matthew:3", "Mark:3", "Luke:3", "John:3", "Acts:3", "Romans:3", "Corinthians:3", "Galatians:3", "Ephesians:3", "Philippians:3", "Colossians:3", "Thessalonians:3", "Timothy:3", "Titus:3", "Philemon:3", "Hebrews:3", "James:3", "Peter:3", "Jude:3", "Revelation:3",
+                // Phonetic Aliases / Common Mis-transcriptions (Weighted 3)
+                "Ax:3", "Mathew:3", "Matthews:3", "Philipian:3", "Ephesian:3", "He brews:3", "Colosian:3", "Thesalonians:3", "Revelations:3", "Psams:3", "Samyuel:3", "Sammual:3",
+                // Biblical Concepts (Weighted 2)
+                "scripture:2", "verse:3", "chapter:3", "bible:2", "halleluiah:2", "amen:2", "jesus:2", "christ:2", "god:2", "lord:2", "spirit:2", "faith:2", "holy:2", "gospel:2", "grace:2", "glory:2", "baptize:2", "prophet:2",
+                // App Commands (Weighted 3)
+                "projector:3", "creenly:3", "listen:2", "display:2", "show:2"
+            ].join(',');
+
+            // Deepgram Tuning for Fast Speech:
+            // - filler_words=true: gracefully handles "um", "uh" without breaking regex chains
+            // - endpointing=500: waits slightly longer for fast speakers to finish a sentence
+            // - keywords: weighted biblical dictionary
             const wsUrl = `wss://api.deepgram.com/v1/listen?` +
                 `encoding=linear16&sample_rate=16000&channels=1&` +
                 `model=nova-2&language=en&` +
-                `interim_results=true&punctuate=true&smart_format=true`;
+                `interim_results=true&punctuate=true&smart_format=true&filler_words=true&endpointing=250&` +
+                `keywords=${encodeURIComponent(weightedKeywords)}`;
 
             console.log("Connecting to Deepgram...");
             const ws = new WebSocket(wsUrl, ["token", apiKey]);
             wsRef.current = ws;
 
-            ws.onopen = () => {
+            ws.onopen = async () => {
                 console.log("Deepgram WebSocket connected!");
                 setStatus("listening");
 
                 // 3. Set up Web Audio API for raw PCM capture
                 const audioContext = new AudioContext({ sampleRate: 16000 });
                 audioContextRef.current = audioContext;
+
+                // Resume context if suspended (browser security requirement)
+                if (audioContext.state === 'suspended') {
+                    await audioContext.resume();
+                }
 
                 const source = audioContext.createMediaStreamSource(stream);
                 // Lower buffer size (1024) significantly reduces latency (64ms vs 256ms)
@@ -140,8 +165,9 @@ export default function DeepgramRecognizer({ isListening, onTranscript, onInteri
                         const level = Math.min(1, rms * 8);
 
                         // Optimization: Only update if change is significant (> 0.02)
-                        // This prevents excessive re-renders of the entire dashboard
-                        if (Math.abs(level - (processorRef.current as any)._lastLevel || 0) > 0.02) {
+                        // SAFETY: Use nullish coalescing to avoid NaN comparison if _lastLevel is undefined
+                        const lastLevel = (processorRef.current as any)._lastLevel ?? 0;
+                        if (Math.abs(level - lastLevel) > 0.02) {
                             (processorRef.current as any)._lastLevel = level;
                             onVolumeRef.current?.(level);
                         }
