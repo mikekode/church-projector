@@ -6,9 +6,10 @@ import { getBibleBooks, getChapterVerseCount, lookupVerseAsync, SUPPORTED_VERSIO
 import { DEFAULT_THEMES, GOOGLE_FONTS, DEFAULT_LAYOUT } from '@/utils/themes';
 import { ScheduleItem } from '@/utils/scheduleManager';
 import { extractTextFromFile, parseLyrics, isCcliCopy, parseCcliCopy, parsePresentationFile } from '@/utils/lyricsParser';
-import { Search, Music, Monitor, FileText, Image as ImageIcon, Book, Plus, Play, Trash2, Folder, FolderPlus, X, Video, Check, Eye, ImagePlus, Bold, Italic } from 'lucide-react';
+import { Search, Music, Monitor, FileText, Image as ImageIcon, Book, Plus, Play, Trash2, Folder, FolderPlus, X, Video, Check, Eye, ImagePlus, Bold, Italic, ChevronDown, Sun } from 'lucide-react';
 import PreviewModal from './PreviewModal';
 import SongImportModal from './SongImportModal';
+import LiveFeedSelector from './LiveFeedSelector';
 import { MOTION_BACKGROUNDS } from '@/utils/motionBackgrounds';
 
 const VersePreview = ({ book, chapter, verse, version }: { book: string, chapter: number, verse: number, version: string }) => {
@@ -21,7 +22,7 @@ const VersePreview = ({ book, chapter, verse, version }: { book: string, chapter
         return () => { active = false; };
     }, [book, chapter, verse, version]);
 
-    if (!text) return <span className="animate-pulse bg-zinc-800 rounded h-3 w-12 inline-block" />;
+    if (!text) return <span className="animate-pulse bg-zinc-200 dark:bg-zinc-800 rounded h-3 w-12 inline-block" />;
     return <span className="line-clamp-2">{text}</span>;
 }
 
@@ -31,6 +32,8 @@ interface ResourceLibraryPanelProps {
     onApplyTheme: (theme: ProjectorTheme) => void;
     activeThemeId?: string;
     onResourcesChanged?: (items: ResourceItem[]) => void;
+    onToggleLibrary?: () => void;
+    isLibraryOpen?: boolean;
 }
 
 type TabType = 'song' | 'media' | 'presentation' | 'scripture' | 'theme';
@@ -40,7 +43,9 @@ export default function ResourceLibraryPanel({
     onGoLive,
     onApplyTheme,
     activeThemeId,
-    onResourcesChanged
+    onResourcesChanged,
+    onToggleLibrary,
+    isLibraryOpen
 }: ResourceLibraryPanelProps) {
     const [resources, setResources] = useState<ResourceItem[]>([]);
     // ...
@@ -67,6 +72,7 @@ export default function ResourceLibraryPanel({
     const [isOnlineMode, setIsOnlineMode] = useState(false);
     const [onlineResults, setOnlineResults] = useState<{ id: string, title: string, artist: string, album: string, thumbnail: string }[]>([]);
     const [isSearchingOnline, setIsSearchingOnline] = useState(false);
+    const [isLiveFeedSelectorOpen, setIsLiveFeedSelectorOpen] = useState(false);
 
     // Bible Browser State
     const [bibleNav, setBibleNav] = useState<{
@@ -385,10 +391,10 @@ export default function ResourceLibraryPanel({
             <div
                 key={resource.id}
                 onClick={() => isPlaceholder ? openEditModal(resource) : onAddToSchedule?.(resource)}
-                className={`group relative aspect-video bg-zinc-900 border border-white/5 hover:border-indigo-500/50 rounded-xl flex flex-col justify-between overflow-hidden transition-all hover:shadow-xl hover:shadow-indigo-500/10 cursor-pointer ${isPlaceholder ? 'border-yellow-500/30' : ''}`}
+                className={`group relative aspect-video bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-white/5 hover:border-indigo-500/50 rounded-xl flex flex-col justify-between overflow-hidden transition-all hover:shadow-xl hover:shadow-indigo-500/10 cursor-pointer ${isPlaceholder ? 'border-yellow-500/30' : ''}`}
             >
                 {/* Thumbnail / Preview */}
-                <div className="flex-1 bg-zinc-950/50 relative overflow-hidden">
+                <div className="flex-1 bg-zinc-100 dark:bg-zinc-950/50 relative overflow-hidden">
                     {typeof resource.meta?.background === 'object' && resource.meta.background.type === 'image' ? (
                         <div className="absolute inset-0 opacity-50 bg-cover bg-center" style={{ backgroundImage: `url(${resource.meta.background.value})` }} />
                     ) : resource.slides[0]?.content?.startsWith('data:video') || resource.slides[0]?.content?.endsWith('.mp4') || resource.slides[0]?.content?.endsWith('.webm') ? (
@@ -403,7 +409,7 @@ export default function ResourceLibraryPanel({
                     ) : resource.slides[0]?.content?.startsWith('data:image') ? (
                         <div className="absolute inset-0 bg-cover bg-center" style={{ backgroundImage: `url(${resource.slides[0].content})` }} />
                     ) : (
-                        <div className="absolute inset-0 p-3 text-[10px] text-zinc-500 opacity-50 select-none overflow-hidden leading-relaxed break-words">
+                        <div className="absolute inset-0 p-3 text-[10px] text-zinc-600 dark:text-zinc-500 select-none overflow-hidden leading-relaxed break-words">
                             {resource.slides[0]?.content.slice(0, 100)}...
                         </div>
                     )}
@@ -451,9 +457,9 @@ export default function ResourceLibraryPanel({
                 </div>
 
                 {/* Info */}
-                <div className="p-3 bg-zinc-900 border-t border-white/5 relative group/info">
+                <div className="p-3 bg-white dark:bg-zinc-900 border-t border-zinc-200 dark:border-white/5 relative group/info">
                     <div className="flex items-center justify-between gap-2">
-                        <h4 className={`text-xs font-semibold truncate flex-1 ${isPlaceholder ? 'text-yellow-500 italic' : 'text-zinc-300'}`} title={resource.title}>
+                        <h4 className={`text-xs font-semibold truncate flex-1 ${isPlaceholder ? 'text-yellow-500 italic' : 'text-zinc-600 dark:text-zinc-300'}`} title={resource.title}>
                             {resource.title}
                         </h4>
 
@@ -462,14 +468,14 @@ export default function ResourceLibraryPanel({
                             <div className="flex items-center gap-1">
                                 <button
                                     onClick={(e) => { e.stopPropagation(); setPreviewItem(toScheduleItem(resource)); }}
-                                    className="w-6 h-6 rounded-full bg-zinc-800 hover:bg-indigo-600 text-zinc-500 hover:text-white flex items-center justify-center transition-colors"
+                                    className="w-6 h-6 rounded-full bg-zinc-200 dark:bg-zinc-800 hover:bg-indigo-600 text-zinc-500 hover:text-white flex items-center justify-center transition-colors"
                                     title="Preview"
                                 >
                                     <Eye size={10} />
                                 </button>
                                 <button
                                     onClick={(e) => { e.stopPropagation(); onGoLive?.(resource); }}
-                                    className="w-6 h-6 rounded-full bg-zinc-800 hover:bg-green-500 text-zinc-500 hover:text-white flex items-center justify-center transition-colors"
+                                    className="w-6 h-6 rounded-full bg-zinc-200 dark:bg-zinc-800 hover:bg-green-500 text-zinc-500 hover:text-white flex items-center justify-center transition-colors"
                                     title="Go Live"
                                 >
                                     <Play size={10} fill="currentColor" />
@@ -480,7 +486,7 @@ export default function ResourceLibraryPanel({
 
                     <div className="flex items-center justify-between gap-2 mt-1.5">
                         <p className="text-[9px] text-zinc-500 truncate">{resource.meta?.author || new Date(resource.dateAdded).toLocaleDateString()}</p>
-                        <span className="text-[9px] bg-zinc-800 text-zinc-500 px-1.5 py-0.5 rounded uppercase tracking-wider scale-90 origin-right ml-auto">
+                        <span className="text-[9px] bg-zinc-200 dark:bg-zinc-800 text-zinc-500 px-1.5 py-0.5 rounded uppercase tracking-wider scale-90 origin-right ml-auto">
                             {resource.slides.length} SL
                         </span>
                     </div>
@@ -519,12 +525,12 @@ export default function ResourceLibraryPanel({
     const renderAddCard = () => (
         <button
             onClick={handleAddNew}
-            className="group relative aspect-video bg-zinc-900/50 border-2 border-dashed border-white/10 hover:border-indigo-500/50 rounded-xl flex flex-col items-center justify-center gap-2 hover:bg-zinc-800 transition-all"
+            className="group relative aspect-video bg-white dark:bg-zinc-900/50 border-2 border-dashed border-zinc-300 dark:border-white/10 hover:border-indigo-500/50 rounded-xl flex flex-col items-center justify-center gap-2 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-all"
         >
-            <div className="w-8 h-8 rounded-full bg-zinc-800 flex items-center justify-center group-hover:bg-indigo-500 group-hover:text-white text-zinc-500 transition-colors shadow-lg">
+            <div className="w-8 h-8 rounded-full bg-zinc-200 dark:bg-zinc-800 flex items-center justify-center group-hover:bg-indigo-500 group-hover:text-white text-zinc-500 transition-colors shadow-lg">
                 <Plus size={16} />
             </div>
-            <span className="text-[10px] font-bold text-zinc-500 group-hover:text-zinc-300 uppercase tracking-wider">Add New</span>
+            <span className="text-[10px] font-bold text-zinc-500 group-hover:text-zinc-600 dark:text-zinc-300 uppercase tracking-wider">Add New</span>
         </button>
     );
 
@@ -563,10 +569,27 @@ export default function ResourceLibraryPanel({
 
         return (
             <div className="space-y-8 animate-in fade-in duration-300">
+                {/* Live Feed Component Integration - TOP LEVEL */}
+                <div className="bg-indigo-600/5 border border-indigo-500/20 rounded-2xl p-6 flex flex-col md:flex-row items-center gap-6">
+                    <div className="w-12 h-12 rounded-xl bg-indigo-500/20 flex items-center justify-center text-indigo-400">
+                        <Video size={24} />
+                    </div>
+                    <div className="flex-1 text-center md:text-left">
+                        <h3 className="text-sm font-bold text-zinc-900 dark:text-white uppercase tracking-wider">Live Video Routing</h3>
+                        <p className="text-xs text-zinc-500 mt-1">Route external windows like <b>VLC</b>, <b>OBS</b>, or <b>Browser</b> directly to the projector.</p>
+                    </div>
+                    <button
+                        onClick={() => setIsLiveFeedSelectorOpen(true)}
+                        className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-black uppercase tracking-widest rounded-full shadow-lg shadow-indigo-500/20 transition-all hover:scale-105 active:scale-95"
+                    >
+                        Route External Feed
+                    </button>
+                </div>
+
                 <div>
-                    <h3 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-3 flex items-center gap-2 pb-2 border-b border-white/5">
+                    <h3 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-3 flex items-center gap-2 pb-2 border-b border-zinc-200 dark:border-white/5">
                         <Video size={12} className="text-indigo-400" /> Videos
-                        <span className="ml-auto bg-zinc-800 px-1.5 py-0.5 rounded text-zinc-400">{videos.length}</span>
+                        <span className="ml-auto bg-zinc-200 dark:bg-zinc-800 px-1.5 py-0.5 rounded text-zinc-500 dark:text-zinc-400">{videos.length}</span>
                     </h3>
                     <div className="grid grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 gap-3">
                         {videos.map(renderCard)}
@@ -575,9 +598,9 @@ export default function ResourceLibraryPanel({
                 </div>
 
                 <div>
-                    <h3 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-3 flex items-center gap-2 pb-2 border-b border-white/5">
+                    <h3 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-3 flex items-center gap-2 pb-2 border-b border-zinc-200 dark:border-white/5">
                         <ImageIcon size={12} className="text-pink-400" /> Images
-                        <span className="ml-auto bg-zinc-800 px-1.5 py-0.5 rounded text-zinc-400">{images.length}</span>
+                        <span className="ml-auto bg-zinc-200 dark:bg-zinc-800 px-1.5 py-0.5 rounded text-zinc-500 dark:text-zinc-400">{images.length}</span>
                     </h3>
                     <div className="grid grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 gap-3">
                         {images.map(renderCard)}
@@ -595,16 +618,16 @@ export default function ResourceLibraryPanel({
             <div className="flex items-center gap-2 mb-4 text-xs">
                 <button
                     onClick={resetBibleNav}
-                    className={`hover:text-white transition-colors ${!bibleNav.book ? 'text-white font-bold' : 'text-zinc-500'}`}
+                    className={`hover:text-zinc-900 dark:hover:text-white transition-colors ${!bibleNav.book ? 'text-zinc-900 dark:text-white font-bold' : 'text-zinc-500'}`}
                 >
                     Books
                 </button>
                 {bibleNav.book && (
                     <>
-                        <span className="text-zinc-700">/</span>
+                        <span className="text-zinc-400 dark:text-zinc-700">/</span>
                         <button
                             onClick={() => setBibleNav(prev => ({ ...prev, chapter: null }))}
-                            className={`hover:text-white transition-colors ${!bibleNav.chapter ? 'text-white font-bold' : 'text-zinc-500'}`}
+                            className={`hover:text-zinc-900 dark:hover:text-white transition-colors ${!bibleNav.chapter ? 'text-zinc-900 dark:text-white font-bold' : 'text-zinc-500'}`}
                         >
                             {bibleNav.book.name}
                         </button>
@@ -613,7 +636,7 @@ export default function ResourceLibraryPanel({
                 {bibleNav.chapter && (
                     <>
                         <span className="text-zinc-700">/</span>
-                        <span className="text-white font-bold">Chapter {bibleNav.chapter}</span>
+                        <span className="text-zinc-900 dark:text-white font-bold">Chapter {bibleNav.chapter}</span>
                     </>
                 )}
             </div>
@@ -627,7 +650,7 @@ export default function ResourceLibraryPanel({
                         <select
                             value={bibleNav.version}
                             onChange={(e) => setBibleNav(prev => ({ ...prev, version: e.target.value }))}
-                            className="bg-zinc-900 border border-white/10 rounded px-2 py-1 text-[10px] text-zinc-300 outline-none focus:border-indigo-500"
+                            className="bg-white dark:bg-zinc-900 border border-zinc-300 dark:border-white/10 rounded px-2 py-1 text-[10px] text-zinc-600 dark:text-zinc-300 outline-none focus:border-indigo-500"
                         >
                             {SUPPORTED_VERSIONS.map(v => <option key={v} value={v}>{v}</option>)}
                         </select>
@@ -637,9 +660,9 @@ export default function ResourceLibraryPanel({
                             <button
                                 key={book.key}
                                 onClick={() => setBibleNav(prev => ({ ...prev, book }))}
-                                className="p-3 bg-zinc-900/50 hover:bg-zinc-800 border border-white/5 hover:border-indigo-500/50 rounded-lg text-left transition-all group"
+                                className="p-3 bg-white dark:bg-zinc-900/50 hover:bg-zinc-100 dark:hover:bg-zinc-800 border border-zinc-200 dark:border-white/5 hover:border-indigo-500/50 rounded-lg text-left transition-all group"
                             >
-                                <div className="font-bold text-xs text-zinc-300 group-hover:text-white truncate">{book.name}</div>
+                                <div className="font-bold text-xs text-zinc-600 dark:text-zinc-300 group-hover:text-indigo-600 dark:group-hover:text-white truncate">{book.name}</div>
                                 <div className="text-[10px] text-zinc-600 mt-1">{book.chapters} Ch</div>
                             </button>
                         ))}
@@ -657,7 +680,7 @@ export default function ResourceLibraryPanel({
                             <button
                                 key={chap}
                                 onClick={() => setBibleNav(prev => ({ ...prev, chapter: chap }))}
-                                className="aspect-square flex items-center justify-center bg-zinc-900/50 hover:bg-zinc-800 border border-white/5 hover:border-indigo-500/50 rounded-lg font-bold text-sm text-zinc-400 hover:text-white transition-all"
+                                className="aspect-square flex items-center justify-center bg-white dark:bg-zinc-900/50 hover:bg-zinc-100 dark:hover:bg-zinc-800 border border-zinc-200 dark:border-white/5 hover:border-indigo-500/50 rounded-lg font-bold text-sm text-zinc-500 dark:text-zinc-400 hover:text-indigo-600 dark:hover:text-white transition-all"
                             >
                                 {chap}
                             </button>
@@ -676,7 +699,7 @@ export default function ResourceLibraryPanel({
                     {Array.from({ length: verseCount }, (_, i) => i + 1).map(verse => (
                         <div
                             key={verse}
-                            className="bg-zinc-900/30 border border-white/5 rounded-lg p-3 hover:bg-zinc-900 transition-colors group cursor-pointer flex gap-4 items-center"
+                            className="bg-white dark:bg-zinc-900/30 border border-zinc-200 dark:border-white/5 rounded-lg p-3 hover:bg-white dark:bg-zinc-900 transition-colors group cursor-pointer flex gap-4 items-center"
                             onClick={async () => {
                                 const text = await lookupVerseAsync(bibleNav.book!.key, bibleNav.chapter!, verse, bibleNav.version);
                                 const resource: ResourceItem = {
@@ -692,11 +715,11 @@ export default function ResourceLibraryPanel({
                                 if (onGoLive) onGoLive(toScheduleItem(resource));
                             }}
                         >
-                            <div className="w-6 h-6 rounded-full bg-zinc-800 flex items-center justify-center text-[10px] font-bold text-zinc-500 group-hover:text-indigo-400 group-hover:bg-indigo-500/10 transition-colors flex-shrink-0">
+                            <div className="w-6 h-6 rounded-full bg-zinc-200 dark:bg-zinc-800 flex items-center justify-center text-[10px] font-bold text-zinc-500 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 group-hover:bg-indigo-100 dark:group-hover:bg-indigo-500/10 transition-colors flex-shrink-0">
                                 {verse}
                             </div>
                             <div className="flex-1">
-                                <div className="text-xs text-zinc-400 group-hover:text-white transition-colors">
+                                <div className="text-xs text-zinc-500 dark:text-zinc-400 group-hover:text-zinc-900 dark:group-hover:text-white transition-colors">
                                     <VersePreview book={bibleNav.book!.key} chapter={bibleNav.chapter!} verse={verse} version={bibleNav.version} />
                                 </div>
                             </div>
@@ -717,7 +740,7 @@ export default function ResourceLibraryPanel({
                                         };
                                         onAddToSchedule?.(resource);
                                     }}
-                                    className="p-1.5 hover:bg-zinc-700 rounded text-zinc-400 hover:text-white transition-colors"
+                                    className="p-1.5 hover:bg-zinc-200 dark:hover:bg-zinc-700 rounded text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white transition-colors"
                                     title="Add to Schedule"
                                 >
                                     <Plus size={14} />
@@ -812,7 +835,7 @@ export default function ResourceLibraryPanel({
                             });
                             setIsThemeModalOpen(true);
                         }}
-                        className="flex items-center gap-2 px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 rounded text-xs text-white transition-colors"
+                        className="flex items-center gap-2 px-3 py-1.5 bg-zinc-200 hover:bg-zinc-300 dark:bg-zinc-800 dark:hover:bg-zinc-700 rounded text-xs text-zinc-700 dark:text-white transition-colors"
                     >
                         <Plus size={12} /> Create Custom
                     </button>
@@ -822,7 +845,7 @@ export default function ResourceLibraryPanel({
                         <div
                             key={theme.id}
                             onClick={() => { onApplyTheme?.(theme); }}
-                            className="group relative aspect-video rounded-xl overflow-hidden border border-white/10 hover:border-indigo-500 transition-all cursor-pointer bg-zinc-900 shadow-md"
+                            className="group relative aspect-video rounded-xl overflow-hidden border border-zinc-300 dark:border-white/10 hover:border-indigo-500 transition-all cursor-pointer bg-white dark:bg-zinc-900 shadow-md"
                         >
                             {/* Preview */}
                             <div className="absolute inset-0 w-full h-full" style={{
@@ -907,10 +930,10 @@ export default function ResourceLibraryPanel({
         if (!editingTheme) return null;
         return (
             <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
-                <div className="bg-zinc-900 border border-white/10 rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col shadow-2xl">
-                    <div className="flex items-center justify-between p-4 border-b border-white/10 bg-zinc-950/50">
-                        <h3 className="font-bold text-white">Theme Editor</h3>
-                        <button onClick={() => setIsThemeModalOpen(false)} className="text-zinc-500 hover:text-white transition-colors"><X size={20} /></button>
+                <div className="bg-white dark:bg-zinc-900 border border-zinc-300 dark:border-white/10 rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col shadow-2xl">
+                    <div className="flex items-center justify-between p-4 border-b border-zinc-300 dark:border-white/10 bg-zinc-100 dark:bg-zinc-950/50">
+                        <h3 className="font-bold text-zinc-900 dark:text-white">Theme Editor</h3>
+                        <button onClick={() => setIsThemeModalOpen(false)} className="text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors"><X size={20} /></button>
                     </div>
 
                     <div className="flex-1 overflow-y-auto p-6 grid grid-cols-1 md:grid-cols-2 gap-8">
@@ -919,7 +942,7 @@ export default function ResourceLibraryPanel({
                             <div className="space-y-2">
                                 <label className="text-xs font-bold text-zinc-500 uppercase">Theme Name</label>
                                 <input
-                                    className="w-full bg-zinc-950 border border-white/10 rounded px-3 py-2 text-sm text-white focus:border-indigo-500 outline-none"
+                                    className="w-full bg-white dark:bg-zinc-950 border border-zinc-300 dark:border-white/10 rounded px-3 py-2 text-sm text-zinc-900 dark:text-white focus:border-indigo-500 outline-none"
                                     value={editingTheme.name}
                                     onChange={e => setEditingTheme({ ...editingTheme, name: e.target.value })}
                                 />
@@ -928,7 +951,7 @@ export default function ResourceLibraryPanel({
                             <div className="space-y-2">
                                 <label className="text-xs font-bold text-zinc-500 uppercase">Font Family</label>
                                 <select
-                                    className="w-full bg-zinc-950 border border-white/10 rounded px-3 py-2 text-sm text-white focus:border-indigo-500 outline-none"
+                                    className="w-full bg-white dark:bg-zinc-950 border border-zinc-300 dark:border-white/10 rounded px-3 py-2 text-sm text-zinc-900 dark:text-white focus:border-indigo-500 outline-none"
                                     value={editingTheme.styles.fontFamily}
                                     onChange={e => setEditingTheme({ ...editingTheme, styles: { ...editingTheme.styles, fontFamily: e.target.value } })}
                                 >
@@ -938,7 +961,7 @@ export default function ResourceLibraryPanel({
 
                             <div className="space-y-2">
                                 <label className="text-xs font-bold text-zinc-500 uppercase">Text Casing</label>
-                                <div className="flex bg-zinc-950 rounded border border-white/10 p-1 gap-1">
+                                <div className="flex bg-zinc-100 dark:bg-zinc-950 rounded border border-zinc-300 dark:border-white/10 p-1 gap-1">
                                     {[
                                         { id: 'none', label: 'Normal' },
                                         { id: 'uppercase', label: 'ALL CAPS' },
@@ -949,7 +972,7 @@ export default function ResourceLibraryPanel({
                                             onClick={() => setEditingTheme({
                                                 ...editingTheme, styles: { ...editingTheme.styles, textTransform: opt.id as any }
                                             })}
-                                            className={`flex-1 py-1 rounded text-xs transition-colors ${(!editingTheme.styles.textTransform && opt.id === 'none') || editingTheme.styles.textTransform === opt.id ? 'bg-indigo-600 text-white shadow-sm' : 'text-zinc-500 hover:text-white hover:bg-zinc-800'} `}
+                                            className={`flex-1 py-1 rounded text-xs transition-colors ${(!editingTheme.styles.textTransform && opt.id === 'none') || editingTheme.styles.textTransform === opt.id ? 'bg-indigo-600 text-white shadow-sm' : 'text-zinc-600 dark:text-zinc-500 hover:text-zinc-900 dark:hover:text-white hover:bg-zinc-200 dark:hover:bg-zinc-800'} `}
                                         >
                                             {opt.label}
                                         </button>
@@ -971,13 +994,13 @@ export default function ResourceLibraryPanel({
                                             type="text"
                                             value={editingTheme.styles.color}
                                             onChange={e => setEditingTheme({ ...editingTheme, styles: { ...editingTheme.styles, color: e.target.value } })}
-                                            className="bg-zinc-950 border border-white/10 rounded px-2 py-1 text-xs text-white w-24 focus:border-indigo-500 outline-none font-mono"
+                                            className="bg-white dark:bg-zinc-950 border border-zinc-300 dark:border-white/10 rounded px-2 py-1 text-xs text-zinc-900 dark:text-white w-24 focus:border-indigo-500 outline-none font-mono"
                                         />
                                     </div>
                                 </div>
                                 <div className="space-y-2">
                                     <label className="text-xs font-bold text-zinc-500 uppercase">Alignment</label>
-                                    <div className="flex bg-zinc-950 rounded border border-white/10 p-1 gap-1">
+                                    <div className="flex bg-zinc-100 dark:bg-zinc-950 rounded border border-zinc-300 dark:border-white/10 p-1 gap-1">
                                         {['left', 'center', 'right'].map(align => (
                                             <button key={align}
                                                 onClick={() => setEditingTheme({
@@ -987,7 +1010,7 @@ export default function ResourceLibraryPanel({
                                                         alignItems: align === 'center' ? 'center' : align === 'left' ? 'flex-start' : 'flex-end'
                                                     }
                                                 })}
-                                                className={`flex-1 py-1 rounded text-xs capitalize transition-colors ${editingTheme.styles.textAlign === align ? 'bg-indigo-600 text-white shadow-sm' : 'text-zinc-500 hover:text-white hover:bg-zinc-800'} `}
+                                                className={`flex-1 py-1 rounded text-xs capitalize transition-colors ${editingTheme.styles.textAlign === align ? 'bg-indigo-600 text-white shadow-sm' : 'text-zinc-500 hover:text-zinc-900 dark:hover:text-white hover:bg-zinc-200 dark:hover:bg-zinc-800'} `}
                                             >
                                                 {align}
                                             </button>
@@ -997,16 +1020,31 @@ export default function ResourceLibraryPanel({
                             </div>
 
                             <div className="space-y-2">
-                                <label className="text-xs font-bold text-zinc-500 uppercase">Background Type</label>
-                                <div className="flex gap-2">
-                                    {['color', 'gradient', 'image'].map(t => (
-                                        <button key={t}
-                                            onClick={() => setEditingTheme({ ...editingTheme, background: { ...editingTheme.background, type: t as any } })}
-                                            className={`px-3 py-1 rounded text-xs font-bold uppercase transition-colors ${editingTheme.background.type === t ? 'bg-white text-black' : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'} `}
-                                        >
-                                            {t}
-                                        </button>
-                                    ))}
+                                <label className="text-xs font-bold text-zinc-500 uppercase">Background Type & Brightness</label>
+                                <div className="flex flex-col gap-4">
+                                    <div className="flex gap-2">
+                                        {['color', 'gradient', 'image'].map(t => (
+                                            <button key={t}
+                                                onClick={() => setEditingTheme({ ...editingTheme, background: { ...editingTheme.background, type: t as any } })}
+                                                className={`px-3 py-1 rounded text-xs font-bold uppercase transition-colors ${editingTheme.background.type === t ? 'bg-white text-black' : 'bg-zinc-200 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400 hover:bg-zinc-300 dark:hover:bg-zinc-700'} `}
+                                            >
+                                                {t}
+                                            </button>
+                                        ))}
+                                    </div>
+                                    <div className="flex items-center gap-3 bg-zinc-100 dark:bg-zinc-950 border border-zinc-300 dark:border-white/10 rounded px-3 py-2">
+                                        <Sun size={14} className="text-zinc-500" />
+                                        <input
+                                            type="range" min="0" max="1" step="0.05"
+                                            value={editingTheme.background.brightness ?? 0.6}
+                                            onChange={(e) => setEditingTheme({
+                                                ...editingTheme,
+                                                background: { ...editingTheme.background, brightness: parseFloat(e.target.value) }
+                                            })}
+                                            className="flex-1 accent-indigo-500 h-1.5"
+                                        />
+                                        <div className="text-[10px] font-mono text-zinc-500 w-8 text-right">{Math.round((editingTheme.background.brightness ?? 0.6) * 100)}%</div>
+                                    </div>
                                 </div>
                             </div>
 
@@ -1020,10 +1058,10 @@ export default function ResourceLibraryPanel({
                                             type="color"
                                             value={editingTheme.background.value}
                                             onChange={e => setEditingTheme({ ...editingTheme, background: { ...editingTheme.background, value: e.target.value } })}
-                                            className="bg-transparent h-10 w-10 cursor-pointer border border-white/10 rounded p-1"
+                                            className="bg-transparent h-10 w-10 cursor-pointer border border-zinc-300 dark:border-white/10 rounded p-1"
                                         />
                                         <input
-                                            className="flex-1 bg-zinc-950 border border-white/10 rounded px-3 py-2 text-sm text-white focus:border-indigo-500 outline-none font-mono text-xs"
+                                            className="flex-1 bg-white dark:bg-zinc-950 border border-zinc-300 dark:border-white/10 rounded px-3 py-2 text-sm text-zinc-900 dark:text-white focus:border-indigo-500 outline-none font-mono text-xs"
                                             value={editingTheme.background.value}
                                             placeholder="#000000"
                                             onChange={e => setEditingTheme({ ...editingTheme, background: { ...editingTheme.background, value: e.target.value } })}
@@ -1033,7 +1071,7 @@ export default function ResourceLibraryPanel({
                                     <>
                                         <div className="flex gap-2">
                                             <input
-                                                className="flex-1 bg-zinc-950 border border-white/10 rounded px-3 py-2 text-sm text-white focus:border-indigo-500 outline-none font-mono text-xs"
+                                                className="flex-1 bg-white dark:bg-zinc-950 border border-zinc-300 dark:border-white/10 rounded px-3 py-2 text-sm text-zinc-900 dark:text-white focus:border-indigo-500 outline-none font-mono text-xs"
                                                 value={editingTheme.background.value.startsWith('data:') ? '(Uploaded Image Data)' : editingTheme.background.value}
                                                 readOnly={editingTheme.background.value.startsWith('data:')}
                                                 placeholder={editingTheme.background.type === 'image' ? 'Image URL or Upload' : 'linear-gradient(...)'}
@@ -1043,7 +1081,7 @@ export default function ResourceLibraryPanel({
                                                 <>
                                                     <button
                                                         onClick={() => themeBgInputRef.current?.click()}
-                                                        className="px-3 py-2 bg-zinc-800 hover:bg-zinc-700 rounded text-zinc-300 transition-colors border border-white/10"
+                                                        className="px-3 py-2 bg-zinc-200 dark:bg-zinc-800 hover:bg-zinc-300 dark:hover:bg-zinc-700 rounded text-zinc-600 dark:text-zinc-300 transition-colors border border-zinc-300 dark:border-white/10"
                                                         title="Upload Image"
                                                     >
                                                         <ImagePlus size={14} />
@@ -1071,12 +1109,12 @@ export default function ResourceLibraryPanel({
                                 )}
                             </div>
 
-                            <div className="pt-4 mt-4 border-t border-white/10">
+                            <div className="pt-4 mt-4 border-t border-zinc-300 dark:border-white/10">
                                 <h4 className="text-xs font-bold text-indigo-400 uppercase mb-3">Layout Settings</h4>
                                 <div className="grid grid-cols-2 gap-4">
                                     <div className="space-y-2">
                                         <label className="text-xs font-bold text-zinc-500 uppercase">Reference Position</label>
-                                        <div className="flex bg-zinc-950 rounded border border-white/10 p-1 gap-1">
+                                        <div className="flex bg-zinc-100 dark:bg-zinc-950 rounded border border-zinc-300 dark:border-white/10 p-1 gap-1">
                                             <button
                                                 onClick={() => setEditingTheme({
                                                     ...editingTheme,
@@ -1089,7 +1127,7 @@ export default function ResourceLibraryPanel({
                                                         referencePosition: 'top'
                                                     }
                                                 })}
-                                                className={`flex-1 py-1 rounded text-xs transition-colors ${(!editingTheme.layout || editingTheme.layout.referencePosition === 'top') ? 'bg-indigo-600 text-white shadow-sm' : 'text-zinc-500 hover:text-white hover:bg-zinc-800'} `}
+                                                className={`flex-1 py-1 rounded text-xs transition-colors ${(!editingTheme.layout || editingTheme.layout.referencePosition === 'top') ? 'bg-indigo-600 text-white shadow-sm' : 'text-zinc-500 hover:text-zinc-900 dark:hover:text-white hover:bg-zinc-200 dark:hover:bg-zinc-800'} `}
                                             >
                                                 TOP
                                             </button>
@@ -1105,7 +1143,7 @@ export default function ResourceLibraryPanel({
                                                         referencePosition: 'bottom'
                                                     }
                                                 })}
-                                                className={`flex-1 py-1 rounded text-xs transition-colors ${(editingTheme.layout?.referencePosition === 'bottom') ? 'bg-indigo-600 text-white shadow-sm' : 'text-zinc-500 hover:text-white hover:bg-zinc-800'} `}
+                                                className={`flex-1 py-1 rounded text-xs transition-colors ${(editingTheme.layout?.referencePosition === 'bottom') ? 'bg-indigo-600 text-white shadow-sm' : 'text-zinc-500 hover:text-zinc-900 dark:hover:text-white hover:bg-zinc-200 dark:hover:bg-zinc-800'} `}
                                             >
                                                 BOTTOM
                                             </button>
@@ -1128,13 +1166,57 @@ export default function ResourceLibraryPanel({
                                                     referenceScale: parseFloat(e.target.value)
                                                 }
                                             })}
-                                            className="w-full accent-indigo-500"
+                                            className="w-full accent-indigo-500 h-1.5"
                                         />
                                         <div className="text-[10px] text-zinc-500 text-right">{(editingTheme.layout?.referenceScale || 1.5).toFixed(1)}x</div>
                                     </div>
                                 </div>
 
-                                <div className="mt-6 pt-4 border-t border-white/5 space-y-4">
+                                <div className="grid grid-cols-2 gap-4 mt-4">
+                                    <div className="space-y-2">
+                                        <label className="text-xs font-bold text-zinc-500 uppercase">Screen Padding</label>
+                                        <input
+                                            type="range" min="0" max="150" step="5"
+                                            value={editingTheme.layout?.contentPadding ?? 80}
+                                            onChange={(e) => setEditingTheme({
+                                                ...editingTheme,
+                                                layout: {
+                                                    ...DEFAULT_LAYOUT,
+                                                    referenceColor: editingTheme.styles.color,
+                                                    versionColor: editingTheme.styles.color,
+                                                    verseNumberColor: editingTheme.styles.color,
+                                                    ...editingTheme.layout,
+                                                    contentPadding: parseInt(e.target.value)
+                                                }
+                                            })}
+                                            className="w-full accent-indigo-500 h-1.5"
+                                        />
+                                        <div className="text-[10px] text-zinc-500 text-right">{editingTheme.layout?.contentPadding ?? 80}px</div>
+                                    </div>
+
+                                    <div className="space-y-2">
+                                        <label className="text-xs font-bold text-zinc-500 uppercase">Text Scale</label>
+                                        <input
+                                            type="range" min="0.5" max="2.5" step="0.05"
+                                            value={editingTheme.layout?.textScale ?? 1}
+                                            onChange={(e) => setEditingTheme({
+                                                ...editingTheme,
+                                                layout: {
+                                                    ...DEFAULT_LAYOUT,
+                                                    referenceColor: editingTheme.styles.color,
+                                                    versionColor: editingTheme.styles.color,
+                                                    verseNumberColor: editingTheme.styles.color,
+                                                    ...editingTheme.layout,
+                                                    textScale: parseFloat(e.target.value)
+                                                }
+                                            })}
+                                            className="w-full accent-indigo-500 h-1.5"
+                                        />
+                                        <div className="text-[10px] text-zinc-500 text-right">{(editingTheme.layout?.textScale ?? 1).toFixed(2)}x</div>
+                                    </div>
+                                </div>
+
+                                <div className="mt-6 pt-4 border-t border-zinc-200 dark:border-white/5 space-y-4">
                                     <div className="grid grid-cols-2 gap-4">
                                         <div className="space-y-2">
                                             <label className="text-[10px] font-bold text-zinc-500 uppercase">Reference Color</label>
@@ -1146,7 +1228,6 @@ export default function ResourceLibraryPanel({
                                                         ...editingTheme,
                                                         layout: {
                                                             ...DEFAULT_LAYOUT,
-                                                            referenceColor: editingTheme.styles.color,
                                                             versionColor: editingTheme.styles.color,
                                                             verseNumberColor: editingTheme.styles.color,
                                                             ...editingTheme.layout,
@@ -1162,14 +1243,13 @@ export default function ResourceLibraryPanel({
                                                         ...editingTheme,
                                                         layout: {
                                                             ...DEFAULT_LAYOUT,
-                                                            referenceColor: editingTheme.styles.color,
                                                             versionColor: editingTheme.styles.color,
                                                             verseNumberColor: editingTheme.styles.color,
                                                             ...editingTheme.layout,
                                                             referenceColor: e.target.value
                                                         }
                                                     })}
-                                                    className="bg-zinc-950 border border-white/10 rounded px-2 py-1 text-[10px] text-white w-20 outline-none font-mono"
+                                                    className="bg-white dark:bg-zinc-950 border border-zinc-300 dark:border-white/10 rounded px-2 py-1 text-[10px] text-zinc-900 dark:text-white w-20 outline-none font-mono"
                                                 />
                                             </div>
                                         </div>
@@ -1184,7 +1264,6 @@ export default function ResourceLibraryPanel({
                                                         layout: {
                                                             ...DEFAULT_LAYOUT,
                                                             referenceColor: editingTheme.styles.color,
-                                                            versionColor: editingTheme.styles.color,
                                                             verseNumberColor: editingTheme.styles.color,
                                                             ...editingTheme.layout,
                                                             versionColor: e.target.value
@@ -1200,13 +1279,12 @@ export default function ResourceLibraryPanel({
                                                         layout: {
                                                             ...DEFAULT_LAYOUT,
                                                             referenceColor: editingTheme.styles.color,
-                                                            versionColor: editingTheme.styles.color,
                                                             verseNumberColor: editingTheme.styles.color,
                                                             ...editingTheme.layout,
                                                             versionColor: e.target.value
                                                         }
                                                     })}
-                                                    className="bg-zinc-950 border border-white/10 rounded px-2 py-1 text-[10px] text-white w-20 outline-none font-mono"
+                                                    className="bg-white dark:bg-zinc-950 border border-zinc-300 dark:border-white/10 rounded px-2 py-1 text-[10px] text-zinc-900 dark:text-white w-20 outline-none font-mono"
                                                 />
                                             </div>
                                         </div>
@@ -1225,7 +1303,6 @@ export default function ResourceLibraryPanel({
                                                             ...DEFAULT_LAYOUT,
                                                             referenceColor: editingTheme.styles.color,
                                                             versionColor: editingTheme.styles.color,
-                                                            verseNumberColor: editingTheme.styles.color,
                                                             ...editingTheme.layout,
                                                             verseNumberColor: e.target.value
                                                         }
@@ -1241,12 +1318,11 @@ export default function ResourceLibraryPanel({
                                                             ...DEFAULT_LAYOUT,
                                                             referenceColor: editingTheme.styles.color,
                                                             versionColor: editingTheme.styles.color,
-                                                            verseNumberColor: editingTheme.styles.color,
                                                             ...editingTheme.layout,
                                                             verseNumberColor: e.target.value
                                                         }
                                                     })}
-                                                    className="bg-zinc-950 border border-white/10 rounded px-2 py-1 text-[10px] text-white w-20 outline-none font-mono"
+                                                    className="bg-white dark:bg-zinc-950 border border-zinc-300 dark:border-white/10 rounded px-2 py-1 text-[10px] text-zinc-900 dark:text-white w-20 outline-none font-mono"
                                                 />
                                             </div>
                                         </div>
@@ -1290,7 +1366,7 @@ export default function ResourceLibraryPanel({
                                                 })}
                                                 className="rounded bg-zinc-800 border-zinc-700 text-indigo-500 focus:ring-indigo-500/20"
                                             />
-                                            <span className="text-xs text-zinc-300">Show Verse Numbers</span>
+                                            <span className="text-xs text-zinc-600 dark:text-zinc-300">Show Verse Numbers</span>
                                         </label>
                                     </div>
                                 </div>
@@ -1300,14 +1376,16 @@ export default function ResourceLibraryPanel({
                         {/* Preview */}
                         <div className="flex flex-col gap-2">
                             <label className="text-xs font-bold text-zinc-500 uppercase">Live Preview</label>
-                            <div className="flex-1 rounded-xl overflow-hidden border border-white/10 relative shadow-2xl bg-zinc-950 select-none">
+                            <div className="flex-1 rounded-xl overflow-hidden border border-zinc-300 dark:border-white/10 relative shadow-2xl bg-zinc-950 select-none">
                                 <div className="absolute inset-0 w-full h-full transition-all duration-300" style={{
                                     background: editingTheme.background.type === 'image' ? `url(${editingTheme.background.value}) center / cover no-repeat` :
-                                        editingTheme.background.type === 'gradient' ? editingTheme.background.value : editingTheme.background.value
+                                        editingTheme.background.type === 'gradient' ? editingTheme.background.value : editingTheme.background.value,
+                                    opacity: editingTheme.background.brightness ?? 0.6
                                 }}>
-                                    <div className="absolute inset-0 flex flex-col p-8" style={{
+                                    <div className="absolute inset-0 flex flex-col" style={{
                                         alignItems: editingTheme.styles.alignItems,
-                                        justifyContent: editingTheme.styles.justifyContent
+                                        justifyContent: editingTheme.styles.justifyContent,
+                                        padding: `${(editingTheme.layout?.contentPadding ?? 80) / 4}px` // Scaled for preview
                                     }}>
                                         <div style={{
                                             fontFamily: editingTheme.styles.fontFamily,
@@ -1352,7 +1430,7 @@ export default function ResourceLibraryPanel({
                                                         16
                                                     </span>
                                                 )}
-                                                <p className="text-2xl leading-tight">For God so loved the world, that he gave his only begotten Son...</p>
+                                                <p className="text-2xl leading-tight" style={{ fontSize: `${2 * (editingTheme.layout?.textScale ?? 1)}rem` }}>For God so loved the world, that he gave his only begotten Son...</p>
                                             </div>
                                         </div>
                                     </div>
@@ -1361,8 +1439,8 @@ export default function ResourceLibraryPanel({
                         </div>
                     </div>
 
-                    <div className="p-4 border-t border-white/10 bg-zinc-950/50 flex justify-end gap-3">
-                        <button onClick={() => setIsThemeModalOpen(false)} className="px-4 py-2 rounded text-sm font-bold text-zinc-400 hover:text-white transition-colors">Cancel</button>
+                    <div className="p-4 border-t border-zinc-300 dark:border-white/10 bg-zinc-100 dark:bg-zinc-950/50 flex justify-end gap-3">
+                        <button onClick={() => setIsThemeModalOpen(false)} className="px-4 py-2 rounded text-sm font-bold text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white transition-colors">Cancel</button>
                         <button onClick={() => handleSaveTheme(editingTheme)} className="px-6 py-2 rounded bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-bold shadow-lg shadow-indigo-500/20 transition-all transform hover:scale-105">Save Theme</button>
                     </div>
                 </div>
@@ -1391,9 +1469,9 @@ export default function ResourceLibraryPanel({
     };
 
     return (
-        <div className="flex flex-col h-full bg-zinc-950 border-t border-white/10">
+        <div className="flex flex-col h-full bg-[#FDFDFD] dark:bg-zinc-950 border-t border-zinc-100 dark:border-white/10">
             {/* Header / Tabs */}
-            <div className="flex items-center justify-between p-2 border-b border-white/5 bg-zinc-900/50">
+            <div className="flex items-center justify-between p-2 border-b border-zinc-100 dark:border-white/5 bg-white/50 dark:bg-zinc-900/50 backdrop-blur-sm">
                 <div className="flex gap-1">
                     {[
                         { id: 'song', label: 'Songs', icon: Music },
@@ -1405,7 +1483,7 @@ export default function ResourceLibraryPanel({
                         <button
                             key={tab.id}
                             onClick={() => setActiveTab(tab.id as TabType)}
-                            className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-2 transition-all ${activeTab === tab.id ? 'bg-indigo-600 text-white shadow-lg' : 'text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800'}`}
+                            className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-2 transition-all ${activeTab === tab.id ? 'bg-indigo-600 text-white shadow-lg' : 'text-zinc-500 hover:text-zinc-600 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800'}`}
                         >
                             <tab.icon size={12} />
                             {tab.label}
@@ -1426,7 +1504,7 @@ export default function ResourceLibraryPanel({
                                     }
                                 }}
                                 placeholder={isOnlineMode ? "Search Song/Artist..." : "Search library..."}
-                                className={`bg-zinc-900 border border-white/10 rounded-lg pl-8 pr-3 py-1 text-xs text-zinc-300 focus:outline-none focus:border-indigo-500 w-48 transition-all relative z-10 ${isOnlineMode ? 'w-64 border-indigo-500 ring-1 ring-indigo-500/20' : ''}`}
+                                className={`bg-white dark:bg-zinc-900 border border-zinc-300 dark:border-white/10 rounded-lg pl-8 pr-3 py-1 text-xs text-zinc-600 dark:text-zinc-300 focus:outline-none focus:border-indigo-500 w-48 transition-all relative z-10 ${isOnlineMode ? 'w-64 border-indigo-500 ring-1 ring-indigo-500/20' : ''}`}
                             />
                         </div>
                     )}
@@ -1443,25 +1521,20 @@ export default function ResourceLibraryPanel({
                                 meta: { author: '', ccli: '' }
                             });
                         }}
-                        className="bg-zinc-800 hover:bg-zinc-700 text-zinc-300 p-1.5 rounded-lg transition-colors mr-1"
+                        className="bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-600 dark:text-zinc-300 p-1.5 rounded-lg transition-colors mr-1"
                         title="Create Blank Song (or Paste CCLI)"
                     >
                         <FileText size={16} />
                     </button>
                     <button
                         onClick={() => setIsCreateCollectionOpen(true)} // Fix: Previously this was opening the collection input logic?
-                        className="bg-zinc-800 hover:bg-zinc-700 text-zinc-300 p-1.5 rounded-lg transition-colors mr-1"
+                        className="bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-600 dark:text-zinc-300 p-1.5 rounded-lg transition-colors mr-1"
                         title="New Collection"
                     >
                         <FolderPlus size={16} />
                     </button>
-                    <button
-                        onClick={() => fileInputRef.current?.click()}
-                        className="bg-indigo-600 hover:bg-indigo-500 text-white p-1.5 rounded-lg transition-colors shadow-lg shadow-indigo-500/20"
-                        title="Import File"
-                    >
-                        <Plus size={16} />
-                    </button>
+                    <div className="w-px h-6 bg-zinc-200 dark:bg-white/10 mx-1" />
+                    <div className="w-px h-6 bg-zinc-200 dark:bg-white/10 mx-1" />
                     <input
                         ref={fileInputRef}
                         type="file"
@@ -1476,16 +1549,16 @@ export default function ResourceLibraryPanel({
             {/* Main Content Area: Sidebar + Grid */}
             <div className="flex flex-1 min-h-0">
                 {/* Collections Sidebar */}
-                <div className="w-48 border-r border-white/5 bg-zinc-900/30 flex flex-col min-h-0">
-                    <div className="p-2 border-b border-white/5">
+                <div className="w-48 border-r border-zinc-200 dark:border-white/5 bg-white dark:bg-zinc-900/30 flex flex-col min-h-0">
+                    <div className="p-2 border-b border-zinc-200 dark:border-white/5">
                         <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Collections</span>
                     </div>
 
                     {isCreateCollectionOpen && (
-                        <div className="p-2 border-b border-white/5 animate-in fade-in slide-in-from-top-2">
+                        <div className="p-2 border-b border-zinc-200 dark:border-white/5 animate-in fade-in slide-in-from-top-2">
                             <div className="flex items-center gap-1">
                                 <input
-                                    className="bg-zinc-950 border border-indigo-500/50 rounded text-xs px-2 py-1 w-full focus:outline-none"
+                                    className="bg-white dark:bg-zinc-950 text-zinc-900 dark:text-white border border-indigo-500/50 rounded text-xs px-2 py-1 w-full focus:outline-none"
                                     placeholder="Name..."
                                     autoFocus
                                     value={newCollectionName}
@@ -1500,9 +1573,9 @@ export default function ResourceLibraryPanel({
                     <div className="flex-1 overflow-y-auto p-2 space-y-1">
                         <button
                             onClick={() => setSelectedCollectionId(null)}
-                            className={`w-full text-left px-3 py-2 rounded-lg text-xs font-medium flex items-center gap-2 transition-colors ${!selectedCollectionId
-                                ? 'bg-indigo-600/10 text-indigo-400 border border-indigo-500/20'
-                                : 'text-zinc-400 hover:bg-white/5 hover:text-zinc-200'
+                            className={`w-full text-left px-3 py-2 rounded-lg text-xs font-medium flex items-center gap-2 transition-all ${!selectedCollectionId
+                                ? 'bg-indigo-50 text-indigo-600 border border-indigo-200/60 shadow-sm'
+                                : 'text-zinc-500 dark:text-zinc-400 hover:bg-white hover:shadow-sm dark:hover:bg-white/5 hover:text-zinc-900 dark:hover:text-zinc-200'
                                 }`}
                         >
                             <Folder size={12} className={!selectedCollectionId ? "fill-indigo-400/20" : ""} />
@@ -1515,7 +1588,7 @@ export default function ResourceLibraryPanel({
                                     onClick={() => setSelectedCollectionId(col.id)}
                                     className={`w-full text-left px-3 py-2 rounded-lg text-xs font-medium flex items-center gap-2 transition-colors ${selectedCollectionId === col.id
                                         ? 'bg-indigo-600/10 text-indigo-400 border border-indigo-500/20'
-                                        : 'text-zinc-400 hover:bg-white/5 hover:text-zinc-200'
+                                        : 'text-zinc-500 dark:text-zinc-400 hover:bg-white/5 hover:text-zinc-200'
                                         }`}
                                 >
                                     <Folder size={12} className={selectedCollectionId === col.id ? "fill-indigo-400/20" : ""} />
@@ -1538,10 +1611,10 @@ export default function ResourceLibraryPanel({
                 </div>
 
                 {/* Content Grid */}
-                <div className="flex-1 overflow-y-auto p-4 bg-zinc-950/50">
+                <div className="flex-1 overflow-y-auto p-4 bg-[#F8F9FA] dark:bg-zinc-950/50">
                     <div className="flex items-center justify-between mb-4">
                         <div className="flex items-center gap-4">
-                            <h3 className="text-xs font-bold text-zinc-400">
+                            <h3 className="text-xs font-bold text-zinc-500 dark:text-zinc-400">
                                 {activeTab === 'song' && isOnlineMode ? 'Online Search' :
                                     activeTab === 'song' ? 'Song Library' :
                                         activeTab === 'media' ? 'Media Library' :
@@ -1556,7 +1629,7 @@ export default function ResourceLibraryPanel({
                             {/* Toggle for Songs Tab */}
 
                             {activeTab === 'song' && (
-                                <div className="flex bg-zinc-900 rounded-lg p-0.5 border border-white/5 ml-auto">
+                                <div className="flex bg-white dark:bg-zinc-900 rounded-lg p-0.5 border border-zinc-200 dark:border-white/5 ml-auto">
                                     <button
                                         onClick={() => setIsOnlineMode(false)}
                                         className={`px-3 py-1 rounded-md text-[10px] font-bold transition-all ${!isOnlineMode ? 'bg-zinc-700 text-white shadow' : 'text-zinc-500 hover:text-white'}`}
@@ -1604,7 +1677,7 @@ export default function ResourceLibraryPanel({
                                     </div>
                                 )}
                                 {onlineResults.map(song => (
-                                    <div key={song.id} className="group relative aspect-square bg-zinc-900/50 border border-white/5 hover:border-indigo-500/50 rounded-xl flex flex-col overflow-hidden transition-all hover:shadow-xl hover:shadow-indigo-500/10">
+                                    <div key={song.id} className="group relative aspect-square bg-white dark:bg-zinc-900/50 border border-zinc-200 dark:border-white/5 hover:border-indigo-500/50 rounded-xl flex flex-col overflow-hidden transition-all hover:shadow-xl hover:shadow-indigo-500/10">
                                         {song.thumbnail ? (
                                             <div className="absolute inset-0 opacity-20 group-hover:opacity-40 transition-opacity" style={{ backgroundImage: `url(${song.thumbnail})`, backgroundSize: 'cover', backgroundPosition: 'center' }} />
                                         ) : (
@@ -1614,7 +1687,7 @@ export default function ResourceLibraryPanel({
                                         )}
                                         <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent p-3 flex flex-col justify-end">
                                             <h4 className="text-xs font-bold text-white truncate" title={song.title}>{song.title}</h4>
-                                            <p className="text-[10px] text-zinc-400 truncate">{song.artist}</p>
+                                            <p className="text-[10px] text-zinc-500 dark:text-zinc-400 truncate">{song.artist}</p>
                                             <button
                                                 id={`btn-import-${song.id}`}
                                                 onClick={() => handleImportSong(song)}
@@ -1664,6 +1737,24 @@ export default function ResourceLibraryPanel({
                 />
             )}
 
+            {/* Collapse Library Button Removed - Moved to Dashboard for better positioning */}
+
+            {isLiveFeedSelectorOpen && (
+                <LiveFeedSelector
+                    onClose={() => setIsLiveFeedSelectorOpen(false)}
+                    onSelect={(sourceId, name) => {
+                        onGoLive({
+                            id: `live-feed-${Date.now()}`,
+                            type: 'live_feed',
+                            title: name,
+                            body: sourceId,
+                            slides: [{ id: '1', content: sourceId }], // Back-compat
+                            meta: { type: 'live_feed' }
+                        } as any);
+                        setIsLiveFeedSelectorOpen(false);
+                    }}
+                />
+            )}
         </div>
     );
 }

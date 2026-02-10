@@ -21,6 +21,7 @@ export interface ProjectorTheme {
         value: string; // url, hex, or gradient string
         overlayOpacity: number; // 0 to 1
         blur: number; // px
+        brightness?: number; // 0 to 1, default 1
     };
     layout?: {
         referencePosition: 'top' | 'bottom';
@@ -30,6 +31,8 @@ export interface ProjectorTheme {
         versionColor?: string;
         verseNumberColor?: string;
         verseNumberScale?: number; // Default 0.5
+        contentPadding?: number; // px
+        textScale?: number; // multiplier
     };
 }
 
@@ -44,7 +47,9 @@ export const DEFAULT_LAYOUT = {
     referencePosition: 'top' as const,
     referenceScale: 1.5,
     showVerseNumbers: true,
-    verseNumberScale: 0.5
+    verseNumberScale: 0.5,
+    contentPadding: 80,
+    textScale: 1
 };
 
 const createTheme = (id: string, name: string, bg: string, font: string, align: 'center' | 'left' = 'center', color = '#ffffff'): ProjectorTheme => ({

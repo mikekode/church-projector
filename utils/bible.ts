@@ -2,6 +2,25 @@
 import kjvData from './kjv.json';
 import { textToNumbers } from './textNormalization';
 
+/**
+ * Fuzzy string matching using Sørensen–Dice coefficient
+ * (Redefined here to avoid circular dependency with hooks)
+ */
+const dice = (s1: string, s2: string) => {
+    if (!s1 || !s2) return 0;
+    const a = s1.toLowerCase().replace(/[^a-z0-9]/g, ''), b = s2.toLowerCase().replace(/[^a-z0-9]/g, '');
+    if (a === b) return 1;
+    const getBigrams = (s: string) => {
+        const b = new Set<string>();
+        for (let i = 0; i < s.length - 1; i++) b.add(s.substring(i, i + 2));
+        return b;
+    };
+    const ba = getBigrams(a), bb = getBigrams(b);
+    if (!ba.size || !bb.size) return 0;
+    let i = 0; ba.forEach(x => { if (bb.has(x)) i++ });
+    return (2 * i) / (ba.size + bb.size);
+};
+
 // Type definitions for the JSON structure
 type BibleData = {
     abbrev: string;
@@ -83,14 +102,43 @@ const BIBLE: BibleData = kjvData as any;
 
 /**
  * Checks if a string is a book name and returns the canonical key.
- * Handles loose matching.
+ * Handles loose matching and fuzzy lookups.
  */
 function findBookKey(input: string): string | null {
     const raw = input.toLowerCase().replace(/\./g, '').trim();
+
+    // 1. Exact or alias match
     if (BOOK_MAP[raw]) return BOOK_MAP[raw];
-    // Check if raw is already a valid key in the BIBLE data
-    const isKey = BIBLE.some(b => b.abbrev === raw);
-    if (isKey) return raw;
+
+    // 2. Exact abbrev match
+    const abbrevMatch = BIBLE.find(b => b.abbrev === raw);
+    if (abbrevMatch) return raw;
+
+    // 3. Fuzzy match using Dice coefficient (High typo tolerance)
+    const books = Object.keys(BOOK_MAP);
+
+    // BLACKLIST: Common words that should never match a book via short abbrev
+    const RISKY_WORDS = ['is', 'am', 'so', 'at', 'on', 'by', 'to', 'if', 'it', 'the', 'was', 'as'];
+    if (RISKY_WORDS.includes(raw)) return null;
+
+    let bestMatch = { key: null as string | null, score: 0 };
+    for (const b of books) {
+        const score = dice(raw, b);
+        // Boost startsWith (e.g., "matti" -> "matthew")
+        // Only boost if raw is at least 3 chars to avoid "is" -> "isaiah"
+        const finalScore = (raw.length >= 3 && b.startsWith(raw)) ? score + 0.2 : score;
+
+        if (finalScore > bestMatch.score) {
+            bestMatch = { key: b, score: finalScore };
+        }
+    }
+
+    // Threshold of 0.6 allows for significant typos while avoiding random words
+    if (bestMatch.score > 0.6 && bestMatch.key) {
+        console.log(`[Bible] Fuzzy Match: "${input}" -> "${bestMatch.key}" (Score: ${bestMatch.score.toFixed(2)})`);
+        return BOOK_MAP[bestMatch.key];
+    }
+
     return null;
 }
 
@@ -115,13 +163,9 @@ export function detectVersesInText(rawText: string): DetectedVerse[] {
     const normalized = textToNumbers(rawText);
 
     // 2. Regex with verse range support
-    // Matches: "1 John 3 16" or "John 3:16" or "John 3:16-17" or "John 3:16 to 17" or "John 3:16 through 18" or "John 3:16 and 17"
-    // Group 1: Optional Number prefix (1, 2, 3, I, II, III)
-    // Group 2: Book Name (e.g. "John", "Kings", "Song of Solomon") - allows spaces
-    // Group 3: Chapter
-    // Group 4: Optional Start Verse
-    // Group 5: Optional End Verse (after -, "to", "through", or "and")
-    const regex = /((?:1|2|3|I|II|III)\s+)?([A-Za-z][A-Za-z\s]+?)\s+(\d+)(?:\s?[:\s]\s?(\d+)(?:\s?(?:-|to|through|and)\s?(\d+))?)?/gi;
+    // Matches: "1 John 3 16" or "John 3:16" or "John 3:16-17"
+    // Also handles "chapter 5 is 10" as "chapter 5 verse 10" (common transcription error)
+    const regex = /((?:1|2|3|I|II|III)\s+)?([A-Za-z][A-Za-z\s]+?)\s+(\d+)(?:\s?(?:[:\s]|verse|is)\s?(\d+)(?:\s?(?:-|to|through|and)\s?(\d+))?)?/gi;
 
     const matches = Array.from(normalized.matchAll(regex));
 

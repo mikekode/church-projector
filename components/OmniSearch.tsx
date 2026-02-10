@@ -138,15 +138,15 @@ export default function OmniSearch({ onGoLive, onAddToSchedule }: OmniSearchProp
     return (
         <div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex items-start justify-center pt-[20vh]" onClick={() => setIsOpen(false)}>
             <div
-                className="w-full max-w-2xl bg-zinc-900 border border-white/10 rounded-xl shadow-2xl overflow-hidden flex flex-col animate-in fade-in zoom-in-95 duration-200"
+                className="w-full max-w-2xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-white/10 rounded-xl shadow-2xl overflow-hidden flex flex-col animate-in fade-in zoom-in-95 duration-200"
                 onClick={e => e.stopPropagation()}
             >
                 {/* Search Input */}
-                <div className="flex items-center px-4 py-4 border-b border-white/5 gap-3">
+                <div className="flex items-center px-4 py-4 border-b border-zinc-200 dark:border-white/5 gap-3">
                     <Search className="w-5 h-5 text-zinc-500" />
                     <input
                         ref={inputRef}
-                        className="flex-1 bg-transparent text-xl text-white placeholder:text-zinc-600 focus:outline-none"
+                        className="flex-1 bg-transparent text-xl text-zinc-900 dark:text-white placeholder:text-zinc-400 dark:placeholder:text-zinc-600 focus:outline-none"
                         placeholder="Search songs, scripture, or media..."
                         value={query}
                         onChange={e => setQuery(e.target.value)}
@@ -154,7 +154,7 @@ export default function OmniSearch({ onGoLive, onAddToSchedule }: OmniSearchProp
                         autoComplete="off"
                     />
                     <div className="flex gap-2">
-                        <span className="text-[10px] bg-zinc-800 text-zinc-400 px-1.5 py-0.5 rounded border border-white/5">ESC</span>
+                        <span className="text-[10px] bg-zinc-50 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400 px-1.5 py-0.5 rounded border border-white/5">ESC</span>
                     </div>
                 </div>
 
@@ -168,7 +168,7 @@ export default function OmniSearch({ onGoLive, onAddToSchedule }: OmniSearchProp
                         results.map((result, idx) => (
                             <div
                                 key={result.id}
-                                className={`flex items-center gap-4 px-4 py-3 rounded-lg cursor-pointer transition-colors ${idx === selectedIndex ? 'bg-indigo-600/20 border border-indigo-500/30' : 'hover:bg-zinc-800/50 border border-transparent'}`}
+                                className={`flex items-center gap-4 px-4 py-3 rounded-lg cursor-pointer transition-colors ${idx === selectedIndex ? 'bg-indigo-600/20 border border-indigo-500/30' : 'hover:bg-zinc-50 dark:hover:bg-zinc-800/50 border border-transparent'}`}
                                 onClick={() => {
                                     onAddToSchedule(result);
                                     setIsOpen(false);
@@ -176,8 +176,8 @@ export default function OmniSearch({ onGoLive, onAddToSchedule }: OmniSearchProp
                             >
                                 {/* Icon Box */}
                                 <div className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0 ${result.type === 'song' ? 'bg-purple-500/20 text-purple-400' :
-                                        result.type === 'bible' ? 'bg-amber-500/20 text-amber-400' :
-                                            'bg-blue-500/20 text-blue-400'
+                                    result.type === 'bible' ? 'bg-amber-500/20 text-amber-400' :
+                                        'bg-blue-500/20 text-blue-400'
                                     }`}>
                                     {result.type === 'song' && <Music size={20} />}
                                     {result.type === 'bible' && <BookOpen size={20} />}
@@ -187,7 +187,7 @@ export default function OmniSearch({ onGoLive, onAddToSchedule }: OmniSearchProp
                                 {/* Content */}
                                 <div className="flex-1 min-w-0">
                                     <div className="flex items-center justify-between">
-                                        <h4 className={`text-sm font-bold truncate ${idx === selectedIndex ? 'text-white' : 'text-zinc-300'}`}>
+                                        <h4 className={`text-sm font-bold truncate ${idx === selectedIndex ? 'text-zinc-900 dark:text-white' : 'text-zinc-600 dark:text-zinc-300'}`}>
                                             {result.title}
                                         </h4>
                                         {idx === selectedIndex && (
@@ -206,13 +206,13 @@ export default function OmniSearch({ onGoLive, onAddToSchedule }: OmniSearchProp
                 </div>
 
                 {/* Footer */}
-                <div className="bg-zinc-950/50 px-4 py-2 border-t border-white/5 flex justify-between items-center text-[10px] text-zinc-500">
+                <div className="bg-zinc-100 dark:bg-zinc-950/50 px-4 py-2 border-t border-zinc-200 dark:border-white/5 flex justify-between items-center text-[10px] text-zinc-500">
                     <div className="flex gap-4">
-                        <span><kbd className="font-sans bg-zinc-800 px-1 rounded text-zinc-300">↵</kbd> Add to Schedule</span>
-                        <span><kbd className="font-sans bg-zinc-800 px-1 rounded text-zinc-300">⇧ ↵</kbd> Go Live</span>
+                        <span><kbd className="font-sans bg-zinc-50 dark:bg-zinc-800 px-1 rounded text-zinc-600 dark:text-zinc-300">↵</kbd> Add to Schedule</span>
+                        <span><kbd className="font-sans bg-zinc-50 dark:bg-zinc-800 px-1 rounded text-zinc-600 dark:text-zinc-300">⇧ ↵</kbd> Go Live</span>
                     </div>
                     <div>
-                        ProTip: Use <kbd className="font-sans bg-zinc-800 px-1 rounded text-zinc-300">↑</kbd> <kbd className="font-sans bg-zinc-800 px-1 rounded text-zinc-300">↓</kbd> to navigate
+                        ProTip: Use <kbd className="font-sans bg-zinc-50 dark:bg-zinc-800 px-1 rounded text-zinc-600 dark:text-zinc-300">↑</kbd> <kbd className="font-sans bg-zinc-50 dark:bg-zinc-800 px-1 rounded text-zinc-600 dark:text-zinc-300">↓</kbd> to navigate
                     </div>
                 </div>
             </div>

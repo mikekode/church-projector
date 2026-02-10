@@ -43,12 +43,12 @@ function openDB(): Promise<IDBDatabase> {
 export interface ResourceCollection {
     id: string;
     name: string;
-    type: 'song' | 'media' | 'presentation' | 'scripture' | 'theme';
+    type: 'song' | 'media' | 'presentation' | 'scripture' | 'theme' | 'live_feed';
     createdAt: number;
 }
 
 export interface ResourceItem extends ScheduleItem {
-    category: 'song' | 'media' | 'presentation' | 'scripture' | 'theme';
+    category: 'song' | 'media' | 'presentation' | 'scripture' | 'theme' | 'live_feed';
     dateAdded: number;
     tags?: string[];
     collectionId?: string;
@@ -159,6 +159,7 @@ export interface ProjectorTheme {
         value: string;
         overlayOpacity: number;
         blur: number;
+        brightness?: number;
     };
     layout?: {
         referencePosition: 'top' | 'bottom';
@@ -168,6 +169,8 @@ export interface ProjectorTheme {
         versionColor?: string;
         verseNumberColor?: string;
         verseNumberScale?: number;
+        contentPadding?: number;
+        textScale?: number;
     };
 }
 

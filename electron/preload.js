@@ -23,8 +23,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
     getVerseOnline: (query) => ipcRenderer.invoke('lookup-verse-online', query),
 
     // Window Management
-    openProjectorWindow: () => ipcRenderer.invoke('open-projector-window'),
-    openStageWindow: () => ipcRenderer.invoke('open-stage-window'),
+    openProjectorWindow: (args) => ipcRenderer.invoke('open-projector-window', args),
+    openStageWindow: (args) => ipcRenderer.invoke('open-stage-window', args),
+
+    // Displays
+    getDisplays: () => ipcRenderer.invoke('get-displays'),
+    identifyDisplays: () => ipcRenderer.invoke('identify-displays'),
 
     // Song Data
     searchSongs: (query) => ipcRenderer.invoke('song-search', query),
@@ -33,6 +37,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
     // AI
     smartDetect: (payload) => ipcRenderer.invoke('smart-detect', payload),
     semanticSearch: (text, threshold, maxResults) => ipcRenderer.invoke('semantic-search', { text, threshold, maxResults }),
+
+    // Desktop Capture for Live Feed
+    getDesktopSources: () => ipcRenderer.invoke('get-desktop-sources'),
 
     // Auto Update
     checkUpdate: () => ipcRenderer.invoke('check-update'),

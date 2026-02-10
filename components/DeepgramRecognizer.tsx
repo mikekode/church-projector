@@ -64,8 +64,16 @@ export default function DeepgramRecognizer({ isListening, onTranscript, onInteri
 
             console.log("Starting Deepgram...");
 
-            // 1. Get microphone
-            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            // 1. Get RAW microphone stream - let Deepgram's AI handle the noise separation
+            const stream = await navigator.mediaDevices.getUserMedia({
+                audio: {
+                    echoCancellation: false, // Disable all browser processing for cleanest raw signal
+                    noiseSuppression: false,
+                    autoGainControl: false,
+                    sampleRate: 16000,
+                    channelCount: 1
+                }
+            });
 
             // Bail out if cancelled during async wait (React StrictMode double-mount)
             if (cancelledRef.current) {
@@ -126,7 +134,7 @@ export default function DeepgramRecognizer({ isListening, onTranscript, onInteri
             const wsUrl = `wss://api.deepgram.com/v1/listen?` +
                 `encoding=linear16&sample_rate=16000&channels=1&` +
                 `model=nova-2&language=en&` +
-                `interim_results=true&punctuate=true&smart_format=true&filler_words=true&endpointing=250&` +
+                `interim_results=true&punctuate=true&smart_format=true&filler_words=true&endpointing=1000&` +
                 `keywords=${encodeURIComponent(weightedKeywords)}`;
 
             console.log("Connecting to Deepgram...");
@@ -147,6 +155,15 @@ export default function DeepgramRecognizer({ isListening, onTranscript, onInteri
                 }
 
                 const source = audioContext.createMediaStreamSource(stream);
+
+                // 4. Add Dynamic Range Compressor (Smooths levels without AGC "pumping")
+                const compressor = audioContext.createDynamicsCompressor();
+                compressor.threshold.setValueAtTime(-24, audioContext.currentTime);
+                compressor.knee.setValueAtTime(30, audioContext.currentTime);
+                compressor.ratio.setValueAtTime(12, audioContext.currentTime);
+                compressor.attack.setValueAtTime(0.003, audioContext.currentTime);
+                compressor.release.setValueAtTime(0.25, audioContext.currentTime);
+
                 // Lower buffer size (1024) significantly reduces latency (64ms vs 256ms)
                 const processor = audioContext.createScriptProcessor(1024, 1, 1);
                 processorRef.current = processor;
@@ -167,7 +184,7 @@ export default function DeepgramRecognizer({ isListening, onTranscript, onInteri
                         // Optimization: Only update if change is significant (> 0.02)
                         // SAFETY: Use nullish coalescing to avoid NaN comparison if _lastLevel is undefined
                         const lastLevel = (processorRef.current as any)._lastLevel ?? 0;
-                        if (Math.abs(level - lastLevel) > 0.02) {
+                        if (Math.abs(level - lastLevel) > 0.01) {
                             (processorRef.current as any)._lastLevel = level;
                             onVolumeRef.current?.(level);
                         }
@@ -177,7 +194,8 @@ export default function DeepgramRecognizer({ isListening, onTranscript, onInteri
                     }
                 };
 
-                source.connect(processor);
+                source.connect(compressor);
+                compressor.connect(processor);
                 processor.connect(audioContext.destination);
             };
 

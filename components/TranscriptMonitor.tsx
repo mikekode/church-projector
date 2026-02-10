@@ -18,33 +18,22 @@ type Props = {
 // Pulsating Voice Wave Component (Isolated)
 const VoiceWave = ({ level, active }: { level: number, active: boolean }) => {
     // 9 bars for a fuller, more professional wave look
-    const sensitivities = [0.3, 0.4, 0.7, 0.9, 1.0, 0.9, 0.7, 0.4, 0.3];
+    const sensitivities = [0.4, 0.6, 0.8, 0.95, 1.0, 0.95, 0.8, 0.6, 0.4];
 
     return (
-        <div className="flex items-center gap-[4px] h-6 px-1">
+        <div className="flex items-center gap-[3px] h-8 px-1">
             {sensitivities.map((sensitivity, i) => {
-                // Energetic scaling: use a higher multiplier (40) and scaleY for smoothness
-                const scale = active ? Math.max(0.1, level * sensitivity * 2.5) : 0.05;
-                const baseHeight = 24; // Full container height
+                // More energetic: higher multiplier (5x), more responsive, min 0.15 when active
+                const scale = active ? Math.max(0.15, level * sensitivity * 5) : 0.05;
+                const baseHeight = 32; // Taller bars
 
-                let bgColor = 'bg-indigo-500';
-                let glow = '';
-
-                // Energy States based on level
-                if (active) {
-                    if (level > 0.6) {
-                        bgColor = 'bg-white';
-                        glow = 'shadow-[0_0_12px_rgba(255,255,255,0.8)]';
-                    } else if (level > 0.3) {
-                        bgColor = 'bg-cyan-400';
-                        glow = 'shadow-[0_0_8px_rgba(34,211,238,0.5)]';
-                    }
-                }
+                const bgColor = 'bg-indigo-500 dark:bg-white';
+                const glow = active ? 'shadow-sm shadow-indigo-500/50' : '';
 
                 return (
                     <div
                         key={i}
-                        className={`w-[4px] rounded-full transition-all duration-75 ease-out ${bgColor} ${glow} ${active ? 'opacity-100' : 'opacity-20'}`}
+                        className={`w-[5px] rounded-full transition-all duration-[50ms] ease-out ${bgColor} ${glow} ${active ? 'opacity-100' : 'opacity-20'}`}
                         style={{
                             height: `${baseHeight}px`,
                             transform: `scaleY(${scale})`,
@@ -81,14 +70,14 @@ export default function TranscriptMonitor({
         <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
             <div className="flex items-center justify-between mb-3 flex-shrink-0">
                 <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest flex items-center gap-2">
-                    <div className="w-1.5 h-1.5 rounded-full bg-indigo-500" /> Live Transcript
+                    <div className="w-1.5 h-1.5 rounded-full bg-zinc-800 dark:bg-white" /> Live Transcript
                 </h3>
                 <VoiceWave level={voiceLevel} active={isListening} />
             </div>
 
             <div
                 ref={scrollRef}
-                className="flex-1 overflow-y-auto font-mono text-[10px] text-zinc-400 leading-relaxed whitespace-pre-wrap transcript-scroll pr-2"
+                className="flex-1 overflow-y-auto font-mono text-[10px] text-zinc-600 dark:text-zinc-400 leading-relaxed whitespace-pre-wrap transcript-scroll pr-2"
                 style={{
                     scrollbarWidth: 'thin',
                     scrollbarColor: '#71717a #27272a'
@@ -100,7 +89,7 @@ export default function TranscriptMonitor({
                         ERROR: {deepgramError}
                     </div>
                 )}
-                <span className="text-indigo-400 animate-pulse block mt-1">{interim}</span>
+                <span className="text-zinc-900 dark:text-white animate-pulse block mt-1">{interim}</span>
             </div>
 
             <DeepgramRecognizer

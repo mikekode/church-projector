@@ -58,17 +58,17 @@ export default function LicenseModal({ isOpen, onClose }: LicenseModalProps) {
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
-            <div className="bg-zinc-900 border border-white/10 rounded-2xl w-full max-w-lg mx-4 shadow-2xl">
+            <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-white/10 rounded-2xl w-full max-w-lg mx-4 shadow-2xl">
                 {/* Header */}
-                <div className="flex items-center justify-between p-6 border-b border-white/10">
+                <div className="flex items-center justify-between p-6 border-b border-zinc-200 dark:border-white/10">
                     <div className="flex items-center gap-3">
                         <div className="p-2 bg-indigo-600/20 rounded-lg">
-                            <Key className="w-5 h-5 text-indigo-400" />
+                            <Key className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
                         </div>
-                        <h2 className="text-xl font-bold text-white">License & Billing</h2>
+                        <h2 className="text-xl font-bold text-zinc-900 dark:text-white">License & Billing</h2>
                     </div>
-                    <button onClick={onClose} className="p-2 hover:bg-white/10 rounded-lg transition-colors">
-                        <X className="w-5 h-5 text-zinc-400" />
+                    <button onClick={onClose} className="p-2 hover:bg-zinc-100 dark:hover:bg-white/10 rounded-lg transition-colors">
+                        <X className="w-5 h-5 text-zinc-500 dark:text-zinc-400" />
                     </button>
                 </div>
 
@@ -110,11 +110,11 @@ export default function LicenseModal({ isOpen, onClose }: LicenseModalProps) {
 
                         {/* Subscription Details */}
                         {isLicensed && license.expiresAt && (
-                            <div className="mt-4 pt-4 border-t border-white/10 flex items-center gap-3">
+                            <div className="mt-4 pt-4 border-t border-zinc-200 dark:border-white/10 flex items-center gap-3">
                                 <Calendar className="w-4 h-4 text-zinc-500" />
                                 <div>
                                     <p className="text-xs text-zinc-500 uppercase tracking-wider">Next billing date</p>
-                                    <p className="text-white font-medium">{formatExpiry(license.expiresAt)}</p>
+                                    <p className="text-zinc-900 dark:text-white font-medium">{formatExpiry(license.expiresAt)}</p>
                                 </div>
                                 {license.daysRemaining && license.daysRemaining <= 7 && (
                                     <span className="ml-auto text-xs bg-amber-500/20 text-amber-400 px-2 py-1 rounded-full">
@@ -126,11 +126,11 @@ export default function LicenseModal({ isOpen, onClose }: LicenseModalProps) {
 
                         {/* Hours Remaining for licensed users */}
                         {isLicensed && hoursRemaining !== null && (
-                            <div className="mt-4 pt-4 border-t border-white/10 flex items-center gap-3">
+                            <div className="mt-4 pt-4 border-t border-zinc-200 dark:border-white/10 flex items-center gap-3">
                                 <Clock className="w-4 h-4 text-zinc-500" />
                                 <div>
                                     <p className="text-xs text-zinc-500 uppercase tracking-wider">Listening hours remaining</p>
-                                    <p className="text-white font-medium">{hoursRemaining.toFixed(1)} hours</p>
+                                    <p className="text-zinc-900 dark:text-white font-medium">{hoursRemaining.toFixed(1)} hours</p>
                                 </div>
                                 {hoursRemaining <= 5 && (
                                     <span className="ml-auto text-xs bg-amber-500/20 text-amber-400 px-2 py-1 rounded-full">
@@ -142,7 +142,7 @@ export default function LicenseModal({ isOpen, onClose }: LicenseModalProps) {
 
                         {/* Expired notice */}
                         {license.status === 'expired' && license.expiresAt && (
-                            <div className="mt-4 pt-4 border-t border-white/10">
+                            <div className="mt-4 pt-4 border-t border-zinc-200 dark:border-white/10">
                                 <p className="text-sm text-zinc-400">
                                     Expired on <span className="text-red-400 font-medium">{formatExpiry(license.expiresAt)}</span>
                                 </p>
@@ -155,21 +155,21 @@ export default function LicenseModal({ isOpen, onClose }: LicenseModalProps) {
                         <div className="p-4 bg-indigo-600/10 border border-indigo-500/30 rounded-xl">
                             <div className="flex items-center justify-between mb-3">
                                 <div>
-                                    <p className="font-bold text-white">CREENLY Pro</p>
+                                    <p className="font-bold text-zinc-900 dark:text-white">CREENLY Pro</p>
                                     <p className="text-sm text-zinc-400">Usage-based pricing</p>
                                 </div>
                             </div>
                             <div className="grid grid-cols-3 gap-2 text-center mb-4">
-                                <div className="p-2 bg-black/30 rounded-lg">
-                                    <p className="text-lg font-bold text-white">$15</p>
+                                <div className="p-2 bg-zinc-100 dark:bg-black/30 rounded-lg">
+                                    <p className="text-lg font-bold text-zinc-900 dark:text-white">$15</p>
                                     <p className="text-[10px] text-zinc-500">40 hrs/mo</p>
                                 </div>
-                                <div className="p-2 bg-indigo-500/20 rounded-lg border border-indigo-500/30">
-                                    <p className="text-lg font-bold text-indigo-400">$90</p>
-                                    <p className="text-[10px] text-indigo-300">240 hrs/6mo</p>
+                                <div className="p-2 bg-indigo-500/10 dark:bg-indigo-500/20 rounded-lg border border-indigo-500/30">
+                                    <p className="text-lg font-bold text-indigo-600 dark:text-indigo-400">$90</p>
+                                    <p className="text-[10px] text-indigo-500 dark:text-indigo-300">240 hrs/6mo</p>
                                 </div>
-                                <div className="p-2 bg-black/30 rounded-lg">
-                                    <p className="text-lg font-bold text-white">$180</p>
+                                <div className="p-2 bg-zinc-100 dark:bg-black/30 rounded-lg">
+                                    <p className="text-lg font-bold text-zinc-900 dark:text-white">$180</p>
                                     <p className="text-[10px] text-zinc-500">480 hrs/yr</p>
                                 </div>
                             </div>
@@ -194,12 +194,12 @@ export default function LicenseModal({ isOpen, onClose }: LicenseModalProps) {
                                 value={keyInput}
                                 onChange={(e) => setKeyInput(e.target.value.toUpperCase())}
                                 placeholder="CRN-XXXX-XXXX-XXXX-XXXX"
-                                className="flex-1 bg-black/50 border border-white/10 rounded-lg px-4 py-3 text-white placeholder:text-zinc-600 focus:outline-none focus:border-indigo-500 font-mono tracking-wider"
+                                className="flex-1 bg-zinc-50 dark:bg-black/50 border border-zinc-300 dark:border-white/10 rounded-lg px-4 py-3 text-zinc-900 dark:text-white placeholder:text-zinc-400 dark:placeholder:text-zinc-600 focus:outline-none focus:border-indigo-500 font-mono tracking-wider"
                             />
                             <button
                                 onClick={handleActivateKey}
                                 disabled={activating || !keyInput.trim()}
-                                className="px-6 bg-zinc-800 hover:bg-zinc-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg font-bold text-white transition-colors"
+                                className="px-6 bg-zinc-200 hover:bg-zinc-300 dark:bg-zinc-800 dark:hover:bg-zinc-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg font-bold text-zinc-900 dark:text-white transition-colors"
                             >
                                 {activating ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Activate'}
                             </button>

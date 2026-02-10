@@ -15,9 +15,22 @@ html {
 }
 
 @layer base {
+
+  /* Default to dark to prevent flash of light mode */
+  html {
+    background-color: black;
+    color-scheme: dark;
+  }
+
   body {
     font-family: var(--font-inter);
+    /* Default dark, override for light mode */
     @apply bg-black text-white selection:bg-indigo-500/30;
+  }
+
+  /* Light mode overrides when dark class is NOT present */
+  html:not(.dark) body {
+    @apply bg-zinc-50 text-zinc-900;
   }
 }
 
@@ -28,11 +41,11 @@ html {
 }
 
 ::-webkit-scrollbar-track {
-  @apply bg-zinc-900/50 rounded;
+  @apply bg-zinc-200 dark:bg-zinc-900/50 rounded;
 }
 
 ::-webkit-scrollbar-thumb {
-  @apply bg-zinc-600 rounded hover:bg-zinc-500 transition-colors;
+  @apply bg-zinc-400 dark:bg-zinc-600 rounded hover:bg-zinc-500 transition-colors;
   min-height: 40px;
 }
 

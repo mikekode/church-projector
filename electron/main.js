@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, Menu, dialog, shell } = require('electron');
+const { app, BrowserWindow, ipcMain, Menu, dialog, shell, desktopCapturer } = require('electron');
 // electron-updater loaded lazily after app ready to avoid getVersion() crash
 let autoUpdater = null;
 const path = require('path');
@@ -101,9 +101,10 @@ function loadBibleEmbeddings() {
             console.log('[Semantic] Loading Bible embeddings...');
             const data = fs.readFileSync(embeddingsPath, 'utf-8');
             bibleEmbeddings = JSON.parse(data);
-            console.log(`[Semantic] Loaded ${bibleEmbeddings.length} verse embeddings`);
+            console.log(`[Semantic] SUCCESS: Loaded ${bibleEmbeddings.length} verse embeddings`);
         } else {
-            console.log('[Semantic] Bible embeddings not found at:', embeddingsPath);
+            console.warn('[Semantic] WARNING: Bible embeddings not found at:', embeddingsPath);
+            console.warn('[Semantic] Paraphrase detection will be limited to regex mode.');
         }
     } catch (error) {
         console.error('[Semantic] Failed to load embeddings:', error.message);
@@ -133,10 +134,12 @@ function initOpenAI() {
 
     if (apiKey) {
         openaiClient = new OpenAI({ apiKey });
-        console.log('[Semantic] OpenAI client initialized');
+        console.log('[Semantic] SUCCESS: OpenAI client initialized');
         return true;
     } else {
-        console.log('[Semantic] OPENAI_API_KEY not found - semantic search disabled');
+        console.error('[Semantic] ERROR: OPENAI_API_KEY not found.');
+        console.error('[Semantic] Production Note: Ensure "electron/resources/secrets.json" exists with your key.');
+        console.error('[Semantic] Semantic search (paraphrase detection) is DISABLED.');
         return false;
     }
 }
@@ -298,12 +301,73 @@ function createWindow() {
 // Projector Window Management
 let projectorWindow = null;
 let stageWindow = null;
+let identifyWindows = [];
 
 function getIconPath() {
     return path.join(__dirname, app.isPackaged ? '../out/logo.png' : '../public/logo.png');
 }
 
-ipcMain.handle('open-projector-window', async () => {
+ipcMain.handle('identify-displays', async () => {
+    const { screen, BrowserWindow } = require('electron');
+    const displays = screen.getAllDisplays();
+
+    // Close any existing identify windows
+    identifyWindows.forEach(w => { if (!w.isDestroyed()) w.close(); });
+    identifyWindows = [];
+
+    displays.forEach((display, index) => {
+        const win = new BrowserWindow({
+            x: display.bounds.x,
+            y: display.bounds.y,
+            width: display.bounds.width,
+            height: display.bounds.height,
+            transparent: true,
+            frame: false,
+            alwaysOnTop: true,
+            skipTaskbar: true,
+            hasShadow: false,
+            webPreferences: {
+                nodeIntegration: false,
+                contextIsolation: true
+            }
+        });
+
+        win.setIgnoreMouseEvents(true);
+        win.loadURL(`data:text/html;charset=utf-8,
+            <html>
+                <body style="-webkit-app-region: drag; background: rgba(79, 70, 229, 0.1); color: white; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; font-family: sans-serif; overflow: hidden; border: 10px solid rgba(79, 70, 229, 0.5);">
+                    <div style="background: rgba(0,0,0,0.8); padding: 40px 80px; border-radius: 40px; text-align: center; border: 2px solid rgba(255,255,255,0.2); backdrop-filter: blur(10px); box-shadow: 0 20px 50px rgba(0,0,0,0.5);">
+                        <h1 style="font-size: 120px; margin: 0; line-height: 1;">${index + 1}</h1>
+                        <p style="font-size: 24px; margin-top: 20px; font-weight: bold; opacity: 0.8; text-transform: uppercase; letter-spacing: 2px;">Screen Identification</p>
+                    </div>
+                </body>
+            </html>
+        `);
+
+        identifyWindows.push(win);
+    });
+
+    setTimeout(() => {
+        identifyWindows.forEach(w => { if (!w.isDestroyed()) w.close(); });
+        identifyWindows = [];
+    }, 5000);
+
+    return { success: true };
+});
+
+ipcMain.handle('get-displays', async () => {
+    const { screen } = require('electron');
+    const displays = screen.getAllDisplays();
+    return displays.map((d, i) => ({
+        id: d.id,
+        index: i + 1,
+        label: `Display ${i + 1} (${d.bounds.width}x${d.bounds.height})`,
+        bounds: d.bounds,
+        isPrimary: d.id === screen.getPrimaryDisplay().id
+    }));
+});
+
+ipcMain.handle('open-projector-window', async (event, { displayId } = {}) => {
     if (projectorWindow) {
         projectorWindow.focus();
         return { success: true, message: "Window already open" };
@@ -312,15 +376,20 @@ ipcMain.handle('open-projector-window', async () => {
     const { screen } = require('electron');
     const displays = screen.getAllDisplays();
 
-    // Default to primary, but prefer secondary if available
     let targetDisplay = displays[0];
-    if (displays.length > 1) {
+    if (displayId) {
+        targetDisplay = displays.find(d => String(d.id) === String(displayId)) || targetDisplay;
+    } else if (displays.length > 1) {
+        // Fallback: use secondary screen if no ID provided
         targetDisplay = displays.find(d => d.bounds.x !== 0 || d.bounds.y !== 0) || displays[1];
     }
 
     projectorWindow = new BrowserWindow({
-        width: 1280,
-        height: 720,
+        x: targetDisplay.bounds.x,
+        y: targetDisplay.bounds.y,
+        width: targetDisplay.bounds.width,
+        height: targetDisplay.bounds.height,
+        fullscreen: false,
         backgroundColor: '#000000',
         show: false,
         title: 'Creenly - Projector',
@@ -361,15 +430,26 @@ ipcMain.handle('open-projector-window', async () => {
     return { success: true };
 });
 
-ipcMain.handle('open-stage-window', async () => {
+ipcMain.handle('open-stage-window', async (event, { displayId } = {}) => {
     if (stageWindow) {
         stageWindow.focus();
         return { success: true, message: "Window already open" };
     }
 
+    const { screen } = require('electron');
+    const displays = screen.getAllDisplays();
+
+    let targetDisplay = displays[0];
+    if (displayId) {
+        targetDisplay = displays.find(d => String(d.id) === String(displayId)) || targetDisplay;
+    }
+
     stageWindow = new BrowserWindow({
-        width: 1280,
-        height: 720,
+        x: targetDisplay.bounds.x,
+        y: targetDisplay.bounds.y,
+        width: targetDisplay.bounds.width,
+        height: targetDisplay.bounds.height,
+        fullscreen: false,
         backgroundColor: '#000000',
         show: false,
         title: 'Creenly - Stage Monitor',
@@ -411,6 +491,16 @@ ipcMain.handle('open-stage-window', async () => {
 
 ipcMain.handle('get-machine-id', async () => {
     return await getMachineId();
+});
+
+ipcMain.handle('get-desktop-sources', async () => {
+    const sources = await desktopCapturer.getSources({ types: ['window', 'screen'], thumbnailSize: { width: 320, height: 180 } });
+    return sources.map(source => ({
+        id: source.id,
+        name: source.name,
+        thumbnail: source.thumbnail.toDataURL(),
+        appIcon: source.appIcon ? source.appIcon.toDataURL() : null
+    }));
 });
 
 // Bible Data Management

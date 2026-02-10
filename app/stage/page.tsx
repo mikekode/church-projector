@@ -6,6 +6,7 @@ import { Clock, ChevronRight, Music, BookOpen, Image, AlertCircle } from 'lucide
 import { useLicense } from '@/hooks/useLicense';
 import DemoWatermark from '@/components/DemoWatermark';
 import { ProjectorTheme, DEFAULT_THEMES } from '@/utils/themes';
+import LiveFeedStream from '@/components/projector/LiveFeedStream';
 
 /**
  * Render formatted text with allowed HTML tags (b, i, font/span with color)
@@ -79,7 +80,7 @@ function calculateFontScale(text: string | undefined, verseCount: number = 1): n
 }
 
 interface StageContent {
-    type: 'verse' | 'song' | 'media' | 'clear';
+    type: 'verse' | 'song' | 'media' | 'live_feed' | 'clear';
     reference?: string;
     text?: string;
     version?: string;
@@ -92,6 +93,7 @@ interface StageContent {
     imageMode?: 'contain' | 'cover' | 'stretch';
     verses?: { verseNum: number; text: string }[];
     background?: string;
+    isAudioOnly?: boolean;
 }
 
 export default function StageDisplayPage() {
@@ -119,6 +121,9 @@ export default function StageDisplayPage() {
 
     // Broadcast Subscription
     const { broadcast } = useBroadcastChannel('projector_channel');
+    useEffect(() => {
+        broadcast({ type: 'REQUEST_STATE' });
+    }, [broadcast]);
     const { subscribe } = useBroadcastChannel('projector_channel', (message: any) => {
         if (message.type === 'SHOW_VERSE') {
             setContent({
@@ -148,9 +153,23 @@ export default function StageDisplayPage() {
                     title: payload.title,
                     currentSlide: payload.body,
                     scale: payload.options?.scale || 1,
-                    imageMode: payload.options?.imageMode || 'contain'
+                    imageMode: payload.options?.imageMode || 'contain',
+                    isAudioOnly: payload.options?.isAudioOnly
                 });
+                setFitScale(1); // Reset scale on new content
+            } else if (payload.type === 'live_feed') {
+                setContent({
+                    type: 'live_feed',
+                    title: payload.title,
+                    currentSlide: payload.body, // Source ID
+                    scale: payload.options?.scale || 1,
+                    imageMode: payload.options?.imageMode || 'contain',
+                    isAudioOnly: payload.options?.isAudioOnly
+                });
+                setFitScale(1);
             }
+        } else if (message.type === 'APPLY_THEME') {
+            setActiveTheme(message.payload);
         } else if (message.type === 'CLEAR') {
             setContent({ type: 'clear' });
         } else if (message.type === 'STAGE_NOTES') {
@@ -158,6 +177,32 @@ export default function StageDisplayPage() {
         } else if (message.type === 'MEDIA_ACTION') {
             // Sync Media Controls
             const { action, value } = message.payload;
+
+            // Handle content state updates (works for images AND videos)
+            if (action === 'set_mode') {
+                setContent(prev => {
+                    if (prev && (prev.type === 'media' || prev.type === 'live_feed')) {
+                        return { ...prev, imageMode: value };
+                    }
+                    return prev;
+                });
+            } else if (action === 'set_scale') {
+                setContent(prev => {
+                    if (prev && (prev.type === 'media' || prev.type === 'live_feed')) {
+                        return { ...prev, scale: value };
+                    }
+                    return prev;
+                });
+            } else if (action === 'set_audio_only') {
+                setContent(prev => {
+                    if (prev && (prev.type === 'media' || prev.type === 'live_feed')) {
+                        return { ...prev, isAudioOnly: value };
+                    }
+                    return prev;
+                });
+            }
+
+            // Handle video-specific controls
             if (videoRef.current) {
                 switch (action) {
                     case 'play':
@@ -178,14 +223,6 @@ export default function StageDisplayPage() {
                         break;
                     case 'rate':
                         videoRef.current.playbackRate = value;
-                        break;
-                    case 'set_mode':
-                        setContent(prev => {
-                            if (prev && prev.type === 'media') {
-                                return { ...prev, imageMode: value };
-                            }
-                            return prev;
-                        });
                         break;
                 }
             }
@@ -318,6 +355,12 @@ export default function StageDisplayPage() {
     useLayoutEffect(() => {
         if (!containerRef.current || !contentRef.current || !content) return;
 
+        // BYPASS FOR MEDIA & LIVE FEED - Always 1:1 scale unless user manually scales
+        if (content.type === 'media' || content.type === 'live_feed') {
+            setFitScale(1);
+            return;
+        }
+
         const checkFit = () => {
             const container = containerRef.current!;
             const contentEl = contentRef.current!;
@@ -360,6 +403,69 @@ export default function StageDisplayPage() {
                         backdropFilter: activeTheme.background.blur ? `blur(${activeTheme.background.blur}px)` : 'none'
                     }}
                 />
+            )}
+
+            {/* Media Content - Outside transform to allow full screen */}
+            {content?.type === 'media' && (
+                <div className="fixed left-0 right-0 bottom-0 top-[5rem] z-[40] bg-black flex items-center justify-center">
+                    {content.isAudioOnly ? (
+                        <div className="flex flex-col items-center justify-center text-zinc-500 gap-4">
+                            <div className="w-24 h-24 rounded-full bg-zinc-900 border border-zinc-800 flex items-center justify-center">
+                                <Music size={48} />
+                            </div>
+                            <div className="text-xl font-bold tracking-widest uppercase">Audio Only</div>
+                        </div>
+                    ) : (
+                        (() => {
+                            const mediaUrl = content.text || content.currentSlide;
+                            const isVideo = mediaUrl?.match(/\.(mp4|webm|mov|ogg)(\?|$)/i) ||
+                                mediaUrl?.startsWith('data:video/') ||
+                                mediaUrl?.startsWith('blob:');
+
+                            const mode = content.imageMode || 'contain';
+                            const objectFitClass = mode === 'cover' ? 'object-cover' : mode === 'stretch' ? 'object-fill' : 'object-contain';
+
+                            return isVideo ? (
+                                <video
+                                    key={mediaUrl}
+                                    ref={videoRef}
+                                    src={mediaUrl}
+                                    className={`w-full h-full ${objectFitClass} transition-all duration-300`}
+                                    style={{ transform: `scale(${content.scale || 1})` }}
+                                    autoPlay
+                                    muted
+                                    loop
+                                    playsInline
+                                />
+                            ) : (
+                                <img
+                                    src={mediaUrl}
+                                    alt={content.title}
+                                    className={`w-full h-full ${objectFitClass} transition-all duration-300`}
+                                    style={{ transform: `scale(${content.scale || 1})` }}
+                                />
+                            );
+                        })()
+                    )}
+                </div>
+            )}
+
+            {content?.type === 'live_feed' && (
+                <div className="fixed left-0 right-0 bottom-0 top-[5rem] z-[40] bg-black flex items-center justify-center">
+                    {content.isAudioOnly ? (
+                        <div className="flex flex-col items-center justify-center text-zinc-500 gap-4">
+                            <div className="w-24 h-24 rounded-full bg-zinc-900 border border-zinc-800 flex items-center justify-center">
+                                <Music size={48} />
+                            </div>
+                            <div className="text-xl font-bold tracking-widest uppercase">Audio Only</div>
+                        </div>
+                    ) : (
+                        <LiveFeedStream
+                            sourceId={content.currentSlide || ''}
+                            className={`w-full h-full ${content.imageMode === 'stretch' ? 'object-fill' : content.imageMode === 'cover' ? 'object-cover' : 'object-contain'}`}
+                        />
+                    )}
+                </div>
             )}
             {/* Top Bar - Clock & Timer */}
             <div className="fixed top-0 left-0 right-0 bg-zinc-900/80 backdrop-blur-md border-b border-white/10 px-6 py-4 flex justify-between items-center z-50">
@@ -411,7 +517,18 @@ export default function StageDisplayPage() {
             </div>
 
             {/* Main Content Area */}
-            <div ref={containerRef} className="pt-24 pb-20 px-8 flex-1 h-full flex flex-col overflow-hidden relative z-10">
+            <div
+                ref={containerRef}
+                className="flex-1 h-full flex flex-col overflow-hidden relative z-10 transition-all duration-300"
+                style={{
+                    paddingTop: activeTheme.layout?.contentPadding !== undefined ?
+                        (content?.type === 'media' || content?.type === 'live_feed' ? `${activeTheme.layout.contentPadding}px` : `${Math.max(activeTheme.layout.contentPadding, 96)}px`) : '6rem',
+                    paddingBottom: activeTheme.layout?.contentPadding !== undefined ?
+                        (content?.type === 'media' || content?.type === 'live_feed' ? `${activeTheme.layout.contentPadding}px` : `${Math.max(activeTheme.layout.contentPadding, 80)}px`) : '5rem',
+                    paddingLeft: activeTheme.layout?.contentPadding !== undefined ? `${activeTheme.layout.contentPadding}px` : '2rem',
+                    paddingRight: activeTheme.layout?.contentPadding !== undefined ? `${activeTheme.layout.contentPadding}px` : '2rem',
+                }}
+            >
                 {/* Current Content - Large Display */}
                 <div
                     ref={contentRef}
@@ -424,7 +541,7 @@ export default function StageDisplayPage() {
                 >
                     {content?.type === 'verse' && (
                         <div
-                            className="text-center max-w-7xl w-full px-4 flex flex-col"
+                            className="text-center w-full flex flex-col"
                             style={{
                                 alignItems: activeTheme.styles.alignItems || 'center',
                                 justifyContent: activeTheme.styles.justifyContent || 'center',
@@ -510,7 +627,7 @@ export default function StageDisplayPage() {
 
                     {content?.type === 'song' && (
                         <div
-                            className="text-center max-w-7xl w-full px-4"
+                            className="text-center w-full"
                             style={{
                                 alignItems: activeTheme.styles.alignItems || 'center',
                                 justifyContent: activeTheme.styles.justifyContent || 'center',
@@ -541,41 +658,7 @@ export default function StageDisplayPage() {
                         </div>
                     )}
 
-                    {content?.type === 'media' && (
-                        <div className="w-full h-full flex items-center justify-center p-8">
-                            {(() => {
-                                const mediaUrl = content.text || content.currentSlide;
-                                const isVideo = mediaUrl?.match(/\.(mp4|webm|mov|ogg)(\?|$)/i) ||
-                                    mediaUrl?.startsWith('data:video/') ||
-                                    mediaUrl?.startsWith('blob:');
 
-                                const mode = content.imageMode || 'contain';
-                                const isFillMode = mode === 'cover' || mode === 'stretch';
-                                const objectFitClass = mode === 'cover' ? 'object-cover' : mode === 'stretch' ? 'object-fill' : 'object-contain';
-
-                                return isVideo ? (
-                                    <video
-                                        key={mediaUrl}
-                                        ref={videoRef}
-                                        src={mediaUrl}
-                                        className={`max-w-full max-h-full ${isFillMode ? 'w-full h-full' : 'max-h-[70vh]'} ${objectFitClass} rounded-lg shadow-2xl border border-white/10 transition-all duration-300`}
-                                        style={{ transform: `scale(${content.scale || 1})` }}
-                                        autoPlay
-                                        muted
-                                        loop
-                                        playsInline
-                                    />
-                                ) : (
-                                    <img
-                                        src={mediaUrl}
-                                        alt={content.title}
-                                        className={`max-w-full max-h-full ${isFillMode ? 'w-full h-full' : 'max-h-[70vh]'} ${objectFitClass} rounded-lg shadow-2xl border border-white/10 transition-all duration-300`}
-                                        style={{ transform: `scale(${content.scale || 1})` }}
-                                    />
-                                );
-                            })()}
-                        </div>
-                    )}
 
                     {(!content || content.type === 'clear') && (
                         <div className="text-center">
@@ -586,6 +669,8 @@ export default function StageDisplayPage() {
                             <p className="text-zinc-600 mt-2">Content will appear here when projected</p>
                         </div>
                     )}
+
+
                 </div>
 
                 {/* Pastor Notes Panel */}

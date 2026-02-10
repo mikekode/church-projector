@@ -6,6 +6,7 @@ import VisualStack from '@/components/projector/VisualStack';
 import { ProjectorTheme, DEFAULT_THEMES } from '@/utils/themes';
 import { useLicense } from '@/hooks/useLicense';
 import DemoWatermark from '@/components/DemoWatermark';
+import LiveFeedStream from '@/components/projector/LiveFeedStream';
 
 /**
  * Sanitize and render formatted text (allows only safe tags: b, i, span with style)
@@ -43,11 +44,13 @@ function renderFormattedText(text: string): string {
     return safe;
 }
 
+
+
 /**
  * Calculate optimal font size based on text length and verse count
  * Returns a multiplier to apply to the base font size
  */
-function calculateFontScale(text: string, verseCount: number = 1): number {
+function calculateFontScale(text: string, verseCount: number = 1, textScale?: number): number {
     const charCount = text.length;
 
     // Base thresholds for single verse
@@ -81,14 +84,14 @@ function calculateFontScale(text: string, verseCount: number = 1): number {
         else scale = 0.38;
     }
 
-    return scale;
+    return scale * (textScale || 1);
 }
 
 // Generic Content Type
 type ProjectorContent = {
-    type: 'verse' | 'song' | 'media';
+    type: 'verse' | 'song' | 'media' | 'live_feed';
     title: string;          // e.g. "John 3:16" or "Amazing Grace"
-    body: string;           // e.g. The text or lyrics
+    body: string;           // e.g. The text or lyrics or sourceId for live_feed
     meta?: string;          // e.g. "KJV" or "John Newton"
     footer?: string;        // Bottom text
     background?: string;    // URL for BG video/image
@@ -96,6 +99,7 @@ type ProjectorContent = {
     options?: {
         imageMode?: 'contain' | 'cover' | 'stretch';
         scale?: number;
+        isAudioOnly?: boolean;
     };
 };
 
@@ -109,8 +113,9 @@ export default function ProjectorPage() {
     const [activeTheme, setActiveTheme] = useState<ProjectorTheme>(DEFAULT_THEMES[0]);
     const [activeAlert, setActiveAlert] = useState<string | null>(null);
 
-    // Video Reference
+    // Video References
     const videoRef = useRef<HTMLVideoElement>(null);
+    const liveFeedRef = useRef<HTMLVideoElement>(null);
 
     const handleMessage = useCallback((msg: any) => {
         // Handle Legacy SHOW_VERSE -> Convert to Layered Content
@@ -208,12 +213,29 @@ export default function ProjectorPage() {
                             };
                         });
                         break;
+                    case 'set_audio_only':
+                        setActiveContent(prev => {
+                            if (!prev) return null;
+                            return {
+                                ...prev,
+                                options: {
+                                    ...(prev.options || {}),
+                                    isAudioOnly: value
+                                }
+                            };
+                        });
+                        break;
                 }
             }
+
         }
     }, []);
 
-    useBroadcastChannel('projector_channel', handleMessage);
+    const { broadcast } = useBroadcastChannel('projector_channel', handleMessage);
+
+    useEffect(() => {
+        broadcast({ type: 'REQUEST_STATE' });
+    }, [broadcast]);
 
     // Render the Content Layer components
     const renderContent = () => {
@@ -231,12 +253,22 @@ export default function ProjectorPage() {
                 activeContent.body?.startsWith('blob:');
 
             return (
-                <div className="z-10 w-full h-full flex flex-col items-center justify-center animate-in fade-in zoom-in-95 duration-500 overflow-hidden">
+                <div className="z-10 w-full h-full flex flex-col items-center justify-center animate-in fade-in zoom-in-95 duration-500 overflow-hidden relative">
+                    {/* Audio Only Indicator */}
+                    {activeContent.options?.isAudioOnly && (
+                        <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-black gap-4">
+                            <div className="w-20 h-20 rounded-full bg-zinc-900 border border-zinc-800 flex items-center justify-center animate-pulse">
+                                <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-zinc-600"><path d="M3 18v-6a9 9 0 0 1 18 0v6"></path><path d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z"></path></svg>
+                            </div>
+                            <span className="text-zinc-500 font-mono text-xs tracking-widest uppercase">Audio Playing</span>
+                        </div>
+                    )}
+
                     {isVideo ? (
                         <video
                             ref={videoRef}
                             src={activeContent.body}
-                            className={`max-w-full max-h-full ${isFillMode ? 'w-full h-full' : 'max-h-[85vh]'} ${objectFitClass} drop-shadow-2xl rounded-lg transition-all duration-300`}
+                            className={`max-w-full max-h-full ${isFillMode ? 'w-full h-full' : ''} ${objectFitClass} transition-all duration-300 ${activeContent.options?.isAudioOnly ? 'opacity-0' : 'opacity-100'}`}
                             style={{ transform: `scale(${scale})` }}
                             autoPlay
                             loop
@@ -246,10 +278,39 @@ export default function ProjectorPage() {
                         <img
                             src={activeContent.body}
                             alt={activeContent.title}
-                            className={`max-w-full max-h-full ${isFillMode ? 'w-full h-full' : 'max-h-[85vh]'} ${objectFitClass} drop-shadow-2xl rounded-lg transition-all duration-300`}
+                            className={`max-w-full max-h-full ${isFillMode ? 'w-full h-full' : ''} ${objectFitClass} transition-all duration-300`}
                             style={{ transform: `scale(${scale})` }}
                         />
                     )}
+                </div>
+            );
+        }
+
+        // Handle Live Feed Routing (VLC, OBS, etc.)
+        if (activeContent.type === 'live_feed') {
+            const sourceId = activeContent.body;
+            const mode = activeContent.options?.imageMode || 'contain';
+            const scale = activeContent.options?.scale || 1;
+            const isFillMode = mode === 'cover' || mode === 'stretch';
+            const objectFitClass = mode === 'cover' ? 'object-cover' : mode === 'stretch' ? 'object-fill' : 'object-contain';
+
+            return (
+                <div className="z-10 w-full h-full flex items-center justify-center animate-in fade-in zoom-in-95 duration-700 overflow-hidden relative">
+                    {/* Audio Only Indicator */}
+                    {activeContent.options?.isAudioOnly && (
+                        <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-black gap-4">
+                            <div className="w-20 h-20 rounded-full bg-zinc-900 border border-zinc-800 flex items-center justify-center animate-pulse">
+                                <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-zinc-600"><path d="M3 18v-6a9 9 0 0 1 18 0v6"></path><path d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z"></path></svg>
+                            </div>
+                            <span className="text-zinc-500 font-mono text-xs tracking-widest uppercase">Audio Playing</span>
+                        </div>
+                    )}
+
+                    <LiveFeedStream
+                        sourceId={sourceId}
+                        className={`max-w-full max-h-full ${isFillMode ? 'w-full h-full' : ''} ${objectFitClass} transition-all duration-300 ${activeContent.options?.isAudioOnly ? 'opacity-0' : 'opacity-100'}`}
+                        style={{ transform: `scale(${scale})` }}
+                    />
                 </div>
             );
         }
@@ -291,13 +352,12 @@ export default function ProjectorPage() {
 
         return (
             <div
-                className="z-10 w-full h-[100vh] animate-in fade-in zoom-in-95 duration-500 px-4"
+                className="z-10 w-full h-full animate-in fade-in zoom-in-95 duration-500"
                 style={{
                     display: 'flex',
                     flexDirection: 'column',
                     alignItems: activeTheme.styles.alignItems || 'center',
                     justifyContent: activeTheme.styles.justifyContent || 'center',
-                    height: '100vh',
                     fontSize: activeTheme.styles.fontSize // PARENT FONT SIZE SET HERE
                 }}
             >
@@ -308,7 +368,7 @@ export default function ProjectorPage() {
                     (() => {
                         // Calculate total text for auto-sizing
                         const totalText = activeContent.verses.map(v => v.text).join(' ');
-                        const fontScale = calculateFontScale(totalText, activeContent.verses.length);
+                        const fontScale = calculateFontScale(totalText, activeContent.verses.length, activeTheme.layout?.textScale);
 
                         return (
                             <div className="space-y-2 w-full">
@@ -339,7 +399,7 @@ export default function ProjectorPage() {
                 ) : (
                     (() => {
                         // Calculate font scale for single verse
-                        const fontScale = calculateFontScale(activeContent.body, 1);
+                        const fontScale = calculateFontScale(activeContent.body, 1, activeTheme.layout?.textScale);
 
                         return (
                             <div className="flex items-start gap-4 relative w-full" style={{ justifyContent: activeTheme.styles.textAlign === 'center' ? 'center' : activeTheme.styles.textAlign === 'right' ? 'flex-end' : 'flex-start' }}>
@@ -382,8 +442,10 @@ export default function ProjectorPage() {
         <div onDoubleClick={toggleFullscreen} className="h-full w-full">
             <VisualStack
                 background={activeBackground}
+                theme={activeTheme}
                 content={renderContent()}
                 alert={activeAlert}
+                fullBleed={activeContent?.type === 'media' || activeContent?.type === 'live_feed'}
             />
             {/* Show watermark for demo/unlicensed users */}
             {isDemo && !loading && <DemoWatermark />}

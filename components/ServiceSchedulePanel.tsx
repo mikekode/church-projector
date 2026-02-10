@@ -25,6 +25,8 @@ import { parseLyrics, extractTextFromFile, parsePresentationFile } from '@/utils
 import PreviewModal from './PreviewModal';
 import AdvancedSongEditor from './AdvancedSongEditor';
 import { ResourceItem } from '@/utils/resourceLibrary';
+import PlanManagerModal from './PlanManagerModal';
+import { FolderOpen } from 'lucide-react';
 
 interface ServiceScheduleProps {
     onGoLive: (item: ScheduleItem, slideIndex: number) => void;
@@ -88,7 +90,7 @@ function SortableScheduleItem({
             case 'song': return <Music size={14} className="text-purple-400" />;
             case 'scripture': return <BookOpen size={14} className="text-amber-400" />;
             case 'media': return <ImageIcon size={14} className="text-blue-400" />;
-            default: return <FileText size={14} className="text-zinc-400" />;
+            default: return <FileText size={14} className="text-zinc-500 dark:text-zinc-400" />;
         }
     };
 
@@ -96,10 +98,10 @@ function SortableScheduleItem({
         <div
             ref={setNodeRef}
             style={style}
-            className={`group relative flex items-center gap-3 p-2 rounded-xl border transition-all ${isDragging ? 'opacity-50 scale-105 z-50 bg-zinc-800' : ''
+            className={`group relative flex items-center gap-3 p-2 rounded-xl border transition-all ${isDragging ? 'opacity-50 scale-105 z-50 bg-white ring-2 ring-indigo-500 shadow-xl' : ''
                 } ${isActive
-                    ? 'bg-indigo-900/30 border-indigo-500/50'
-                    : 'bg-zinc-900/50 border-white/5 hover:border-white/10 hover:bg-zinc-800/50'
+                    ? 'bg-indigo-50/80 dark:bg-indigo-900/30 border-indigo-200 dark:border-indigo-500/50 shadow-sm'
+                    : 'bg-white dark:bg-zinc-900/40 border-zinc-100 dark:border-white/5 hover:border-zinc-300 dark:hover:border-white/10 hover:shadow-md hover:-translate-y-0.5'
                 }`}
             onMouseEnter={() => setIsHovered(true)}
             onMouseLeave={() => setIsHovered(false)}
@@ -108,14 +110,14 @@ function SortableScheduleItem({
             <div
                 {...attributes}
                 {...listeners}
-                className="p-1 rounded hover:bg-white/5 cursor-grab active:cursor-grabbing text-zinc-600 hover:text-zinc-400 flex-shrink-0"
+                className="p-1 rounded hover:bg-zinc-100 dark:hover:bg-white/5 cursor-grab active:cursor-grabbing text-zinc-300 hover:text-zinc-600 dark:text-zinc-600 dark:hover:text-zinc-300 flex-shrink-0 transition-colors"
             >
                 <GripVertical size={14} />
             </div>
 
             {/* Thumbnail / Card Preview */}
             <div
-                className="relative w-16 h-10 rounded-lg bg-zinc-800 flex-shrink-0 overflow-hidden border border-white/5 flex items-center justify-center cursor-pointer hover:border-indigo-500/50 transition-colors"
+                className="relative w-16 h-10 rounded-lg bg-zinc-100 dark:bg-zinc-800 flex-shrink-0 overflow-hidden border border-zinc-200 dark:border-white/5 flex items-center justify-center cursor-pointer hover:border-indigo-500/50 transition-colors"
                 onClick={(e) => { e.stopPropagation(); onPreview(); }}
                 title="Click to Preview"
             >
@@ -126,14 +128,14 @@ function SortableScheduleItem({
                 )}
 
                 {/* Type Badge (Tiny) */}
-                <div className="absolute bottom-0 right-0 px-1 py-0.5 bg-black/60 rounded-tl text-[6px] font-bold text-zinc-300 uppercase">
+                <div className="absolute bottom-0 right-0 px-1 py-0.5 bg-black/60 rounded-tl text-[6px] font-bold text-zinc-600 dark:text-zinc-300 uppercase">
                     {item.type.slice(0, 3)}
                 </div>
             </div>
 
             {/* Content Info */}
             <div className="flex-1 min-w-0 flex flex-col justify-center">
-                <h4 className={`text-xs font-semibold truncate leading-tight ${isActive ? 'text-indigo-200' : 'text-zinc-300'}`}>
+                <h4 className={`text-xs font-semibold truncate leading-tight ${isActive ? 'text-indigo-700 dark:text-indigo-200' : 'text-zinc-700 dark:text-zinc-300'}`}>
                     {item.title}
                 </h4>
                 <div className="flex items-center gap-2 mt-0.5">
@@ -148,7 +150,7 @@ function SortableScheduleItem({
             <div className={`flex items-center gap-1 ${isHovered || isActive ? 'opacity-100' : 'opacity-0'} transition-opacity`}>
                 <button
                     onClick={(e) => { e.stopPropagation(); onPreview(); }}
-                    className="p-2 rounded-full bg-zinc-800 text-zinc-500 hover:text-white hover:bg-zinc-700 transition-all shadow-sm"
+                    className="p-2 rounded-full bg-white dark:bg-zinc-800 text-zinc-400 hover:text-zinc-900 dark:hover:text-white hover:bg-zinc-100 dark:hover:bg-zinc-700 transition-all shadow-sm border border-zinc-200 dark:border-white/5"
                     title="Preview"
                 >
                     <Eye size={12} />
@@ -164,7 +166,7 @@ function SortableScheduleItem({
 
                 <button
                     onClick={(e) => { e.stopPropagation(); onRemove(); }}
-                    className="p-2 rounded-full bg-zinc-800 text-zinc-500 hover:text-red-400 hover:bg-zinc-700 transition-all ml-1"
+                    className="p-2 rounded-full bg-white dark:bg-zinc-800 text-zinc-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-zinc-700 transition-all ml-1 shadow-sm border border-zinc-200 dark:border-white/5"
                     title="Remove"
                 >
                     <Trash2 size={12} />
@@ -195,6 +197,7 @@ export default function ServiceSchedulePanel({ onGoLive, schedule: controlledSch
     const [previewItem, setPreviewItem] = useState<ScheduleItem | null>(null);
     const [editingItem, setEditingItem] = useState<ResourceItem | null>(null);
     const [isUploading, setIsUploading] = useState(false);
+    const [isPlanManagerOpen, setIsPlanManagerOpen] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     const sensors = useSensors(
@@ -355,26 +358,29 @@ export default function ServiceSchedulePanel({ onGoLive, schedule: controlledSch
     };
 
     return (
-        <div className="flex flex-col h-full">
+        <div className="flex flex-col h-full bg-transparent">
             {/* Header */}
-            <div className="flex items-center justify-between p-3 border-b border-white/5">
+            <div className="flex items-center justify-between p-3 border-b border-zinc-100 dark:border-white/5 bg-zinc-50/50 dark:bg-zinc-950 backdrop-blur-sm">
                 <div>
-                    <h3 className="text-xs font-bold text-white">{schedule.name}</h3>
+                    <h3 className="text-xs font-bold text-zinc-900 dark:text-white">{schedule.name}</h3>
                     <p className="text-[10px] text-zinc-500">{schedule.items.length} items</p>
                 </div>
-                <input
-                    type="date"
-                    value={schedule.date}
-                    onChange={(e) => setSchedule(prev => ({ ...prev, date: e.target.value }))}
-                    className="bg-zinc-800 border border-white/10 rounded px-1.5 py-0.5 text-[10px] text-zinc-400 w-24"
-                />
+                <div className="flex items-center gap-2">
+                    <button
+                        onClick={() => setIsPlanManagerOpen(true)}
+                        className="flex items-center gap-2 px-3 py-1.5 bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 rounded-lg text-xs font-bold text-zinc-700 dark:text-zinc-300 transition-colors"
+                    >
+                        <FolderOpen size={14} />
+                        <span>Manage Schedule</span>
+                    </button>
+                </div>
             </div>
 
             {/* Upload Button */}
-            <div className="p-2 border-b border-white/5">
-                <label className={`flex items-center justify-center gap-2 w-full py-2 border border-dashed border-zinc-700 hover:border-indigo-500 rounded-lg cursor-pointer transition-colors ${isUploading ? 'opacity-50' : ''}`}>
+            <div className="p-2 border-b border-zinc-200 dark:border-white/5">
+                <label className={`flex items-center justify-center gap-2 w-full py-2 border border-dashed border-zinc-300 dark:border-zinc-700 hover:border-indigo-500 rounded-lg cursor-pointer transition-colors ${isUploading ? 'opacity-50' : ''}`}>
                     <Upload size={14} className="text-zinc-500" />
-                    <span className="text-[10px] text-zinc-400">
+                    <span className="text-[10px] text-zinc-500 dark:text-zinc-400">
                         {isUploading ? 'Uploading...' : 'Upload (Images, Songs, Slides)'}
                     </span>
                     <input
@@ -392,12 +398,12 @@ export default function ServiceSchedulePanel({ onGoLive, schedule: controlledSch
             {/* Schedule List */}
             <div className="flex-1 overflow-y-auto p-2 space-y-1.5">
                 {schedule.items.length === 0 ? (
-                    <div className="h-full flex flex-col items-center justify-center text-zinc-600 gap-2 py-8">
-                        <div className="w-12 h-12 rounded-full bg-zinc-900 flex items-center justify-center">
+                    <div className="h-full flex flex-col items-center justify-center text-zinc-600 gap-2 py-8 bg-zinc-50/50 dark:bg-zinc-950/20">
+                        <div className="w-12 h-12 rounded-full bg-zinc-100 dark:bg-black flex items-center justify-center">
                             <Music size={20} />
                         </div>
                         <p className="text-[10px] text-center">No items in schedule</p>
-                        <p className="text-[9px] text-zinc-700 text-center">
+                        <p className="text-[9px] text-zinc-400 dark:text-zinc-700 text-center">
                             Ctrl+K to add songs<br />or upload files above
                         </p>
                     </div>
@@ -471,6 +477,17 @@ export default function ServiceSchedulePanel({ onGoLive, schedule: controlledSch
                 </div>,
                 document.body
             )}
+
+            {/* Plan Manager Modal */}
+            <PlanManagerModal
+                isOpen={isPlanManagerOpen}
+                onClose={() => setIsPlanManagerOpen(false)}
+                currentSchedule={schedule}
+                onLoadPlan={(loadedPlan) => {
+                    setSchedule(loadedPlan);
+                    // Since we updated the schedule, the local effect will kick in and save it to the "current" slot automatically
+                }}
+            />
         </div>
     );
 }

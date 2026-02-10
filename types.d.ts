@@ -75,8 +75,13 @@ interface Window {
         getVerse: (query: any) => Promise<any>;
         getVerseOnline: (query: any) => Promise<any>;
         // Window Management
-        openProjectorWindow: () => Promise<any>;
-        openStageWindow: () => Promise<any>;
+        openProjectorWindow: (args?: { displayId: string | null }) => Promise<any>;
+        openStageWindow: (args?: { displayId: string | null }) => Promise<any>;
+        // Display Management
+        getDisplays: () => Promise<any[]>;
+        identifyDisplays: () => Promise<any>;
+        // Desktop Capture
+        getDesktopSources: () => Promise<any[]>;
         // Songs
         searchSongs: (query: string) => Promise<any>;
         getLyrics: (title: string, artist: string) => Promise<any>;

@@ -1,11 +1,12 @@
 "use client";
 
 import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
-import { Play, Pause, Square, SkipBack, SkipForward, Maximize2, Maximize, Mic, MicOff, Search, Settings, Monitor, CheckCircle, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Key, Download, X, Tv2, Music, Clock, Lock } from 'lucide-react';
+import { Play, Pause, Square, SkipBack, SkipForward, Maximize2, Maximize, Mic, MicOff, Search, Settings, Monitor, CheckCircle, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Key, Download, X, Tv2, Music, Clock, Lock, PanelLeftOpen, PanelLeftClose, Sun, Moon, Book, User, Library } from 'lucide-react';
 import Fuse from 'fuse.js';
 
 import LicenseModal from '@/components/LicenseModal';
 import MIDISettingsModal from '@/components/MIDISettingsModal';
+import DisplaySettingsModal from '@/components/DisplaySettingsModal';
 import { useMIDI, MidiAction } from '@/hooks/useMIDI';
 import { useBroadcastChannel } from '@/hooks/useBroadcast';
 import { useSmartDetection, type DetectionSignal } from '@/hooks/useSmartDetection';
@@ -19,7 +20,9 @@ import Link from 'next/link';
 import OmniSearch from '@/components/OmniSearch';
 import ServiceSchedulePanel from '@/components/ServiceSchedulePanel';
 import ResourceLibraryPanel from '@/components/ResourceLibraryPanel';
+import AudioModePrompt from '@/components/AudioModePrompt';
 import MediaControls from '@/components/MediaControls';
+import LiveFeedStream from '@/components/projector/LiveFeedStream';
 import { ScheduleItem, ServiceSchedule, createBlankSchedule, loadSchedule, saveSchedule } from '@/utils/scheduleManager';
 import { getThemes, ResourceItem } from '@/utils/resourceLibrary';
 import { loadPastorProfile, PastorProfile, savePastorProfile } from '@/lib/pastorProfile';
@@ -92,16 +95,52 @@ function calculateDashboardFontScale(text: string, verseCount: number = 1): stri
         else if (charCount < 200) baseSize = 1.3;
         else if (charCount < 350) baseSize = 1.1;
         else if (charCount < 500) baseSize = 0.9;
-        else baseSize = 0.7;
+        else baseSize = 0.75;
+    } else if (verseCount === 2) {
+        if (charCount < 200) baseSize = 1.1;
+        else if (charCount < 400) baseSize = 0.9;
+        else if (charCount < 600) baseSize = 0.75;
+        else if (charCount < 800) baseSize = 0.65;
+        else baseSize = 0.55;
     } else {
-        if (charCount < 250) baseSize = 1.2;
-        else if (charCount < 450) baseSize = 1.0;
-        else if (charCount < 700) baseSize = 0.8;
-        else baseSize = 0.6;
+        // 3 verses - most aggressive scaling
+        if (charCount < 300) baseSize = 0.9;
+        else if (charCount < 500) baseSize = 0.75;
+        else if (charCount < 700) baseSize = 0.65;
+        else if (charCount < 900) baseSize = 0.55;
+        else if (charCount < 1200) baseSize = 0.48;
+        else baseSize = 0.4;
     }
 
     return `${baseSize}rem`;
 }
+
+// Get signal color
+const getSignalColor = (signal: DetectionSignal) => {
+    switch (signal) {
+        case 'SWITCH': return 'bg-green-500';
+        case 'HOLD': return 'bg-amber-500';
+        case 'WAIT': return 'bg-zinc-600';
+    }
+};
+
+// Get confidence badge color
+const getConfidenceBadgeColor = (confidence?: number) => {
+    if (!confidence) return 'bg-zinc-200 dark:bg-zinc-700 text-zinc-600 dark:text-zinc-400';
+    if (confidence >= 90) return 'bg-green-100 dark:bg-green-500/20 text-green-700 dark:text-green-400 border-green-300 dark:border-green-500/30';
+    if (confidence >= 70) return 'bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-400 border-amber-300 dark:border-amber-500/30';
+    return 'bg-zinc-200 dark:bg-zinc-700/50 text-zinc-600 dark:text-zinc-400 border-zinc-300 dark:border-zinc-600';
+};
+
+// Get match type badge
+const getMatchTypeBadge = (matchType?: string) => {
+    switch (matchType) {
+        case 'exact': return { text: 'EXACT', color: 'bg-green-100 dark:bg-green-500/20 text-green-700 dark:text-green-400' };
+        case 'partial': return { text: 'PARTIAL', color: 'bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-400' };
+        case 'paraphrase': return { text: 'PARAPHRASE', color: 'bg-purple-100 dark:bg-purple-500/20 text-purple-700 dark:text-purple-400' };
+        default: return null;
+    }
+};
 
 export default function DashboardPage() {
     const [isListening, setIsListening] = useState(false);
@@ -119,6 +158,7 @@ export default function DashboardPage() {
     const [aiStatus, setAiStatus] = useState<'idle' | 'processing' | 'loading'>('idle');
     const [lastSignal, setLastSignal] = useState<DetectionSignal>('WAIT');
     const [confidenceThreshold, setConfidenceThreshold] = useState(85);
+    const [isScheduleCollapsed, setIsScheduleCollapsed] = useState(false);
 
 
     // WebSocket (Deepgram) Status Management
@@ -126,15 +166,32 @@ export default function DashboardPage() {
     const [deepgramError, setDeepgramError] = useState<string | null>(null);
     const [selectedVersion, setSelectedVersion] = useState<string>('KJV');
     const [verseCount, setVerseCount] = useState<1 | 2 | 3>(1);
+    // Audio Prompt State
+    const [showAudioPrompt, setShowAudioPrompt] = useState(false);
+    const [pendingLiveItem, setPendingLiveItem] = useState<{ item: ScheduleItem, slideIndex?: number } | null>(null);
     const [showBibleBrowser, setShowBibleBrowser] = useState(false);
     const [showVersionMenu, setShowVersionMenu] = useState(false);
 
     const [isLicenseModalOpen, setIsLicenseModalOpen] = useState(false);
-    const [isLibraryOpen, setIsLibraryOpen] = useState(true);
+    const [isLibraryOpen, setIsLibraryOpen] = useState(false);
     const [isMidiSettingsOpen, setIsMidiSettingsOpen] = useState(false);
+    const [isDisplaySettingsOpen, setIsDisplaySettingsOpen] = useState(false);
+    const [isSourceLibraryOpen, setIsSourceLibraryOpen] = useState(false);
+    const [theme, setTheme] = useState<'dark' | 'light'>('dark'); // Always start dark
+
+    // Theme Effect
+    useEffect(() => {
+        if (theme === 'dark') {
+            document.documentElement.classList.add('dark');
+        } else {
+            document.documentElement.classList.remove('dark');
+        }
+        localStorage.setItem('creenly-theme', theme);
+    }, [theme]);
     const [showTimerSettings, setShowTimerSettings] = useState(false);
     const [timerDuration, setTimerDuration] = useState(30); // Minutes
     const [timerState, setTimerState] = useState({ isRunning: false, isPaused: false });
+    const [isSettingsOpen, setIsSettingsOpen] = useState(false);
     const [resetFlash, setResetFlash] = useState(false);
     const [libraryResources, setLibraryResources] = useState<ResourceItem[]>([]);
     const [pastorProfile, setPastorProfile] = useState<PastorProfile | null>(null);
@@ -142,8 +199,58 @@ export default function DashboardPage() {
     // Initialize Fuse for Song Detection
     const fuseRef = useRef<Fuse<any> | null>(null);
 
-    const { broadcast, subscribe } = useBroadcastChannel('projector_channel', (msg: any) => {
-        // Handle incoming messages if needed
+    const { broadcast, subscribe } = useBroadcastChannel('projector_channel', (message: any) => {
+        if (message.type === 'REQUEST_STATE') {
+            console.log('[Dashboard] Received REQUEST_STATE from new window');
+            // Resend current theme
+            if (currentTheme) {
+                broadcast({ type: 'APPLY_THEME', payload: currentTheme });
+            }
+            // Resend current active item if it exists
+            if (activeItemRef.current) {
+                const item = activeItemRef.current;
+                if (item.version === 'SONG' || item.version === 'MEDIA') {
+                    // It's a persistent presentation (song/media)
+                    if (livePresentationRef.current) {
+                        const lp = livePresentationRef.current;
+                        broadcast({
+                            type: 'SHOW_CONTENT',
+                            payload: {
+                                type: lp.item.type === 'media' ? 'media' : 'song',
+                                title: lp.item.title,
+                                body: lp.item.slides[lp.slideIndex].content,
+                                meta: lp.item.type === 'media' ? 'Image' : lp.item.meta?.author,
+                                background: lp.item.meta?.background,
+                                options: lp.item.type === 'media' ? { imageMode: lp.item.meta?.imageMode } : undefined,
+                                slideIndex: lp.slideIndex,
+                                totalSlides: lp.item.slides.length,
+                                nextSlide: lp.item.slides[lp.slideIndex + 1]?.content
+                            }
+                        });
+                    }
+                } else {
+                    // It's a verse
+                    const allVerses = item.additionalVerses || [];
+                    const allTexts = [item.text, ...allVerses.map(v => v.text)];
+                    const lastVerse = allVerses.length > 0
+                        ? allVerses[allVerses.length - 1].verseNum
+                        : item.verseNum;
+                    const displayReference = allVerses.length > 0
+                        ? `${item.book} ${item.chapter}:${item.verseNum}-${lastVerse}`
+                        : item.reference;
+
+                    broadcast({
+                        type: 'SHOW_VERSE',
+                        payload: {
+                            reference: displayReference,
+                            text: allTexts.join(' '),
+                            version: item.version,
+                            verses: [{ verseNum: item.verseNum, text: item.text }, ...allVerses]
+                        }
+                    });
+                }
+            }
+        }
     });
 
     // Sync Timer Status
@@ -297,6 +404,7 @@ export default function DashboardPage() {
     const detectedQueueRef = useRef(detectedQueue);
     const autoModeRef = useRef(autoMode);
     const activeItemRef = useRef(activeItem);
+    const livePresentationRef = useRef(livePresentation);
     const selectedVersionRef = useRef(selectedVersion);
     const verseCountRef = useRef(verseCount);
     const confidenceThresholdRef = useRef(confidenceThreshold);
@@ -308,10 +416,11 @@ export default function DashboardPage() {
         detectedQueueRef.current = detectedQueue;
         autoModeRef.current = autoMode;
         activeItemRef.current = activeItem;
+        livePresentationRef.current = livePresentation;
         selectedVersionRef.current = selectedVersion;
         verseCountRef.current = verseCount;
         confidenceThresholdRef.current = confidenceThreshold;
-    }, [transcript, detectedQueue, autoMode, activeItem, selectedVersion, verseCount, confidenceThreshold]);
+    }, [transcript, detectedQueue, autoMode, activeItem, livePresentation, selectedVersion, verseCount, confidenceThreshold]);
 
     // Broadcast Theme Changes
     useEffect(() => {
@@ -543,6 +652,7 @@ export default function DashboardPage() {
 
     const clearProjector = useCallback(() => {
         setActiveItem(null);
+        setLivePresentation(null);
         broadcast({ type: 'CLEAR' });
     }, [broadcast]);
 
@@ -793,6 +903,7 @@ export default function DashboardPage() {
     );
 
     const processTranscript = useCallback(async (text: string) => {
+        if (!text) return; // Basic safety check
         setTranscript(prev => (prev + " " + text).slice(-1000));
 
         // 0. Feed to Smart Detection for fuzzy matching and auto-navigation
@@ -994,6 +1105,7 @@ export default function DashboardPage() {
 
 
 
+
     // UI HELPER: Handle Manual Lookup (Debug / Override)
     const handleManualLookup = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -1028,280 +1140,323 @@ export default function DashboardPage() {
         }
     };
 
-    // Get signal color
-    const getSignalColor = (signal: DetectionSignal) => {
-        switch (signal) {
-            case 'SWITCH': return 'bg-green-500';
-            case 'HOLD': return 'bg-amber-500';
-            case 'WAIT': return 'bg-zinc-600';
-        }
-    };
-
-    // Get confidence badge color
-    const getConfidenceBadgeColor = (confidence?: number) => {
-        if (!confidence) return 'bg-zinc-700 text-zinc-400';
-        if (confidence >= 90) return 'bg-green-500/20 text-green-400 border-green-500/30';
-        if (confidence >= 70) return 'bg-amber-500/20 text-amber-400 border-amber-500/30';
-        return 'bg-zinc-700/50 text-zinc-400 border-zinc-600';
-    };
-
-    // Get match type badge
-    const getMatchTypeBadge = (matchType?: string) => {
-        switch (matchType) {
-            case 'exact': return { text: 'EXACT', color: 'bg-green-500/20 text-green-400' };
-            case 'partial': return { text: 'PARTIAL', color: 'bg-amber-500/20 text-amber-400' };
-            case 'paraphrase': return { text: 'PARAPHRASE', color: 'bg-purple-500/20 text-purple-400' };
-            default: return null;
-        }
-    };
-
-
-
     return (
-        <main className="min-h-screen bg-zinc-950 text-zinc-100 font-sans selection:bg-indigo-500/30">
-            {/* TOP BAR */}
-            <header className="h-12 border-b border-white/5 bg-black/40 backdrop-blur-md flex items-center justify-between px-4 fixed top-0 w-full z-50">
-                <div className="flex items-center gap-1">
-                    <div className="relative group flex items-center">
-                        <img
-                            src="logo.png"
-                            alt="Creenly Logo"
-                            className="w-10 h-10 object-contain transition-transform group-hover:scale-110 duration-300 translate-y-[2px]"
-                        />
-                        <div className="absolute inset-0 bg-indigo-500/20 blur-xl rounded-full -z-10 opacity-0 group-hover:opacity-100 transition-opacity" />
-                    </div>
-                    <div className="w-px h-6 bg-white/10 mx-2" />
-                    {/* License Button */}
-                    <button
-                        onClick={() => setIsLicenseModalOpen(true)}
-                        className="flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-bold transition-all bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 hover:bg-indigo-500/20 shadow-lg shadow-indigo-500/5"
-                    >
-                        <Key size={12} strokeWidth={3} />
-                        License
-                    </button>
-                </div>
-                <div className="flex items-center gap-3">
-                    {/* Signal Indicator */}
-                    <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium transition-all ${lastSignal === 'SWITCH' ? 'bg-green-500/10 text-green-400 border border-green-500/20' :
-                        lastSignal === 'HOLD' ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20' :
-                            'bg-zinc-900 text-zinc-600'
-                        } `}>
-                        <div className={`w-2 h-2 rounded-full ${getSignalColor(lastSignal)} ${lastSignal !== 'WAIT' ? 'animate-pulse' : ''} `}></div>
-                        {lastSignal}
-                    </div>
-                    {/* Status */}
-                    <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium transition-all ${aiStatus === 'processing' ? 'bg-green-500/10 text-green-400 border border-green-500/20' : 'bg-zinc-900 text-zinc-600'} `}>
-                        <div className={`w-2 h-2 rounded-full ${aiStatus === 'processing' ? 'bg-green-500 animate-pulse' : 'bg-zinc-700'} `}></div>
-                        {aiStatus === 'processing' ? 'DETECTING' : 'READY'}
-                    </div>
-                    {/* Mic Status */}
-                    <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium transition-all ${isListening ? 'bg-green-500/10 text-green-400 border border-green-500/20 animate-pulse' : 'bg-zinc-900 text-zinc-500'} `}>
-                        <div className={`w-2 h-2 rounded-full ${isListening ? 'bg-green-500' : 'bg-zinc-600'} `}></div>
-                        {isListening ? 'LISTENING ON' : 'MIC OFF'}
-                    </div>
-                    {/* MIDI Button */}
-                    <button
-                        onClick={() => setIsMidiSettingsOpen(true)}
-                        className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium transition-all ${midi.isEnabled ? 'bg-purple-600 text-white' : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'}`}
-                        title="MIDI Settings"
-                    >
-                        <Music size={12} />
-                        MIDI
-                    </button>
-                    {/* Usage Hours Indicator */}
-                    {hoursRemaining !== null && (
-                        <div
-                            className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium transition-all ${isLowHours
-                                ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
-                                : 'bg-zinc-800 text-zinc-400'
-                                }`}
-                            title={`${hoursRemaining.toFixed(1)} hours of AI listening remaining`}
-                        >
-                            <Clock size={12} />
-                            {hoursRemaining.toFixed(1)}h left
-                        </div>
-                    )}
-                    {/* Stage Display Button */}
-                    <button
-                        onClick={() => {
-                            if ((window as any).electronAPI?.openStageWindow) {
-                                (window as any).electronAPI.openStageWindow();
-                            } else {
-                                window.open('/stage', 'stageDisplay', 'width=1280,height=720');
-                            }
-                        }}
-                        className="flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium transition-all bg-purple-500/10 text-purple-400 border border-purple-500/20 hover:bg-purple-500/20"
-                        title="Open Stage Display (Confidence Monitor)"
-                    >
-                        <Tv2 size={12} />
-                        Stage
-                    </button>
-
-                </div>
-            </header>
-
-            {/* VERSION SELECTOR BAR (Redesigned) */}
-            <div className="fixed top-12 left-0 right-0 z-40 bg-zinc-900/90 backdrop-blur-md border-b border-white/5 px-4 py-2 flex items-center justify-between">
-
-                {/* Version Dropdown (Custom) */}
-                <div className="flex items-center gap-3 relative">
-                    <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Version</span>
-
-                    <button
-                        onClick={() => setShowVersionMenu(!showVersionMenu)}
-                        className="flex items-center gap-2 bg-zinc-800 hover:bg-zinc-700 text-white text-xs font-bold px-3 py-1.5 rounded-md border border-white/10 transition-all outline-none focus:ring-2 ring-indigo-500/50"
-                    >
-                        {selectedVersion}
-                        <ChevronDown size={14} className={`text-zinc-400 transition-transform ${showVersionMenu ? 'rotate-180' : ''}`} />
-                    </button>
-
-                    {/* Dropdown Menu */}
-                    {showVersionMenu && (
-                        <>
-                            <div className="fixed inset-0 z-40" onClick={() => setShowVersionMenu(false)} />
-                            <div className="absolute top-full left-14 mt-2 w-48 max-h-[60vh] overflow-y-auto bg-zinc-900 border border-white/10 rounded-lg shadow-2xl z-50 py-1 no-scrollbar animate-in fade-in zoom-in-95 duration-100">
-                                {BIBLE_VERSIONS.map((version) => (
-                                    <button
-                                        key={version}
-                                        onClick={() => {
-                                            setSelectedVersion(version);
-                                            selectedVersionRef.current = version;
-                                            setShowVersionMenu(false);
-                                            if (activeItemRef.current?.book && activeItemRef.current.book !== 'Song') {
-                                                navigateVerse('jump');
-                                            }
-                                        }}
-                                        className={`w-full text-left px-4 py-2 text-xs font-medium hover:bg-white/5 transition-colors flex items-center justify-between group ${selectedVersion === version ? 'text-indigo-400 bg-indigo-500/10' : 'text-zinc-300'
-                                            }`}
-                                    >
-                                        {version}
-                                        {selectedVersion === version && <CheckCircle size={12} />}
-                                    </button>
-                                ))}
-                            </div>
-                        </>
-                    )}
-                </div>
-
-                {/* Verse Count (Clean Segmented Control) */}
-                <div className="flex items-center gap-3 bg-zinc-950/50 p-1 rounded-lg border border-white/5">
-                    <span className="text-[10px] font-bold text-zinc-600 uppercase tracking-wider ml-2">Display</span>
-                    {VERSE_COUNT_OPTIONS.map((count) => (
-                        <button
-                            key={count}
-                            onClick={() => {
-                                setVerseCount(count as any);
-                                verseCountRef.current = count as any;
-                            }}
-                            className={`px-3 py-1 rounded text-[10px] font-bold transition-all ${verseCount === count
-                                ? 'bg-zinc-800 text-white shadow-sm'
-                                : 'text-zinc-500 hover:text-zinc-300'
-                                }`}
-                        >
-                            {count} Verse{count > 1 ? 's' : ''}
-                        </button>
-                    ))}
-                </div>
-            </div>
-
+        <main className="min-h-screen bg-[#F8F9FA] dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100 font-sans selection:bg-indigo-500/30">
             <div
                 ref={containerRef}
-                className="fixed top-24 left-0 right-0 bottom-0 px-4 pb-4 flex flex-col gap-0 overflow-hidden"
+                className="fixed inset-0 px-4 pt-4 pb-20 flex flex-col gap-4 overflow-hidden"
             >
+                {/* UNIFIED SIDEBAR CONTAINER */}
+                <div className={`absolute top-4 left-4 z-[50] flex flex-col pointer-events-none bg-white dark:bg-black border border-zinc-200 dark:border-white/10 rounded-2xl shadow-lg dark:shadow-2xl transition-all duration-300 ${isScheduleCollapsed ? 'w-fit h-fit' : 'w-[320px] 2xl:w-[400px] bottom-20'}`}>
+                    {/* FIGMA PILL (AS HEADER) */}
+                    <div className="flex items-center gap-2 text-zinc-900 dark:text-white px-3 py-2 pointer-events-auto shrink-0 border-b border-zinc-200 dark:border-white/5">
+                        {/* VERSION DROPDOWN TRIGGER */}
+                        <div className="flex items-center gap-2 relative">
+                            <button
+                                onClick={() => setShowVersionMenu(!showVersionMenu)}
+                                className="flex items-center gap-2 text-zinc-700 dark:text-white/90 hover:text-zinc-900 dark:hover:text-white text-[11px] font-bold tracking-tight py-0.5 outline-none transition-colors"
+                            >
+                                <Book size={12} className="text-indigo-400" />
+                                <span>{selectedVersion}</span>
+                                <ChevronDown size={10} className={`text-zinc-500 transition-transform ${showVersionMenu ? 'rotate-180' : ''}`} />
+                            </button>
+
+                            {/* Dropdown Menu (Relative to Pill) */}
+                            {showVersionMenu && (
+                                <>
+                                    <div className="fixed inset-0 z-40" onClick={() => setShowVersionMenu(false)} />
+                                    <div className="absolute top-full left-0 mt-3 w-48 max-h-[60vh] overflow-y-auto bg-white dark:bg-zinc-900 border border-zinc-300 dark:border-white/10 rounded-lg shadow-2xl z-50 py-1 no-scrollbar animate-in fade-in zoom-in-95 duration-100">
+                                        {SUPPORTED_VERSIONS.map((version) => (
+                                            <button
+                                                key={version}
+                                                onClick={() => {
+                                                    setSelectedVersion(version);
+                                                    selectedVersionRef.current = version;
+                                                    setShowVersionMenu(false);
+                                                    if (activeItemRef.current?.book && activeItemRef.current.book !== 'Song') {
+                                                        navigateVerse('jump');
+                                                    }
+                                                }}
+                                                className={`w-full text-left px-4 py-2 text-xs font-medium hover:bg-zinc-100 dark:hover:bg-white/5 transition-colors flex items-center justify-between group ${selectedVersion === version ? 'text-indigo-400 bg-indigo-500/10' : 'text-zinc-600 dark:text-zinc-300'}`}
+                                            >
+                                                {version}
+                                                {selectedVersion === version && <CheckCircle size={12} />}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </>
+                            )}
+                        </div>
+
+                        <div className="w-px h-3 bg-zinc-300 dark:bg-white/10 mx-1" />
+
+                        <div className="relative">
+                            <button
+                                onClick={() => setIsSettingsOpen(!isSettingsOpen)}
+                                className={`p-1 rounded transition-colors ${isSettingsOpen ? 'text-indigo-500 dark:text-indigo-400 bg-zinc-200 dark:bg-white/10' : 'text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white hover:bg-zinc-100 dark:hover:bg-white/10'}`}
+                                title="Settings"
+                            >
+                                <Settings size={14} />
+                            </button>
+
+                            {/* Settings Dropdown Menu (Relative to Pill) - OPEN RIGHT to avoid clipping */}
+                            {isSettingsOpen && (
+                                <>
+                                    <div className="fixed inset-0 z-40" onClick={() => setIsSettingsOpen(false)} />
+                                    <div className="absolute top-full left-0 mt-3 w-64 bg-white dark:bg-zinc-900 border border-zinc-300 dark:border-white/10 rounded-xl shadow-2xl z-50 py-2 no-scrollbar animate-in fade-in zoom-in-95 duration-100">
+                                        <div className="px-3 py-2 border-b border-zinc-100 dark:border-white/5 mb-1">
+                                            <span className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">Preferences</span>
+                                        </div>
+
+                                        {/* Theme Toggle */}
+                                        <button
+                                            onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')}
+                                            className="w-full text-left px-4 py-2.5 text-xs font-medium hover:bg-zinc-100 dark:hover:bg-white/5 transition-colors flex items-center gap-3 text-zinc-600 dark:text-zinc-300"
+                                        >
+                                            <div className="w-6 h-6 rounded bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center">
+                                                {theme === 'light' ? <Moon size={14} /> : <Sun size={14} />}
+                                            </div>
+                                            <span>{theme === 'light' ? 'Switch to Dark Mode' : 'Switch to Light Mode'}</span>
+                                        </button>
+
+                                        {/* License Button */}
+                                        <button
+                                            onClick={() => {
+                                                setIsLicenseModalOpen(true);
+                                                setIsSettingsOpen(false);
+                                            }}
+                                            className="w-full text-left px-4 py-2.5 text-xs font-medium hover:bg-zinc-100 dark:hover:bg-white/5 transition-colors flex items-center gap-3 text-zinc-600 dark:text-zinc-300"
+                                        >
+                                            <div className="w-6 h-6 rounded bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center">
+                                                <Key size={14} />
+                                            </div>
+                                            <span>License Key Settings</span>
+                                        </button>
+
+                                        {/* Display Settings */}
+                                        <button
+                                            onClick={() => {
+                                                setIsDisplaySettingsOpen(true);
+                                                setIsSettingsOpen(false);
+                                            }}
+                                            className="w-full text-left px-4 py-2.5 text-xs font-medium hover:bg-zinc-100 dark:hover:bg-white/5 transition-colors flex items-center gap-3 text-zinc-600 dark:text-zinc-300"
+                                        >
+                                            <div className="w-6 h-6 rounded bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center">
+                                                <Monitor size={14} className="text-zinc-500" />
+                                            </div>
+                                            <span>Display Mapping (Screens)</span>
+                                        </button>
+
+                                        {/* MIDI Settings */}
+                                        <button
+                                            onClick={() => {
+                                                setIsMidiSettingsOpen(true);
+                                                setIsSettingsOpen(false);
+                                            }}
+                                            className="w-full text-left px-4 py-2.5 text-xs font-medium hover:bg-zinc-100 dark:hover:bg-white/5 transition-colors flex items-center gap-3 text-zinc-600 dark:text-zinc-300"
+                                        >
+                                            <div className="w-6 h-6 rounded bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center">
+                                                <Music size={14} className={midi.isEnabled ? 'text-blue-500' : ''} />
+                                            </div>
+                                            <span>MIDI Configuration</span>
+                                        </button>
+
+                                        <div className="mx-2 my-2 border-t border-zinc-100 dark:border-white/5 pt-2">
+                                            <div className="px-2 py-1 flex items-center gap-2 mb-2">
+                                                <Clock size={12} className="text-zinc-500" />
+                                                <span className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">Service Timer</span>
+                                            </div>
+
+                                            <div className="px-2 space-y-3">
+                                                <div>
+                                                    <div className="flex gap-2">
+                                                        <input
+                                                            type="number"
+                                                            value={timerDuration}
+                                                            onChange={e => setTimerDuration(parseInt(e.target.value) || 0)}
+                                                            className="flex-1 bg-zinc-50 dark:bg-black/50 border border-zinc-300 dark:border-white/10 rounded px-2 py-1 text-sm text-zinc-900 dark:text-white"
+                                                            placeholder="Mins"
+                                                        />
+                                                        <button
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                broadcast({ type: 'TIMER_ACTION', payload: { action: 'set', mode: 'countdown', value: timerDuration * 60 } });
+                                                            }}
+                                                            className="bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold px-3 rounded py-1"
+                                                        >
+                                                            SET
+                                                        </button>
+                                                    </div>
+                                                </div>
+
+                                                <div className="grid grid-cols-3 gap-1">
+                                                    <button
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            broadcast({ type: 'TIMER_ACTION', payload: { action: 'start' } });
+                                                        }}
+                                                        className={`flex flex-col items-center justify-center gap-1 p-1.5 rounded-lg transition-all ${timerState.isRunning
+                                                            ? 'bg-green-500/20 text-green-400 border border-green-500/30'
+                                                            : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-500 hover:text-zinc-600 dark:text-zinc-300 hover:bg-zinc-200 dark:hover:bg-zinc-700 border border-zinc-200 dark:border-white/5'
+                                                            }`}
+                                                    >
+                                                        <Play size={14} fill={timerState.isRunning ? "currentColor" : "none"} />
+                                                        <span className="text-[9px] font-bold uppercase">Start</span>
+                                                    </button>
+                                                    <button
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            broadcast({ type: 'TIMER_ACTION', payload: { action: 'pause' } });
+                                                        }}
+                                                        className="flex flex-col items-center justify-center gap-1 p-1.5 rounded-lg bg-amber-500/10 text-amber-500 hover:bg-amber-500/20 border border-amber-500/20 transition-all font-bold text-[9px] uppercase"
+                                                    >
+                                                        <Pause size={14} fill="currentColor" />
+                                                        <span>Pause</span>
+                                                    </button>
+                                                    <button
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            broadcast({ type: 'TIMER_ACTION', payload: { action: 'stop' } });
+                                                        }}
+                                                        className="flex flex-col items-center justify-center gap-1 p-1.5 rounded-lg bg-red-500/10 text-red-500 hover:bg-red-500/20 border border-red-500/20 transition-all font-bold text-[9px] uppercase"
+                                                    >
+                                                        <Square size={14} fill="currentColor" />
+                                                        <span>Stop</span>
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </>
+                            )}
+                        </div>
+
+                        <div className="w-px h-3 bg-zinc-300 dark:bg-white/10 mx-1" />
+
+                        <button
+                            onClick={() => setIsScheduleCollapsed(!isScheduleCollapsed)}
+                            className="p-1 hover:bg-zinc-100 dark:hover:bg-white/10 rounded transition-colors"
+                            title={isScheduleCollapsed ? "Expand Sidebar" : "Collapse Sidebar"}
+                        >
+                            <PanelLeftOpen size={14} className="text-zinc-700 dark:text-white" />
+                        </button>
+                    </div>
+
+                    <div
+                        className={`flex-1 min-h-0 transition-all duration-300 ease-in-out pointer-events-auto overflow-hidden rounded-2xl bg-white dark:bg-zinc-900/50 border border-zinc-200 dark:border-white/5 shadow-sm dark:shadow-none ${isScheduleCollapsed ? 'opacity-0 hidden' : 'opacity-100'
+                            }`}
+                    >
+                        <ServiceSchedulePanel
+                            schedule={schedule}
+                            onScheduleChange={setSchedule}
+                            onGoLive={(item: ScheduleItem, slideIndex: number) => {
+                                const slide = item.slides[slideIndex];
+                                const content = slide?.content || '';
+
+                                // Check if this is actually a video (not an image)
+                                const isVideo = item.type === 'live_feed' ||
+                                    content.startsWith('data:video') ||
+                                    content.match(/\.(mp4|webm|mov|ogg)(\?|$)/i) !== null;
+
+                                // Intercept ONLY Live Feed and Video items for Audio Mode Selection
+                                if (isVideo) {
+                                    setPendingLiveItem({ item, slideIndex });
+                                    setShowAudioPrompt(true);
+                                    return;
+                                }
+
+
+
+                                // Update Live Presentation State
+                                if (['song', 'media'].includes(item.type)) {
+                                    setLivePresentation({ item, slideIndex });
+                                } else {
+                                    setLivePresentation(null);
+                                }
+
+                                if (item.type === 'song') {
+                                    // Set active item for Dashboard preview too
+                                    setActiveItem({
+                                        id: item.id,
+                                        reference: item.title,
+                                        text: slide.content,
+                                        version: 'SONG',
+                                        book: 'Song',
+                                        chapter: 0,
+                                        verseNum: 0,
+                                        timestamp: new Date()
+                                    });
+                                    broadcast({
+                                        type: 'SHOW_CONTENT',
+                                        payload: {
+                                            type: 'song',
+                                            title: item.title,
+                                            body: slide.content,
+                                            meta: item.meta?.author,
+                                            background: typeof item.meta?.background === 'object' ? (item.meta?.background as any)?.value : item.meta?.background
+                                        }
+                                    });
+                                } else if (item.type === 'scripture') {
+                                    // Update local preview immediately so handshake works
+                                    setActiveItem({
+                                        id: item.id,
+                                        reference: item.title,
+                                        text: slide.content,
+                                        version: item.meta?.version || 'KJV',
+                                        book: item.title.split(' ')[0],
+                                        chapter: parseInt(item.title.split(' ')[1]?.split(':')[0]) || 0,
+                                        verseNum: parseInt(item.title.split(':')[1]) || 0,
+                                        timestamp: new Date()
+                                    });
+
+                                    broadcast({
+                                        type: 'SHOW_CONTENT',
+                                        payload: {
+                                            type: 'verse',
+                                            title: item.title,
+                                            body: slide.content,
+                                            meta: item.meta?.version
+                                        }
+                                    });
+                                } else if (item.type === 'media') {
+                                    // Handle Media/Image
+                                    broadcast({
+                                        type: 'SHOW_CONTENT',
+                                        payload: {
+                                            type: 'media',
+                                            title: item.title,
+                                            body: slide.content, // Data URL
+                                            meta: 'Image',
+                                            options: {
+                                                imageMode: item.meta?.imageMode
+                                            }
+                                        }
+                                    });
+
+                                    // Update local preview
+                                    setActiveItem({
+                                        id: item.id,
+                                        reference: item.title,
+                                        text: slide.content, // Store Data URL in text
+                                        version: 'MEDIA',    // Use version as flag
+                                        book: 'Media',
+                                        chapter: 0,
+                                        verseNum: 0,
+                                        timestamp: new Date()
+                                    });
+                                }
+                            }}
+                        />
+                    </div>
+                </div>
 
                 <div
-                    className="grid grid-cols-12 gap-2 min-h-0 transition-[height] ease-out duration-300"
-                    style={{
-                        height: isLibraryOpen ? `${topPanelHeight}% ` : 'calc(100% - 3.5rem)',
-                        transitionDuration: isDraggingRef.current ? '0ms' : '300ms',
-                        marginBottom: isLibraryOpen ? '0' : '0.5rem'
-                    }}
+                    className={`flex gap-2 min-h-0 h-full transition-all duration-300 ${isScheduleCollapsed ? 'pl-0' : 'pl-[336px] 2xl:pl-[416px]'}`}
                 >
-
-                    {/* FAR LEFT: SERVICE SCHEDULE */}
-                    <section className="col-span-3 flex flex-col min-h-0 overflow-hidden">
-                        <div className="bg-zinc-900/50 border border-white/5 rounded-2xl flex-1 flex flex-col overflow-hidden">
-                            <ServiceSchedulePanel
-                                schedule={schedule}
-                                onScheduleChange={setSchedule}
-                                onGoLive={(item: ScheduleItem, slideIndex: number) => {
-                                    const slide = item.slides[slideIndex];
-
-                                    // Update Live Presentation State
-                                    if (['song', 'media'].includes(item.type)) {
-                                        setLivePresentation({ item, slideIndex });
-                                    } else {
-                                        setLivePresentation(null);
-                                    }
-
-                                    if (item.type === 'song') {
-                                        // Set active item for Dashboard preview too
-                                        setActiveItem({
-                                            id: item.id,
-                                            reference: item.title,
-                                            text: slide.content,
-                                            version: 'SONG',
-                                            book: 'Song',
-                                            chapter: 0,
-                                            verseNum: 0,
-                                            timestamp: new Date()
-                                        });
-                                        broadcast({
-                                            type: 'SHOW_CONTENT',
-                                            payload: {
-                                                type: 'song',
-                                                title: item.title,
-                                                body: slide.content,
-                                                meta: item.meta?.author,
-                                                background: typeof item.meta?.background === 'object' ? (item.meta?.background as any)?.value : item.meta?.background
-                                            }
-                                        });
-                                    } else if (item.type === 'scripture') {
-                                        broadcast({
-                                            type: 'SHOW_CONTENT',
-                                            payload: {
-                                                type: 'verse',
-                                                title: item.title,
-                                                body: slide.content,
-                                                meta: item.meta?.version
-                                            }
-                                        });
-                                    } else if (item.type === 'media') {
-                                        // Handle Media/Image
-                                        broadcast({
-                                            type: 'SHOW_CONTENT',
-                                            payload: {
-                                                type: 'media',
-                                                title: item.title,
-                                                body: slide.content, // Data URL
-                                                meta: 'Image',
-                                                options: {
-                                                    imageMode: item.meta?.imageMode
-                                                }
-                                            }
-                                        });
-
-                                        // Update local preview
-                                        setActiveItem({
-                                            id: item.id,
-                                            reference: item.title,
-                                            text: slide.content, // Store Data URL in text
-                                            version: 'MEDIA',    // Use version as flag
-                                            book: 'Media',
-                                            chapter: 0,
-                                            verseNum: 0,
-                                            timestamp: new Date()
-                                        });
-                                    }
-                                }}
-                            />
-                        </div>
-                    </section>
-
                     {/* LEFT: LIVE FEED & CONTROLS */}
-                    <section className="col-span-3 flex flex-col gap-3 min-h-0 overflow-hidden">
+                    <section className="flex-1 flex flex-col gap-3 min-h-0 min-w-[200px] shrink transition-all duration-300">
                         {/* TRANSCRIPT CARD */}
-                        <div className="flex-1 bg-zinc-900/50 border border-white/5 rounded-2xl p-5 flex flex-col min-h-0 overflow-hidden shadow-sm" style={{ maxHeight: '450px' }}>
+                        <div className={`flex-1 bg-white dark:bg-zinc-900/50 border rounded-2xl p-6 flex flex-col min-h-0 overflow-hidden shadow-sm dark:shadow-none transition-all duration-700 ${isListening ? 'animate-glow-green border-green-500/30' : 'animate-glow-red border-zinc-200 dark:border-white/5'} ${isScheduleCollapsed ? 'pt-14' : 'pt-6'}`}>
                             <TranscriptMonitor
                                 isListening={isListening}
                                 onTranscript={(text) => {
@@ -1323,66 +1478,66 @@ export default function DashboardPage() {
                                 interim={interim}
                                 deepgramError={deepgramError || deepgramStatus.error}
                             />
-
-                            <button
-                                onClick={() => {
-                                    if (!isLicensed) {
-                                        setIsLicenseModalOpen(true);
-                                        return;
-                                    }
-                                    if (isMicLoading) return;
-                                    setIsMicLoading(true);
-                                    setIsListening(!isListening);
-                                    // Auto-unlock after 1.5s to prevent toggle spamming
-                                    setTimeout(() => setIsMicLoading(false), 1500);
-                                }}
-                                className={`w-full py-2 rounded-xl font-black text-xs tracking-wider shadow-xl transition-all flex items-center justify-center gap-3 relative overflow-hidden group
-                                    ${deepgramStatus.status === 'listening'
-                                        ? 'bg-red-500/10 text-red-400 border border-red-500/50 hover:bg-red-500/20'
-                                        : deepgramStatus.status === 'connecting' || isMicLoading
-                                            ? 'bg-yellow-500/10 text-yellow-400 border border-yellow-500/50 cursor-wait'
-                                            : 'bg-indigo-600 text-white hover:bg-indigo-500 hover:scale-[1.02] active:scale-[0.98]'
-                                    } `}
-                            >
-                                {deepgramStatus.status === 'listening' ? (
-                                    <>
-                                        <span className="relative flex h-3 w-3">
-                                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
-                                            <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500"></span>
-                                        </span>
-                                        <span>LISTENING...</span>
-                                        <span className="text-[10px] font-normal opacity-60 ml-2">CLICK TO STOP</span>
-                                    </>
-                                ) : (deepgramStatus.status === 'connecting' || isMicLoading) ? (
-                                    <>
-                                        <div className="w-4 h-4 border-2 border-yellow-400 border-t-transparent rounded-full animate-spin" />
-                                        <span>STARTING MIC...</span>
-                                    </>
-                                ) : (
-                                    <>
-                                        <div className="p-1.5 bg-white/20 rounded-full group-hover:bg-white/30 transition-colors">
-                                            {isLicensed ? (
-                                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><line x1="12" y1="19" x2="12" y2="23"></line><line x1="8" y1="23" x2="16" y2="23"></line></svg>
-                                            ) : (
-                                                <Lock size={16} strokeWidth={3} />
-                                            )}
-                                        </div>
-                                        {isLicensed ? 'START LISTENING' : 'ACTIVATE LICENSE TO START'}
-                                    </>
-                                )}
-                            </button>
                         </div>
 
+                        <button
+                            onClick={() => {
+                                if (!isLicensed) {
+                                    setIsLicenseModalOpen(true);
+                                    return;
+                                }
+                                if (isMicLoading) return;
+                                setIsMicLoading(true);
+                                setIsListening(!isListening);
+                                // Auto-unlock after 1.5s to prevent toggle spamming
+                                setTimeout(() => setIsMicLoading(false), 1500);
+                            }}
+                            className={`w-full py-2 rounded-xl font-black text-xs tracking-wider shadow-xl transition-all flex items-center justify-center gap-3 relative overflow-hidden group
+                                    ${deepgramStatus.status === 'listening'
+                                    ? 'bg-red-500/10 text-red-400 border border-red-500/50 hover:bg-red-500/20'
+                                    : deepgramStatus.status === 'connecting' || isMicLoading
+                                        ? 'bg-yellow-500/10 text-yellow-400 border border-yellow-500/50 cursor-wait'
+                                        : 'bg-indigo-600 text-white hover:bg-indigo-500 hover:scale-[1.02] active:scale-[0.98]'
+                                } `}
+                        >
+                            {deepgramStatus.status === 'listening' ? (
+                                <>
+                                    <span className="relative flex h-3 w-3">
+                                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                                        <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500"></span>
+                                    </span>
+                                    <span>LISTENING...</span>
+                                    <span className="text-[10px] font-normal opacity-60 ml-2">CLICK TO STOP</span>
+                                </>
+                            ) : (deepgramStatus.status === 'connecting' || isMicLoading) ? (
+                                <>
+                                    <div className="w-4 h-4 border-2 border-yellow-400 border-t-transparent rounded-full animate-spin" />
+                                    <span>STARTING MIC...</span>
+                                </>
+                            ) : (
+                                <>
+                                    <div className="p-1.5 bg-white/20 rounded-full group-hover:bg-white/30 transition-colors">
+                                        {isLicensed ? (
+                                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><line x1="12" y1="19" x2="12" y2="23"></line><line x1="8" y1="23" x2="16" y2="23"></line></svg>
+                                        ) : (
+                                            <Lock size={16} strokeWidth={3} />
+                                        )}
+                                    </div>
+                                    {isLicensed ? 'START LISTENING' : 'ACTIVATE LICENSE TO START'}
+                                </>
+                            )}
+                        </button>
+
                         {/* MANUAL INPUT */}
-                        <div className="flex-shrink-0 bg-zinc-900/50 border border-white/5 rounded-xl p-3">
+                        <div className={`flex-shrink-0 bg-white dark:bg-zinc-900/50 border border-zinc-200 dark:border-white/5 rounded-2xl ${isScheduleCollapsed ? 'p-4' : 'p-3'} shadow-sm dark:shadow-none transition-all duration-300`}>
                             <form onSubmit={handleManualLookup} className="flex gap-2">
-                                <input name="verseInput" placeholder="Type 'John 3:16'..." className="flex-1 bg-black/50 border border-white/10 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:border-indigo-500 transition-colors" />
-                                <button type="submit" className="bg-zinc-800 hover:bg-zinc-700 px-4 rounded-lg text-xs font-bold text-zinc-300">GO</button>
+                                <input name="verseInput" placeholder="Type 'John 3:16'..." className="flex-1 min-w-0 bg-white dark:bg-black/50 border border-zinc-300 dark:border-white/10 rounded-full px-4 py-2 text-sm focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/10 transition-all text-zinc-900 dark:text-zinc-200 placeholder:text-zinc-400 font-medium" />
+                                <button type="submit" className={`bg-blue-600 hover:bg-blue-700 text-white rounded-full text-xs font-bold shadow-md shadow-blue-500/20 transition-all flex items-center justify-center ${isScheduleCollapsed ? 'px-6' : 'px-4'}`}>GO</button>
                             </form>
                         </div>
 
                         {/* CONFIDENCE THRESHOLD */}
-                        <div className="flex-shrink-0 bg-zinc-900/50 border border-white/5 rounded-xl p-3 space-y-3">
+                        <div className="flex-shrink-0 bg-white dark:bg-zinc-900/50 border border-zinc-100 dark:border-white/5 rounded-xl p-3 space-y-3 shadow-[0_4px_20px_rgb(0,0,0,0.03)] dark:shadow-none ring-1 ring-black/5 dark:ring-white/5">
                             <div>
                                 <div className="flex items-center justify-between mb-1">
                                     <span className="text-xs font-bold text-zinc-500 uppercase">Confidence Threshold</span>
@@ -1402,56 +1557,28 @@ export default function DashboardPage() {
                                     <span>Strict</span>
                                 </div>
                             </div>
-
-                            <div className="pt-2 border-t border-white/5">
-                                <label className="flex items-center justify-between cursor-pointer group">
-                                    <div className="flex flex-col">
-                                        <span className="text-xs font-bold text-zinc-400 uppercase tracking-wider group-hover:text-white transition-colors">Strict Commands</span>
-                                        <span className="text-[9px] text-zinc-600">Requires "Projector" wake-word</span>
-                                    </div>
-                                    <div className="relative inline-flex items-center">
-                                        <input
-                                            type="checkbox"
-                                            className="sr-only peer"
-                                            checked={pastorProfile?.strictCommandMode || false}
-                                            onChange={(e) => {
-                                                if (pastorProfile) {
-                                                    const updated = { ...pastorProfile, strictCommandMode: e.target.checked };
-                                                    setPastorProfile(updated);
-                                                    savePastorProfile(updated);
-                                                }
-                                            }}
-                                        />
-                                        <div className="w-8 h-4 bg-zinc-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-zinc-400 after:border-zinc-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-green-600 peer-checked:after:bg-white" />
-                                    </div>
-                                </label>
-                            </div>
                         </div>
                     </section>
 
                     {/* MIDDLE: QUEUE & HISTORY */}
-                    <section className="col-span-3 flex flex-col gap-4 min-h-0 overflow-hidden" style={{ maxHeight: '450px' }}>
-                        <div className="bg-zinc-900/30 border border-white/5 rounded-2xl flex-1 flex flex-col overflow-hidden">
-                            <header className="p-4 border-b border-white/5 flex justify-between items-center bg-zinc-900/50">
-                                <h3 className="text-xs font-bold text-zinc-500 uppercase tracking-wider">Detection Queue</h3>
-                                <div className="flex flex-col items-end">
-                                    {autoMode && (
-                                        <span className="text-[7px] font-black text-indigo-400 italic tracking-[0.2em] mb-0.5 animate-pulse">
-                                            BETA
-                                        </span>
-                                    )}
-                                    <div className="flex items-center gap-2">
-                                        <span className={`text-[10px] font-bold uppercase transition-colors ${autoMode ? 'text-indigo-400' : 'text-zinc-600'}`}>
+                    <section className="flex-1 flex flex-col gap-4 min-h-0 min-w-[200px] shrink transition-all duration-300">
+                        <div className="bg-white dark:bg-zinc-900/30 border border-zinc-100 dark:border-white/5 rounded-2xl flex-1 flex flex-col min-h-0 overflow-hidden shadow-none">
+                            <header className="p-4 border-b border-zinc-200/50 dark:border-white/5 flex justify-between items-center bg-zinc-50/50 dark:bg-zinc-900/50 backdrop-blur-sm shrink-0">
+                                <h3 className="text-xs font-bold text-zinc-500 uppercase tracking-wider shrink-0 whitespace-nowrap">Detection Queue</h3>
+                                <div className="flex flex-col items-end shrink-0">
+                                    <div className="flex items-center gap-2 shrink-0">
+                                        <span className={`text-[9px] font-black uppercase tracking-[0.1em] transition-colors ${autoMode ? 'text-zinc-900 dark:text-white' : 'text-zinc-500'}`}>
                                             Auto-Push
                                         </span>
                                         <button
                                             onClick={() => setAutoMode(!autoMode)}
-                                            className={`w-9 h-5 rounded-full transition-colors relative focus:outline-none focus:ring-2 ring-indigo-500/50 ${autoMode ? 'bg-indigo-600' : 'bg-zinc-800 border border-zinc-700'}`}
+                                            className={`w-8 h-4 rounded-full transition-all duration-300 relative focus:outline-none border ${autoMode ? 'bg-zinc-900 dark:bg-white border-zinc-900 dark:border-white' : 'bg-transparent border-zinc-300 dark:border-zinc-700'}`}
                                             title={autoMode ? "Auto-Push Enabled" : "Auto-Push Disabled"}
                                         >
-                                            <div className={`w-3 h-3 bg-white rounded-full absolute top-1 shadow-sm transition-transform duration-200 ${autoMode ? 'translate-x-5' : 'translate-x-1'}`} />
+                                            <div className={`w-2.5 h-2.5 rounded-full absolute top-[1px] shadow-sm transition-transform duration-300 ${autoMode ? 'translate-x-[16px] bg-white dark:bg-black' : 'translate-x-[3px] bg-zinc-400'}`} />
                                         </button>
                                     </div>
+
                                 </div>
                             </header>
                             <div
@@ -1464,11 +1591,11 @@ export default function DashboardPage() {
                                 {detectedQueue.map(item => {
                                     const matchBadge = getMatchTypeBadge(item.matchType);
                                     return (
-                                        <div key={item.id} className="p-4 rounded-xl bg-zinc-950 border border-white/5 hover:border-indigo-500/30 transition-all group flex gap-4">
+                                        <div key={item.id} className="p-4 rounded-xl bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-white/5 hover:border-indigo-500/30 transition-all group flex gap-4">
                                             <div className="flex-1">
                                                 <div className="flex items-center gap-1 mb-1 flex-wrap">
-                                                    <span className="font-bold text-indigo-400 text-sm">{item.reference}</span>
-                                                    <span className="text-[10px] bg-zinc-900 text-zinc-500 px-1.5 py-0.5 rounded">{item.version}</span>
+                                                    <span className="font-bold text-indigo-600 dark:text-indigo-400 text-sm">{item.reference}</span>
+                                                    <span className="text-[10px] bg-white dark:bg-zinc-900 text-zinc-500 px-1.5 py-0.5 rounded">{item.version}</span>
                                                     {item.confidence && (
                                                         <span className={`text-[10px] px-1.5 py-0.5 rounded border ${getConfidenceBadgeColor(item.confidence)} `}>
                                                             {item.confidence}%
@@ -1480,15 +1607,15 @@ export default function DashboardPage() {
                                                         </span>
                                                     )}
                                                     {item.sourceType === 'semantic' && (
-                                                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-purple-500/20 text-purple-400 border border-purple-500/30">
+                                                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-purple-100 dark:bg-purple-500/20 text-purple-700 dark:text-purple-400 border border-purple-300 dark:border-purple-500/30">
                                                             semantic
                                                         </span>
                                                     )}
                                                     <span className="text-[10px] text-zinc-600">{item.timestamp.toLocaleTimeString()}</span>
                                                 </div>
-                                                <p className="text-zinc-400 text-sm line-clamp-2 leading-snug">"{item.text}"</p>
+                                                <p className="text-zinc-700 dark:text-zinc-400 text-sm line-clamp-2 leading-snug">"{item.text}"</p>
                                             </div>
-                                            <button onClick={() => goLive(item)} className="self-center px-4 py-2 bg-zinc-800 hover:bg-indigo-600 hover:text-white rounded-lg text-xs font-bold text-zinc-500 transition-all opacity-0 group-hover:opacity-100">
+                                            <button onClick={() => goLive(item)} className="self-center px-4 py-2 bg-zinc-200 dark:bg-zinc-800 hover:bg-indigo-600 text-zinc-700 dark:text-white hover:text-white rounded-lg text-xs font-bold transition-all opacity-0 group-hover:opacity-100">
                                                 PUSH
                                             </button>
                                         </div>
@@ -1496,7 +1623,7 @@ export default function DashboardPage() {
                                 })}
                                 {detectedQueue.length === 0 && (
                                     <div className="h-full flex flex-col items-center justify-center text-zinc-700 space-y-2 opacity-50">
-                                        <div className="w-12 h-12 rounded-full bg-zinc-900 flex items-center justify-center">?</div>
+                                        <div className="w-12 h-12 rounded-full bg-white dark:bg-zinc-900 flex items-center justify-center">?</div>
                                         <p className="text-xs">Waiting for scripture...</p>
                                     </div>
                                 )}
@@ -1504,155 +1631,52 @@ export default function DashboardPage() {
                         </div>
                     </section>
 
-                    {/* RIGHT: LIVE PREVIEW */}
-                    <section className="col-span-3 flex flex-col gap-4 min-h-0" style={{ maxHeight: '450px' }}>
-                        <div className="bg-zinc-900 border border-white/5 rounded-2xl flex-1 flex flex-col relative">
-                            <header className="p-4 border-b border-white/5 flex justify-between items-center bg-zinc-950 rounded-t-2xl">
-                                <h3 className="text-xs font-bold text-green-500 uppercase tracking-wider flex items-center gap-2">
-                                    <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" /> Live Output
+                    {/* RIGHT: LIVE PREVIEW (ALWAYS DARK) */}
+                    <section className="flex-1 flex flex-col gap-4 min-h-0 min-w-[200px] shrink transition-all duration-300">
+                        <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-white/5 rounded-2xl flex-1 flex flex-col min-h-0 relative shadow-sm dark:shadow-none">
+                            <header className="px-3 py-2 border-b border-zinc-200 dark:border-white/5 flex justify-between items-center bg-zinc-50 dark:bg-zinc-950 rounded-t-2xl shrink-0 overflow-visible">
+                                <h3 className="text-xs font-bold text-green-500 uppercase tracking-wider flex items-center gap-2 shrink-0 whitespace-nowrap mr-4">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse shrink-0" /> Live Output
                                 </h3>
                                 {/* Media Controls (Only show if active item is video) */}
 
-                                <div className="flex items-center gap-2">
-                                    <div className="relative">
-                                        <button
-                                            onClick={() => setShowTimerSettings(!showTimerSettings)}
-                                            className={`p-2 hover:bg-white/10 rounded-full transition-colors ${showTimerSettings ? 'text-white bg-white/10' : 'text-zinc-400'}`}
-                                            title="Service Timer Controls"
-                                        >
-                                            <Clock size={20} />
-                                        </button>
-                                        {showTimerSettings && (
-                                            <>
-                                                <div className="fixed inset-0 z-[59]" onClick={() => setShowTimerSettings(false)} />
-                                                <div className="absolute top-full right-0 mt-2 bg-zinc-900 border border-white/10 rounded-xl shadow-2xl p-4 w-72 z-[60] isolate" onClick={e => e.stopPropagation()}>
-                                                    <h4 className="text-xs font-bold text-zinc-500 uppercase mb-3">Timer Settings</h4>
-
-                                                    {/* Mode & Time */}
-                                                    <div className="space-y-3 mb-4">
-                                                        <div>
-                                                            <label className="text-xs text-zinc-400 block mb-1">Duration (Minutes)</label>
-                                                            <div className="flex gap-2">
-                                                                <input
-                                                                    type="number"
-                                                                    value={timerDuration}
-                                                                    onChange={e => setTimerDuration(parseInt(e.target.value) || 0)}
-                                                                    className="flex-1 bg-black/50 border border-white/10 rounded px-2 py-1 text-sm text-white"
-                                                                />
-                                                                <button
-                                                                    onClick={() => broadcast({ type: 'TIMER_ACTION', payload: { action: 'set', mode: 'countdown', value: timerDuration * 60 } })}
-                                                                    className="bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold px-3 rounded"
-                                                                >
-                                                                    SET
-                                                                </button>
-                                                            </div>
-                                                        </div>
-                                                    </div>
-
-                                                    {/* Controls */}
-                                                    <div className="grid grid-cols-3 gap-2 border-t border-white/10 pt-3">
-                                                        <button
-                                                            onClick={() => broadcast({ type: 'TIMER_ACTION', payload: { action: 'start' } })}
-                                                            className={`flex flex-col items-center justify-center gap-1 p-2 rounded-lg transition-all ${timerState.isRunning
-                                                                ? 'bg-green-500/20 text-green-400 border border-green-500/30'
-                                                                : 'bg-zinc-800 text-zinc-500 hover:text-zinc-300 hover:bg-zinc-700 border border-white/5'
-                                                                }`}
-                                                        >
-                                                            <Play size={16} fill={timerState.isRunning ? "currentColor" : "none"} />
-                                                            <span className="text-[10px] font-bold">START</span>
-                                                        </button>
-                                                        <button
-                                                            onClick={() => broadcast({ type: 'TIMER_ACTION', payload: { action: 'pause' } })}
-                                                            className={`flex flex-col items-center justify-center gap-1 p-2 rounded-lg transition-all ${timerState.isPaused
-                                                                ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
-                                                                : 'bg-zinc-800 text-zinc-500 hover:text-zinc-300 hover:bg-zinc-700 border border-white/5'
-                                                                }`}
-                                                        >
-                                                            <Pause size={16} fill={timerState.isPaused ? "currentColor" : "none"} />
-                                                            <span className="text-[10px] font-bold">PAUSE</span>
-                                                        </button>
-                                                        <button
-                                                            onClick={() => {
-                                                                setResetFlash(true);
-                                                                broadcast({ type: 'TIMER_ACTION', payload: { action: 'reset' } });
-                                                                setTimeout(() => setResetFlash(false), 300);
-                                                            }}
-                                                            className={`flex flex-col items-center justify-center gap-1 p-2 rounded-lg transition-all ${resetFlash
-                                                                ? 'bg-red-500/20 text-red-500 border border-red-500/50 scale-95'
-                                                                : 'bg-zinc-800 text-zinc-500 hover:text-red-400 hover:bg-zinc-700 border border-white/5'
-                                                                }`}
-                                                        >
-                                                            <Square size={16} />
-                                                            <span className="text-[10px] font-bold">RESET</span>
-                                                        </button>
-                                                    </div>
-                                                </div>
-                                            </>
-                                        )}
-                                    </div>
-
-
-
-                                    {/* Electron Multi-Window Trigger */}
+                                <div className="flex items-center gap-2 shrink-0">
+                                    {/* Window controls: Icon-only to save space */}
                                     <button
                                         onClick={() => {
                                             if ((window as any).electronAPI?.openProjectorWindow) {
-                                                (window as any).electronAPI.openProjectorWindow();
+                                                const displayId = localStorage.getItem('projectorDisplayId');
+                                                (window as any).electronAPI.openProjectorWindow({ displayId });
                                             } else {
                                                 window.open('/projector', '_blank', 'width=1280,height=720');
                                             }
                                         }}
-                                        className="p-2 hover:bg-white/10 rounded-full text-zinc-400 hover:text-green-400 transition-colors"
-                                        title="Open Projector Window"
+                                        className="p-1.5 hover:bg-white/10 text-zinc-400 hover:text-indigo-400 rounded-lg transition-colors shrink-0"
+                                        title="Projector"
                                     >
-                                        <Maximize size={20} />
+                                        <Monitor size={16} />
                                     </button>
-                                    {livePresentation ? (
-                                        <div className="flex bg-zinc-800 rounded-lg p-0.5 border border-white/5">
-                                            <button
-                                                onClick={() => handleSlideNavigation('prev')}
-                                                disabled={livePresentation.slideIndex <= 0}
-                                                className="p-1.5 hover:bg-zinc-700 text-zinc-400 hover:text-white rounded-md transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-                                                title="Previous Slide"
-                                            >
-                                                <ChevronLeft size={14} />
-                                            </button>
-                                            <div className="w-px h-4 bg-white/10 mx-0.5 my-auto" />
-                                            <button
-                                                onClick={() => handleSlideNavigation('next')}
-                                                disabled={livePresentation.slideIndex >= livePresentation.item.slides.length - 1}
-                                                className="p-1.5 hover:bg-zinc-700 text-zinc-400 hover:text-white rounded-md transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-                                                title="Next Slide"
-                                            >
-                                                <ChevronRight size={14} />
-                                            </button>
-                                        </div>
-                                    ) : activeItem && activeItem.version !== 'MEDIA' && activeItem.version !== 'SONG' && (
-                                        <div className="flex bg-zinc-800 rounded-lg p-0.5 border border-white/5">
-                                            <button
-                                                onClick={() => navigateVerse('prev')}
-                                                className="p-1.5 hover:bg-zinc-700 text-zinc-400 hover:text-white rounded-md transition-colors"
-                                                title="Previous Verse"
-                                            >
-                                                <ChevronLeft size={14} />
-                                            </button>
-                                            <div className="w-px h-4 bg-white/10 mx-0.5 my-auto" />
-                                            <button
-                                                onClick={() => navigateVerse('next')}
-                                                className="p-1.5 hover:bg-zinc-700 text-zinc-400 hover:text-white rounded-md transition-colors"
-                                                title="Next Verse"
-                                            >
-                                                <ChevronRight size={14} />
-                                            </button>
-                                        </div>
-                                    )}
-                                    <button onClick={clearProjector} className="text-[10px] font-bold text-red-400 hover:text-red-300">CLEAR</button>
+                                    <button
+                                        onClick={() => {
+                                            if ((window as any).electronAPI?.openStageWindow) {
+                                                const displayId = localStorage.getItem('stageDisplayId');
+                                                (window as any).electronAPI.openStageWindow({ displayId });
+                                            } else {
+                                                window.open('/stage', '_blank', 'width=1280,height=720');
+                                            }
+                                        }}
+                                        className="p-1.5 hover:bg-white/10 text-zinc-400 hover:text-indigo-400 rounded-lg transition-colors shrink-0 mr-1"
+                                        title="Stage"
+                                    >
+                                        <Tv2 size={16} />
+                                    </button>
+                                    <button onClick={clearProjector} className="text-[10px] font-bold text-red-400 hover:text-red-300 shrink-0">CLEAR</button>
                                 </div>
                             </header>
 
                             {/* PREVIEW CONTAINER */}
                             <div
-                                className="flex-1 flex items-center justify-center p-8 relative group overflow-hidden rounded-b-2xl"
+                                className="flex-1 flex items-center justify-center p-4 relative group overflow-y-auto rounded-b-2xl"
                                 style={{
                                     scrollbarWidth: 'thin',
                                     scrollbarColor: '#71717a #000000',
@@ -1662,6 +1686,30 @@ export default function DashboardPage() {
                                 }}
                             >
                                 <div className="absolute inset-0 bg-black/20 pointer-events-none" /> {/* Overlay for readability */}
+
+                                {/* Floating Nav Buttons - Left */}
+                                {(livePresentation || (activeItem && activeItem.version !== 'MEDIA' && activeItem.version !== 'SONG')) && (
+                                    <button
+                                        onClick={() => livePresentation ? handleSlideNavigation('prev') : navigateVerse('prev')}
+                                        disabled={livePresentation ? livePresentation.slideIndex <= 0 : false}
+                                        className="absolute left-2 top-1/2 -translate-y-1/2 z-50 p-2 bg-white/20 hover:bg-white/40 text-white rounded-full transition-all opacity-0 group-hover:opacity-100 disabled:opacity-30 disabled:cursor-not-allowed backdrop-blur-sm"
+                                        title={livePresentation ? "Previous Slide" : "Previous Verse"}
+                                    >
+                                        <ChevronLeft size={20} />
+                                    </button>
+                                )}
+
+                                {/* Floating Nav Buttons - Right */}
+                                {(livePresentation || (activeItem && activeItem.version !== 'MEDIA' && activeItem.version !== 'SONG')) && (
+                                    <button
+                                        onClick={() => livePresentation ? handleSlideNavigation('next') : navigateVerse('next')}
+                                        disabled={livePresentation ? livePresentation.slideIndex >= livePresentation.item.slides.length - 1 : false}
+                                        className="absolute right-2 top-1/2 -translate-y-1/2 z-50 p-2 bg-white/20 hover:bg-white/40 text-white rounded-full transition-all opacity-0 group-hover:opacity-100 disabled:opacity-30 disabled:cursor-not-allowed backdrop-blur-sm"
+                                        title={livePresentation ? "Next Slide" : "Next Verse"}
+                                    >
+                                        <ChevronRight size={20} />
+                                    </button>
+                                )}
                                 {activeItem ? (
                                     activeItem.version === 'MEDIA' ? (
                                         <div className="text-center w-full h-full flex flex-col items-center justify-center relative z-10 overflow-hidden">
@@ -1670,7 +1718,13 @@ export default function DashboardPage() {
                                                 const isFillMode = mode === 'cover' || mode === 'stretch';
                                                 const objectFitClass = mode === 'cover' ? 'object-cover' : mode === 'stretch' ? 'object-fill' : 'object-contain';
 
-                                                return (activeItem.text?.startsWith('data:video') || activeItem.text?.endsWith('.mp4') || activeItem.text?.endsWith('.webm')) ? (
+                                                return (activeItem.book === 'LIVE') ? (
+                                                    <LiveFeedStream
+                                                        sourceId={activeItem.text}
+                                                        className={`max-w-full max-h-full ${isFillMode ? 'w-full h-full' : 'max-h-full'} ${objectFitClass} transition-transform duration-200`}
+                                                        style={{ transform: `scale(${(activeItem as any).options?.scale || 1})` }}
+                                                    />
+                                                ) : (activeItem.text?.startsWith('data:video') || activeItem.text?.endsWith('.mp4') || activeItem.text?.endsWith('.webm')) ? (
                                                     <video
                                                         src={activeItem.text}
                                                         className={`max-w-full max-h-full ${isFillMode ? 'w-full h-full' : 'max-h-full'} ${objectFitClass} transition-transform duration-200`}
@@ -1735,7 +1789,7 @@ export default function DashboardPage() {
                                                     )}
                                                     <span style={{
                                                         fontWeight: currentTheme?.styles.fontWeight,
-                                                        fontSize: calculateDashboardFontScale(activeItem.text, 1), // Dynamic sizing for dashboard
+                                                        fontSize: calculateDashboardFontScale(activeItem.text + (activeItem.additionalVerses?.map(v => v.text).join('') || ''), (activeItem.additionalVerses?.length || 0) + 1), // Use total text for sizing
                                                         textShadow: currentTheme?.styles.textShadow,
                                                         lineHeight: 1.2
                                                     }} dangerouslySetInnerHTML={{ __html: renderFormattedText(activeItem.text) }} />
@@ -1758,7 +1812,7 @@ export default function DashboardPage() {
                                                         )}
                                                         <span style={{
                                                             fontWeight: currentTheme?.styles.fontWeight,
-                                                            fontSize: calculateDashboardFontScale(v.text, (activeItem.additionalVerses?.length || 0) + 1),
+                                                            fontSize: calculateDashboardFontScale(activeItem.text + (activeItem.additionalVerses?.map(v => v.text).join('') || ''), (activeItem.additionalVerses?.length || 0) + 1), // Use total text for sizing
                                                             textShadow: currentTheme?.styles.textShadow,
                                                             lineHeight: 1.2
                                                         }} dangerouslySetInnerHTML={{ __html: renderFormattedText(v.text) }} />
@@ -1790,22 +1844,8 @@ export default function DashboardPage() {
                                 )}
 
                                 {
-                                    /* OVERLAY ACTIONS */
+                                    /* OVERLAY ACTIONS (Removed as redundant) */
                                 }
-                                <div className="absolute inset-0 z-50 bg-black/80 flex items-center justify-center gap-4 opacity-0 group-hover:opacity-100 transition-opacity backdrop-blur-sm pointer-events-none">
-                                    <button
-                                        onClick={() => {
-                                            if ((window as any).electronAPI?.openProjectorWindow) {
-                                                (window as any).electronAPI.openProjectorWindow();
-                                            } else {
-                                                window.open('/projector', '_blank', 'width=1280,height=720');
-                                            }
-                                        }}
-                                        className="pointer-events-auto px-6 py-2 bg-white text-black font-bold rounded-full hover:scale-105 transition-transform"
-                                    >
-                                        Open Projector Window ↗
-                                    </button>
-                                </div>
 
                                 {/* Floating Media Controls - Show for any MEDIA type (Video, Image, PDF Slide) */}
                                 {(activeItem?.version === 'MEDIA' || activeItem?.text?.startsWith('data:video')) && (
@@ -1813,16 +1853,47 @@ export default function DashboardPage() {
                                         <div className="scale-90 origin-bottom">
                                             <MediaControls
                                                 isVideo={activeItem?.text?.startsWith('data:video') || activeItem?.text?.match(/\.(mp4|webm|mov|ogg)(\?|$)/i) !== null}
+                                                isAudioOnly={(activeItem as any).options?.isAudioOnly}
                                                 onAction={(action, value) => {
                                                     // Broadcast to Projector
-                                                    broadcast({ type: 'MEDIA_ACTION', payload: { action, value } });
+                                                    broadcast({
+                                                        type: 'MEDIA_ACTION',
+                                                        payload: { action, value }
+                                                    });
 
-                                                    // Update Local Preview State immediately
-                                                    if (action === 'set_scale' || action === 'set_mode') {
+                                                    // Update Local State for Preview
+                                                    if (action === 'set_audio_only') {
                                                         setActiveItem(prev => {
                                                             if (!prev) return null;
-                                                            const key = action === 'set_scale' ? 'scale' : 'imageMode';
-                                                            return { ...prev, options: { ...(prev as any).options, [key]: value } } as DetectedItem;
+                                                            return {
+                                                                ...prev,
+                                                                options: {
+                                                                    ...(prev as any).options,
+                                                                    isAudioOnly: value
+                                                                }
+                                                            } as any;
+                                                        });
+                                                    } else if (action === 'set_scale') {
+                                                        setActiveItem(prev => {
+                                                            if (!prev) return null;
+                                                            return {
+                                                                ...prev,
+                                                                options: {
+                                                                    ...(prev as any).options,
+                                                                    scale: value
+                                                                }
+                                                            } as any;
+                                                        });
+                                                    } else if (action === 'set_mode') {
+                                                        setActiveItem(prev => {
+                                                            if (!prev) return null;
+                                                            return {
+                                                                ...prev,
+                                                                options: {
+                                                                    ...(prev as any).options,
+                                                                    imageMode: value
+                                                                }
+                                                            } as any;
                                                         });
                                                     }
                                                 }}
@@ -1832,152 +1903,136 @@ export default function DashboardPage() {
                                 )}
                             </div>
                         </div>
+
+                        {/* Verse Count Circles - Below preview box, only for scriptures */}
+                        {activeItem && activeItem.version !== 'MEDIA' && activeItem.version !== 'SONG' && !livePresentation && (
+                            <div className="flex justify-center gap-2 mt-4">
+                                {[1, 2, 3].map((num) => (
+                                    <button
+                                        key={num}
+                                        onClick={() => setVerseCount(num as 1 | 2 | 3)}
+                                        className={`w-8 h-8 rounded-full text-xs font-bold transition-all ${verseCount === num
+                                            ? 'bg-indigo-600 text-white'
+                                            : 'bg-zinc-200 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-300 dark:hover:bg-zinc-700'
+                                            }`}
+                                        title={`Show ${num} verse${num > 1 ? 's' : ''}`}
+                                    >
+                                        {num}
+                                    </button>
+                                ))}
+                            </div>
+                        )}
                     </section>
 
-                </div> {/* End Grid */}
+                </div > {/* End Grid */}
 
-                {/* Resizer Handle */}
-                {
-                    isLibraryOpen && (
-                        <div
-                            onMouseDown={handleMouseDown}
-                            className="h-4 -my-2 flex items-center justify-center cursor-row-resize z-50 group shrink-0 select-none"
-                        >
-                            <div className="w-24 h-1 bg-zinc-800 rounded-full group-hover:bg-indigo-500 transition-colors" />
-                        </div>
-                    )
-                }
-
-                {/* Resource Library (Bottom) */}
+                {/* Resource Library Overlay (Full Height) */}
                 <div
-                    className={`flex-1 min-h-0 rounded-2xl overflow-hidden border border-white/10 shadow-3xl transition-all duration-300 ease-in-out relative z-[60] bg-zinc-900 ${isLibraryOpen ? 'flex-[4]' : 'bg-zinc-900/50 border-dashed border-white/20 h-14'} `}
-                    style={{
-                        boxShadow: isLibraryOpen ? '0 -20px 50px -12px rgba(0, 0, 0, 0.5)' : 'none'
-                    }}
+                    className={`fixed inset-x-0 z-[100] transition-all duration-500 ease-in-out ${isLibraryOpen ? 'top-14 bottom-14 opacity-100 scale-100' : 'top-[100%] bottom-[-100%] opacity-0 pointer-events-none scale-95'}`}
                 >
-                    {/* Toggle Button */}
-                    <button
-                        onClick={() => setIsLibraryOpen(!isLibraryOpen)}
-                        className="absolute right-0 bottom-0 z-50 p-2.5 bg-zinc-800 text-zinc-400 hover:text-white hover:bg-zinc-700 rounded-tl-xl shadow-lg border-t border-l border-white/10 transition-colors"
-                        title={isLibraryOpen ? "Collapse Library" : "Expand Library"}
-                    >
-                        {isLibraryOpen ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
-                    </button>
-
-                    {/* Collapsed Placeholder Title */}
-                    {!isLibraryOpen && (
-                        <div
-                            className="absolute inset-0 flex items-center px-4 cursor-pointer hover:bg-white/5 transition-colors"
-                            onClick={() => setIsLibraryOpen(true)}
-                        >
-                            <span className="text-xs font-bold text-zinc-500 uppercase tracking-widest flex items-center gap-2">
-                                <span className="w-1.5 h-1.5 rounded-full bg-indigo-500" /> Resource Library
-                            </span>
-                        </div>
-                    )}
-
-                    <div className={`h-full ${!isLibraryOpen ? 'opacity-0 pointer-events-none' : 'opacity-100'} transition-opacity duration-200`}>
+                    <div className="h-full bg-white dark:bg-zinc-950 rounded-3xl border border-zinc-200 dark:border-white/10 shadow-2xl overflow-hidden flex flex-col">
                         <ResourceLibraryPanel
                             onResourcesChanged={setLibraryResources}
                             onAddToSchedule={handleAddToSchedule}
+                            onToggleLibrary={() => setIsLibraryOpen(false)}
+                            onApplyTheme={setCurrentTheme}
+                            activeThemeId={currentTheme?.id}
                             onGoLive={(item: ScheduleItem) => {
-                                const slide = item.slides?.[0];
+                                console.log('[Dashboard] onGoLive for library item:', item.type, item.title);
 
-                                // Guard: if no slides, show error and return
-                                if (!slide) {
-                                    console.error('No slides found for item:', item.title);
+                                const slide = item.slides?.[0];
+                                const content = slide?.content || '';
+
+                                // Check if this is actually a video (not an image)
+                                const isVideo = item.type === 'live_feed' ||
+                                    content.startsWith('data:video') ||
+                                    content.match(/\.(mp4|webm|mov|ogg)(\?|$)/i) !== null;
+
+                                // Intercept ONLY Live Feed and Video items for Audio Mode Selection
+                                if (isVideo) {
+                                    setPendingLiveItem({ item, slideIndex: 0 });
+                                    setShowAudioPrompt(true);
                                     return;
                                 }
 
-                                // Support all types for live presentation handling (slide nav)
-                                if (['song', 'media', 'scripture'].includes(item.type)) {
-                                    setLivePresentation({ item, slideIndex: 0 });
-                                } else {
-                                    setLivePresentation(null);
-                                }
+                                if (!slide) return;
 
-                                if (item.type === 'scripture') {
-                                    // Parse Scripture Reference (e.g., "Genesis 1:1")
-                                    // Handle cases where title might be "1 John 3:16" or "Genesis 1:1"
-                                    // Regex: Last part is verse, separation by colon
-                                    // Then last part is chapter, separation by space
-                                    let book = 'Bible';
-                                    let chapter = 0;
-                                    let verseNum = 0;
+                                const meta = (item as any).meta || {};
 
-                                    // Robust parsing attempt
-                                    try {
-                                        const lastColon = item.title.lastIndexOf(':');
-                                        if (lastColon !== -1) {
-                                            verseNum = parseInt(item.title.substring(lastColon + 1));
-                                            const refPart = item.title.substring(0, lastColon);
-                                            const lastSpace = refPart.lastIndexOf(' ');
-                                            if (lastSpace !== -1) {
-                                                chapter = parseInt(refPart.substring(lastSpace + 1));
-                                                book = refPart.substring(0, lastSpace);
-                                            }
-                                        }
-                                    } catch (e) {
-                                        console.error('Error parsing scripture title:', item.title);
-                                    }
-
-                                    setActiveItem({
-                                        id: item.id,
-                                        reference: item.title,
-                                        text: slide.content,
-                                        version: (item.meta?.version as string) || 'KJV',
-                                        book: book,
-                                        chapter: chapter,
-                                        verseNum: verseNum,
-                                        timestamp: new Date()
-                                    });
-                                } else {
-                                    // Song / Media
-                                    setActiveItem({
-                                        id: item.id,
-                                        reference: item.title,
-                                        text: slide.content,
-                                        version: item.type === 'media' ? 'MEDIA' : 'SONG',
-                                        book: item.type === 'media' ? 'Media' : 'Song',
-                                        chapter: 0,
-                                        verseNum: 0,
-                                        timestamp: new Date()
-                                    });
-                                }
-
-                                if (item.type === 'scripture') {
-                                    broadcast({
-                                        type: 'SHOW_VERSE',
-                                        payload: {
-                                            reference: item.title,
-                                            text: slide.content,
-                                            version: (item.meta?.version as string) || 'KJV',
-                                            verses: [{ verseNum: 1, text: slide.content }]
-                                        }
-                                    });
-                                } else {
+                                // Handle media items directly if not intercepted above
+                                if (item.type === 'media') {
                                     broadcast({
                                         type: 'SHOW_CONTENT',
                                         payload: {
-                                            type: item.type === 'media' ? 'media' : 'song',
+                                            type: 'media',
                                             title: item.title,
                                             body: slide.content,
-                                            meta: item.type === 'media' ? 'Image' : item.meta?.author,
-                                            background: typeof item.meta?.background === 'object' ? (item.meta?.background as any)?.value : item.meta?.background,
-                                            options: item.type === 'media' ? { imageMode: item.meta?.imageMode } : undefined,
-                                            slideIndex: 0,
-                                            totalSlides: item.slides?.length || 1,
-                                            nextSlide: item.slides?.[1]?.content
+                                            options: {
+                                                imageMode: meta.imageMode || 'contain',
+                                                scale: meta.scale || 1
+                                            }
                                         }
                                     });
+                                    setActiveItem({
+                                        id: item.id,
+                                        reference: item.title,
+                                        text: slide.content,
+                                        version: 'MEDIA',
+                                        book: 'Media',
+                                        chapter: 0,
+                                        verseNum: 0,
+                                        timestamp: new Date()
+                                    } as any);
+                                    return;
                                 }
+
+                                // Fallback for songs and other existing types
+                                goLive({
+                                    id: item.id,
+                                    reference: item.title,
+                                    text: slide.content,
+                                    version: 'SONG',
+                                    book: 'Song',
+                                    chapter: 0,
+                                    verseNum: 0,
+                                    timestamp: new Date()
+                                });
                             }}
-                            onApplyTheme={setCurrentTheme}
-                            activeThemeId={currentTheme?.id}
+                            isLibraryOpen={isLibraryOpen}
                         />
                     </div>
                 </div>
 
+                {/* Restore Library Trigger (Floating at bottom when closed) */}
+                {
+                    !isLibraryOpen && (
+                        <div className="absolute bottom-0 left-0 right-0 h-20 flex items-center justify-center z-[70] animate-in slide-in-from-bottom-5 duration-300">
+                            <button
+                                onClick={() => setIsLibraryOpen(true)}
+                                className="bg-indigo-600 dark:bg-zinc-900 border border-indigo-500 dark:border-white/10 text-white px-6 py-2 rounded-full shadow-2xl hover:bg-indigo-500 dark:hover:bg-zinc-800 transition-all flex items-center gap-2 group font-bold text-xs"
+                            >
+                                <Library size={14} className="group-hover:text-indigo-400" />
+                                RESOURCE LIBRARY
+                                <ChevronUp size={14} className="text-zinc-500" />
+                            </button>
+                        </div>
+                    )
+                }
+
+                {/* Collapse Library Trigger (Fixed at bottom when open) - Moves out of panel for better positioning */}
+                {
+                    isLibraryOpen && (
+                        <div className="fixed bottom-0 left-0 right-0 h-14 flex items-center justify-center z-[110] animate-in slide-in-from-bottom-5 duration-300 pointer-events-none">
+                            <button
+                                onClick={() => setIsLibraryOpen(false)}
+                                className="bg-indigo-600 dark:bg-zinc-900 border border-indigo-500 dark:border-white/10 text-white px-8 py-2 rounded-full shadow-2xl hover:bg-indigo-500 dark:hover:bg-zinc-800 transition-all flex items-center gap-2 group font-black text-[10px] tracking-widest uppercase pointer-events-auto"
+                            >
+                                <ChevronDown size={14} className="text-zinc-500 group-hover:text-white transition-transform group-hover:translate-y-0.5" />
+                                COLLAPSE LIBRARY
+                            </button>
+                        </div>
+                    )
+                }
             </div >
 
             <OmniSearch
@@ -2050,16 +2105,22 @@ export default function DashboardPage() {
                 isOpen={isLicenseModalOpen}
                 onClose={() => setIsLicenseModalOpen(false)}
             />
+            {/* Display Settings Modal */}
+            <DisplaySettingsModal
+                isOpen={isDisplaySettingsOpen}
+                onClose={() => setIsDisplaySettingsOpen(false)}
+            />
             {/* MIDI Settings Modal */}
             <MIDISettingsModal
                 isOpen={isMidiSettingsOpen}
                 onClose={() => setIsMidiSettingsOpen(false)}
                 midi={midi}
             />
+
             {/* Update Banner */}
             {
                 updateStatus.type !== 'idle' && updateStatus.type !== 'error' && (
-                    <div className="fixed bottom-4 right-4 bg-indigo-600 text-white p-4 rounded-xl shadow-2xl z-50 animate-in slide-in-from-bottom-5 border border-white/10 max-w-sm">
+                    <div className="fixed bottom-4 right-4 bg-indigo-600 text-zinc-900 dark:text-white p-4 rounded-xl shadow-2xl z-50 animate-in slide-in-from-bottom-5 border border-zinc-300 dark:border-white/10 max-w-sm">
                         <div className="flex items-start gap-4">
                             <div className="p-2 bg-white/20 rounded-full">
                                 <Download size={24} className="animate-pulse" />
@@ -2085,7 +2146,7 @@ export default function DashboardPage() {
                                 {updateStatus.type === 'ready' && (
                                     <button
                                         onClick={() => (window as any).electronAPI.installUpdate()}
-                                        className="mt-3 w-full py-1.5 bg-green-500 text-white font-bold rounded text-xs hover:bg-green-600 transition-colors"
+                                        className="mt-3 w-full py-1.5 bg-green-500 text-zinc-900 dark:text-white font-bold rounded text-xs hover:bg-green-600 transition-colors"
                                     >
                                         Restart & Install
                                     </button>
@@ -2093,7 +2154,7 @@ export default function DashboardPage() {
                             </div>
                             <button
                                 onClick={() => setUpdateStatus({ type: 'idle' })}
-                                className="text-white/50 hover:text-white"
+                                className="text-zinc-900 dark:text-white/50 hover:text-zinc-900 dark:text-white"
                             >
                                 <X size={16} />
                             </button>
@@ -2101,6 +2162,67 @@ export default function DashboardPage() {
                     </div>
                 )
             }
-        </main>
+
+            {/* Audio Mode Prompt */}
+            <AudioModePrompt
+                isOpen={showAudioPrompt}
+                onClose={() => {
+                    setShowAudioPrompt(false);
+                    setPendingLiveItem(null);
+                }}
+                onConfirm={(isAudioOnly) => {
+                    if (!pendingLiveItem) return;
+                    const { item, slideIndex } = pendingLiveItem;
+                    const slide = item.slides?.[slideIndex || 0];
+
+                    if (slide) {
+                        const isLiveFeed = item.type === 'live_feed';
+                        const isMedia = item.type === 'media';
+
+                        // Use correct content payload based on type
+                        const payloadType = isLiveFeed ? 'live_feed' : 'media';
+                        const body = slide.content;
+
+                        broadcast({
+                            type: 'SHOW_CONTENT',
+                            payload: {
+                                type: payloadType,
+                                title: item.title,
+                                body: body,
+                                meta: isLiveFeed ? '[EXTERNAL]' : ((item as any).meta || {}),
+                                options: {
+                                    isAudioOnly: isAudioOnly,
+                                    scale: 1,
+                                    imageMode: 'contain'
+                                }
+                            }
+                        });
+
+                        // Set Active Item for Dashboard Preview
+                        setActiveItem({
+                            id: item.id,
+                            reference: item.title,
+                            text: body,
+                            version: 'MEDIA',
+                            book: isLiveFeed ? 'LIVE' : 'MEDIA',
+                            chapter: 0,
+                            verseNum: 0,
+                            timestamp: new Date(),
+                            options: {
+                                isAudioOnly: isAudioOnly
+                            }
+                        });
+
+                        // If it's a schedule item (not library), update live presentation state
+                        if (slideIndex !== undefined) {
+                            setLivePresentation({ item, slideIndex });
+                        }
+                    }
+
+                    setShowAudioPrompt(false);
+                    setPendingLiveItem(null);
+                }}
+            />
+        </main >
     );
 }

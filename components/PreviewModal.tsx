@@ -105,11 +105,11 @@ export default function PreviewModal({
             onClick={onClose}
         >
             <div
-                className="bg-zinc-900 border border-white/10 rounded-2xl w-full max-w-4xl max-h-[85vh] overflow-hidden flex flex-col shadow-2xl animate-in zoom-in-95 fade-in duration-200"
+                className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-white/10 rounded-2xl w-full max-w-4xl max-h-[85vh] overflow-hidden flex flex-col shadow-2xl animate-in zoom-in-95 fade-in duration-200"
                 onClick={e => e.stopPropagation()}
             >
                 {/* Header */}
-                <div className="flex items-center justify-between p-4 border-b border-white/5">
+                <div className="flex items-center justify-between p-4 border-b border-zinc-200 dark:border-white/5">
                     <div className="flex items-center gap-3">
                         <div className={`w-10 h-10 rounded-lg flex items-center justify-center text-sm font-bold ${item.type === 'song' ? 'bg-purple-500/20 text-purple-400' :
                             item.type === 'media' ? 'bg-blue-500/20 text-blue-400' :
@@ -118,7 +118,7 @@ export default function PreviewModal({
                             {item.type === 'song' ? '♪' : item.type === 'media' ? '◼' : '✝'}
                         </div>
                         <div>
-                            <h2 className="text-lg font-bold text-white">{item.title}</h2>
+                            <h2 className="text-lg font-bold text-zinc-900 dark:text-white">{item.title}</h2>
                             <p className="text-xs text-zinc-500 uppercase">{item.type} • {item.slides.length} slides</p>
                         </div>
                     </div>
@@ -160,7 +160,7 @@ export default function PreviewModal({
                             <ImageIcon size={14} />
                             Set Background
                         </button>
-                        <button onClick={onClose} className="p-2 hover:bg-white/5 rounded-lg text-zinc-400 hover:text-white">
+                        <button onClick={onClose} className="p-2 hover:bg-zinc-100 dark:hover:bg-white/5 rounded-lg text-zinc-400 hover:text-zinc-900 dark:hover:text-white">
                             <X size={20} />
                         </button>
                     </div>
@@ -170,7 +170,7 @@ export default function PreviewModal({
                 <div className="flex-1 flex overflow-hidden">
                     {/* Slide Thumbnails (Left Sidebar) */}
                     {!isImage && item.slides.length > 1 && (
-                        <div className="w-32 border-r border-white/5 overflow-y-auto p-2 space-y-2 bg-zinc-950/50">
+                        <div className="w-32 border-r border-zinc-200 dark:border-white/5 overflow-y-auto p-2 space-y-2 bg-zinc-100 dark:bg-zinc-950/50">
                             {item.slides.map((slide, idx) => (
                                 <div
                                     key={slide.id}
@@ -187,7 +187,7 @@ export default function PreviewModal({
 
                                     {/* Thumbnail */}
                                     <div
-                                        className="aspect-video bg-zinc-900 p-2 flex items-center justify-center"
+                                        className="aspect-video bg-white dark:bg-zinc-900 p-2 flex items-center justify-center"
                                         style={{
                                             backgroundImage: item.meta?.background ? `url(${item.meta.background})` : undefined,
                                             backgroundSize: 'cover',
@@ -200,7 +200,7 @@ export default function PreviewModal({
                                     </div>
 
                                     {/* Label */}
-                                    <div className="text-[9px] text-zinc-500 text-center py-1 bg-zinc-900 truncate px-1">
+                                    <div className="text-[9px] text-zinc-500 text-center py-1 bg-zinc-100 dark:bg-zinc-900 truncate px-1">
                                         {slide.label}
                                     </div>
                                 </div>
@@ -295,10 +295,10 @@ export default function PreviewModal({
                 </div>
 
                 {/* Footer Actions */}
-                <div className="p-4 border-t border-white/5 flex justify-between items-center bg-zinc-950/50">
+                <div className="p-4 border-t border-zinc-200 dark:border-white/5 flex justify-between items-center bg-zinc-100 dark:bg-zinc-950/50">
                     <button
                         onClick={onClose}
-                        className="px-4 py-2 text-zinc-400 hover:text-white text-sm"
+                        className="px-4 py-2 text-zinc-500 hover:text-zinc-900 dark:hover:text-white text-sm"
                     >
                         Close
                     </button>
@@ -318,10 +318,10 @@ export default function PreviewModal({
                     onClick={() => setShowBackgroundPicker(false)}
                 >
                     <div
-                        className="bg-zinc-900 border border-white/10 rounded-xl p-6 w-96"
+                        className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-white/10 rounded-xl p-6 w-96"
                         onClick={e => e.stopPropagation()}
                     >
-                        <h3 className="text-lg font-bold text-white mb-4">Set Slide Background</h3>
+                        <h3 className="text-lg font-bold text-zinc-900 dark:text-white mb-4">Set Slide Background</h3>
                         <label className="flex flex-col items-center justify-center w-full h-40 border-2 border-dashed border-zinc-700 hover:border-indigo-500 rounded-xl cursor-pointer transition-colors">
                             <Upload size={32} className="text-zinc-500 mb-2" />
                             <span className="text-sm text-zinc-400">Click to upload image</span>

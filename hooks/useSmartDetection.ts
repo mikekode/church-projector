@@ -728,9 +728,26 @@ export function useSmartDetection(
 
             // Process scripture detections
             for (const s of data.scriptures || []) {
-                // Check confidence threshold
-                if (s.confidence < confidenceThreshold) {
-                    console.log(`[SmartDetect] Below threshold (${s.confidence}):`, s.book, s.chapter, s.verse);
+                // 1. Smart Anchor Weighting: Prioritize scriptures near current context
+                let finalConfidence = s.confidence;
+                if (chapterContextRef.current) {
+                    const [anchorBook, anchorChapterStr] = chapterContextRef.current.split(/ (\d+)$/);
+                    const anchorChapter = parseInt(anchorChapterStr);
+
+                    // Boost if book matches
+                    if (s.book.toLowerCase() === anchorBook.toLowerCase()) {
+                        finalConfidence += 15; // Significant boost for same book
+
+                        // Extra boost if chapter is close (within 2 chapters)
+                        if (Math.abs(s.chapter - anchorChapter) <= 2) {
+                            finalConfidence += 10;
+                        }
+                    }
+                }
+
+                // Check confidence threshold (using the boosted confidence)
+                if (finalConfidence < confidenceThreshold) {
+                    console.log(`[SmartDetect] Below threshold (${finalConfidence}):`, s.book, s.chapter, s.verse);
                     continue;
                 }
 

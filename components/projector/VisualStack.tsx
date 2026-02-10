@@ -2,14 +2,18 @@
 
 import { useEffect, useState } from 'react';
 
+import { ProjectorTheme } from '@/utils/themes';
+
 interface VisualStackProps {
     background?: string | null; // URL to video or image
+    theme?: ProjectorTheme | null;
     content: React.ReactNode;
     overlay?: React.ReactNode;  // Props layer (Corner logo, etc)
     alert?: string | null;      // Alert message
+    fullBleed?: boolean;        // If true, ignore padding (for edge-to-edge media)
 }
 
-export default function VisualStack({ background, content, overlay, alert }: VisualStackProps) {
+export default function VisualStack({ background, theme, content, overlay, alert, fullBleed }: VisualStackProps) {
     const [activeBg, setActiveBg] = useState<string | null>(null);
     const [isVisible, setIsVisible] = useState(false);
 
@@ -37,13 +41,15 @@ export default function VisualStack({ background, content, overlay, alert }: Vis
                             autoPlay
                             loop
                             muted
-                            className="w-full h-full object-cover opacity-60"
+                            className="w-full h-full object-cover"
+                            style={{ opacity: theme?.background?.brightness ?? 0.6 }}
                         />
                     ) : (activeBg.startsWith('/') || activeBg.startsWith('http') || activeBg.startsWith('data:')) ? (
                         <img
                             src={activeBg}
                             alt="bg"
-                            className="w-full h-full object-cover opacity-60"
+                            className="w-full h-full object-cover"
+                            style={{ opacity: theme?.background?.brightness ?? 0.6 }}
                         />
                     ) : (
                         <div className="w-full h-full opacity-100" style={{ background: activeBg }} />
@@ -61,7 +67,10 @@ export default function VisualStack({ background, content, overlay, alert }: Vis
             </div>
 
             {/* LAYER 2: CONTENT (Z-20) */}
-            <div className="absolute inset-0 z-20 flex flex-col items-center justify-center p-20 transition-all duration-500">
+            <div
+                className="absolute inset-0 z-20 flex flex-col items-center justify-center transition-all duration-500"
+                style={{ padding: fullBleed ? 0 : `${theme?.layout?.contentPadding ?? 80}px` }}
+            >
                 {content}
             </div>
 

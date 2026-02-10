@@ -16,8 +16,8 @@ const SECTION_TEMPLATES = [
     { label: 'Verse 3', color: 'bg-blue-500/20 text-blue-400 border-blue-500/30' },
     { label: 'Chorus', color: 'bg-indigo-500/20 text-indigo-400 border-indigo-500/30' },
     { label: 'Bridge', color: 'bg-purple-500/20 text-purple-400 border-purple-500/30' },
-    { label: 'Intro', color: 'bg-zinc-800 text-zinc-400 border-zinc-700' },
-    { label: 'Outro', color: 'bg-zinc-800 text-zinc-400 border-zinc-700' },
+    { label: 'Intro', color: 'bg-zinc-200 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400 border-zinc-700' },
+    { label: 'Outro', color: 'bg-zinc-200 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400 border-zinc-700' },
     { label: 'Pre-Chorus', color: 'bg-pink-500/20 text-pink-400 border-pink-500/30' },
 ];
 
@@ -103,14 +103,14 @@ export default function AdvancedSongEditor({ resource, onSave, onCancel }: Advan
     };
 
     return (
-        <div className="flex flex-col h-full bg-zinc-900 text-zinc-300">
+        <div className="flex flex-col h-full bg-zinc-50 dark:bg-zinc-900 text-zinc-900 dark:text-zinc-300">
 
             {/* Toolbar Header */}
-            <div className="flex items-center justify-between p-4 border-b border-white/5 bg-zinc-950/50">
+            <div className="flex items-center justify-between p-4 border-b border-zinc-200 dark:border-white/5 bg-white dark:bg-zinc-950/50">
                 <div className="flex items-center gap-6 flex-1">
                     <button
                         onClick={onCancel}
-                        className="flex items-center gap-2 px-3 py-2 hover:bg-white/5 rounded-xl transition-colors group text-zinc-500 hover:text-white"
+                        className="flex items-center gap-2 px-3 py-2 hover:bg-white/5 rounded-xl transition-colors group text-zinc-500 hover:text-zinc-900 dark:text-white"
                         title="Back to Dashboard"
                     >
                         <ArrowLeft size={20} />
@@ -122,7 +122,7 @@ export default function AdvancedSongEditor({ resource, onSave, onCancel }: Advan
                             type="text"
                             value={title}
                             onChange={(e) => setTitle(e.target.value)}
-                            className="bg-transparent text-lg font-bold text-white focus:outline-none focus:border-b border-indigo-500/50 w-full"
+                            className="bg-transparent text-lg font-bold text-zinc-900 dark:text-white focus:outline-none focus:border-b border-indigo-500/50 w-full"
                             placeholder="Song Title"
                         />
                         <div className="flex items-center gap-2 text-zinc-500">
@@ -138,11 +138,11 @@ export default function AdvancedSongEditor({ resource, onSave, onCancel }: Advan
                     </div>
 
                     {/* Formatting Controls */}
-                    <div className="flex items-center gap-1 px-4 border-l border-r border-white/5">
+                    <div className="flex items-center gap-1 px-4 border-l border-r border-zinc-200 dark:border-white/5">
                         <button
                             onMouseDown={(e) => e.preventDefault()}
                             onClick={() => applyFormat('bold')}
-                            className="p-2 hover:bg-zinc-800 rounded-lg text-zinc-400 hover:text-white transition-colors"
+                            className="p-2 hover:bg-zinc-200 dark:hover:bg-zinc-800 rounded-lg text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white transition-colors"
                             title="Bold"
                         >
                             <Bold size={18} />
@@ -150,12 +150,12 @@ export default function AdvancedSongEditor({ resource, onSave, onCancel }: Advan
                         <button
                             onMouseDown={(e) => e.preventDefault()}
                             onClick={() => applyFormat('italic')}
-                            className="p-2 hover:bg-zinc-800 rounded-lg text-zinc-400 hover:text-white transition-colors"
+                            className="p-2 hover:bg-zinc-200 dark:hover:bg-zinc-800 rounded-lg text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white transition-colors"
                             title="Italic"
                         >
                             <Italic size={18} />
                         </button>
-                        <div className="w-px h-6 bg-zinc-800 mx-2" />
+                        <div className="w-px h-6 bg-zinc-200 dark:bg-zinc-800 mx-2" />
                         <div className="flex items-center gap-2 group relative">
                             <Palette size={16} className="text-zinc-500" />
                             <input
@@ -187,10 +187,10 @@ export default function AdvancedSongEditor({ resource, onSave, onCancel }: Advan
                 </div>
 
                 <div className="flex items-center gap-3">
-                    <button onClick={handleSave} className="flex items-center gap-2 px-6 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-bold rounded-xl shadow-lg shadow-indigo-500/20 transition-all">
+                    <button onClick={handleSave} className="flex items-center gap-2 px-6 py-2 bg-indigo-600 hover:bg-indigo-500 text-zinc-900 dark:text-white text-sm font-bold rounded-xl shadow-lg shadow-indigo-500/20 transition-all">
                         <Save size={16} /> SAVE SONG
                     </button>
-                    <button onClick={onCancel} className="p-2 hover:bg-white/10 rounded-lg transition-colors border border-white/5" title="Discard Changes">
+                    <button onClick={onCancel} className="p-2 hover:bg-white/10 rounded-lg transition-colors border border-zinc-200 dark:border-white/5" title="Discard Changes">
                         <X size={20} className="text-zinc-500 hover:text-red-400" />
                     </button>
                 </div>
@@ -199,20 +199,20 @@ export default function AdvancedSongEditor({ resource, onSave, onCancel }: Advan
             {/* Main Editor Area */}
             <div className="flex-1 flex overflow-hidden">
                 {/* Left: Slide Cards List */}
-                <div className="w-1/2 overflow-y-auto p-4 space-y-4 bg-black/20 border-r border-white/5 custom-scrollbar">
+                <div className="w-1/2 overflow-y-auto p-4 space-y-4 bg-zinc-100 dark:bg-black/20 border-r border-zinc-200 dark:border-white/5 custom-scrollbar">
                     {slides.map((slide, index) => (
                         <div
                             key={slide.id}
                             onClick={() => setActiveSlideIndex(index)}
                             className={`group border rounded-2xl overflow-hidden transition-all duration-300 relative ${activeSlideIndex === index
                                 ? 'border-indigo-500 ring-2 ring-indigo-500/20 bg-indigo-500/5'
-                                : 'border-white/5 bg-zinc-900/50 hover:border-white/20'
+                                : 'border-zinc-200 dark:border-white/5 bg-zinc-900/50 hover:border-white/20'
                                 }`}
                         >
                             {/* Slide Header */}
-                            <div className="flex items-center justify-between p-3 border-b border-white/5 bg-black/20">
+                            <div className="flex items-center justify-between p-3 border-b border-zinc-200 dark:border-white/5 bg-zinc-100 dark:bg-black/20">
                                 <div className="flex items-center gap-3">
-                                    <div className="w-7 h-7 rounded-xl bg-zinc-800 flex items-center justify-center text-[11px] font-black text-zinc-500">
+                                    <div className="w-7 h-7 rounded-xl bg-zinc-200 dark:bg-zinc-800 flex items-center justify-center text-[11px] font-black text-zinc-500">
                                         {index + 1}
                                     </div>
                                     <input
@@ -251,7 +251,7 @@ export default function AdvancedSongEditor({ resource, onSave, onCancel }: Advan
                                     onBlur={(e) => updateSlideContent(index, e.currentTarget.innerHTML)}
                                     // Update state on input to drive live preview, relying on ref guard to prevent cursor jumps
                                     onInput={(e) => updateSlideContent(index, e.currentTarget.innerHTML)}
-                                    className="min-h-[120px] text-xl leading-relaxed text-white focus:outline-none whitespace-pre-wrap"
+                                    className="min-h-[120px] text-xl leading-relaxed text-zinc-900 dark:text-white focus:outline-none whitespace-pre-wrap"
                                 />
                             </div>
 
@@ -265,7 +265,7 @@ export default function AdvancedSongEditor({ resource, onSave, onCancel }: Advan
 
                     <button
                         onClick={handleAddSlide}
-                        className="w-full py-6 border-2 border-dashed border-white/5 hover:border-indigo-500/30 rounded-2xl flex flex-col items-center justify-center gap-2 text-zinc-500 hover:text-indigo-400 hover:bg-indigo-500/5 transition-all group"
+                        className="w-full py-6 border-2 border-dashed border-zinc-200 dark:border-white/5 hover:border-indigo-500/30 rounded-2xl flex flex-col items-center justify-center gap-2 text-zinc-500 hover:text-indigo-400 hover:bg-indigo-500/5 transition-all group"
                     >
                         <Plus size={24} className="group-hover:scale-110 transition-transform" />
                         <span className="text-[10px] font-black uppercase tracking-[0.3em]">Insert New Slide Here</span>
@@ -279,7 +279,7 @@ export default function AdvancedSongEditor({ resource, onSave, onCancel }: Advan
                     </div>
 
                     <div className="w-full max-w-[560px] aspect-video bg-[#0a0a0a] rounded-3xl shadow-[0_32px_64px_-16px_rgba(0,0,0,0.8)] border border-white/10 flex flex-col relative z-10 overflow-hidden ring-1 ring-white/5">
-                        <header className="p-4 border-b border-white/5 bg-black/60 flex justify-between items-center backdrop-blur-md">
+                        <header className="p-4 border-b border-zinc-200 dark:border-white/5 bg-black/60 flex justify-between items-center backdrop-blur-md">
                             <div className="flex gap-2">
                                 <div className="w-3 h-3 rounded-full bg-red-500/50" />
                                 <div className="w-3 h-3 rounded-full bg-yellow-500/50" />
@@ -303,12 +303,12 @@ export default function AdvancedSongEditor({ resource, onSave, onCancel }: Advan
                             />
                         </div>
 
-                        <footer className="p-4 border-t border-white/5 bg-black/60 flex justify-center gap-6 backdrop-blur-md">
+                        <footer className="p-4 border-t border-zinc-200 dark:border-white/5 bg-black/60 flex justify-center gap-6 backdrop-blur-md">
                             <div className="flex gap-2">
                                 {slides.map((_, i) => (
                                     <div
                                         key={i}
-                                        className={`w-2 h-2 rounded-full transition-all duration-500 ${i === activeSlideIndex ? 'bg-indigo-500 w-8' : 'bg-zinc-800'}`}
+                                        className={`w-2 h-2 rounded-full transition-all duration-500 ${i === activeSlideIndex ? 'bg-indigo-500 w-8' : 'bg-zinc-200 dark:bg-zinc-800'}`}
                                     />
                                 ))}
                             </div>
@@ -316,7 +316,7 @@ export default function AdvancedSongEditor({ resource, onSave, onCancel }: Advan
                     </div>
 
                     <div className="mt-12 flex flex-col items-center gap-4 animate-in fade-in slide-in-from-bottom-4 duration-1000">
-                        <p className="text-[11px] text-zinc-500 font-bold uppercase tracking-[0.3em] text-center max-w-xs leading-loose bg-white/5 px-6 py-3 rounded-2xl border border-white/5">
+                        <p className="text-[11px] text-zinc-500 font-bold uppercase tracking-[0.3em] text-center max-w-xs leading-loose bg-white/5 px-6 py-3 rounded-2xl border border-zinc-200 dark:border-white/5">
                             Real-time Projection Sync
                         </p>
                         <div className="flex items-center gap-2 text-[10px] text-zinc-600 font-medium italic">
