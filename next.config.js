@@ -15,12 +15,12 @@ module.exports = {
         return [
             {
                 source: '/download/windows',
-                destination: 'https://github.com/mikekode/church-projector/releases/download/v2.1.23/Creenly.Setup.2.1.23.exe',
+                destination: 'https://github.com/mikekode/church-projector/releases/download/v2.1.24/Creenly.Setup.2.1.24.exe',
                 permanent: false,
             },
             {
                 source: '/download/mac',
-                destination: 'https://github.com/mikekode/church-projector/releases/download/v2.1.23/Creenly-2.1.23-arm64.dmg',
+                destination: 'https://github.com/mikekode/church-projector/releases/download/v2.1.24/Creenly-2.1.24-arm64.dmg',
                 permanent: false,
             },
         ]
