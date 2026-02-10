@@ -128,7 +128,7 @@ function SortableScheduleItem({
                 )}
 
                 {/* Type Badge (Tiny) */}
-                <div className="absolute bottom-0 right-0 px-1 py-0.5 bg-black/60 rounded-tl text-[6px] font-bold text-zinc-600 dark:text-zinc-300 uppercase">
+                <div className="absolute bottom-0 right-0 px-1 py-0.5 bg-black/60 rounded-tl text-[6px] font-bold text-zinc-300 uppercase">
                     {item.type.slice(0, 3)}
                 </div>
             </div>
