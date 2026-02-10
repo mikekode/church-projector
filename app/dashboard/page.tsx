@@ -1632,7 +1632,7 @@ export default function DashboardPage() {
                     </section>
 
                     {/* RIGHT: LIVE PREVIEW (ALWAYS DARK) */}
-                    <section className="flex-1 flex flex-col gap-4 min-h-0 min-w-[200px] shrink transition-all duration-300">
+                    <section className="flex-1 flex flex-col gap-4 min-h-0 min-w-[200px] shrink transition-all duration-300 relative">
                         <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-white/5 rounded-2xl flex-1 flex flex-col min-h-0 relative shadow-sm dark:shadow-none">
                             <header className="px-3 py-2 border-b border-zinc-200 dark:border-white/5 flex justify-between items-center bg-zinc-50 dark:bg-zinc-950 rounded-t-2xl shrink-0 overflow-visible">
                                 <h3 className="text-xs font-bold text-green-500 uppercase tracking-wider flex items-center gap-2 shrink-0 whitespace-nowrap mr-4">
@@ -1906,14 +1906,14 @@ export default function DashboardPage() {
 
                         {/* Verse Count Circles - Below preview box, only for scriptures */}
                         {activeItem && activeItem.version !== 'MEDIA' && activeItem.version !== 'SONG' && !livePresentation && (
-                            <div className="flex justify-center gap-2 mt-4">
+                            <div className="absolute -bottom-12 left-0 right-0 flex justify-center gap-2 z-10">
                                 {[1, 2, 3].map((num) => (
                                     <button
                                         key={num}
                                         onClick={() => setVerseCount(num as 1 | 2 | 3)}
-                                        className={`w-8 h-8 rounded-full text-xs font-bold transition-all ${verseCount === num
-                                            ? 'bg-indigo-600 text-white'
-                                            : 'bg-zinc-200 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-300 dark:hover:bg-zinc-700'
+                                        className={`w-8 h-8 rounded-full text-xs font-bold transition-all shadow-lg ring-1 ring-black/5 dark:ring-white/10 ${verseCount === num
+                                            ? 'bg-indigo-600 text-white transform scale-110'
+                                            : 'bg-white dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-700'
                                             }`}
                                         title={`Show ${num} verse${num > 1 ? 's' : ''}`}
                                     >
@@ -1959,7 +1959,7 @@ export default function DashboardPage() {
 
                                 const meta = (item as any).meta || {};
 
-                                // Handle media items directly if not intercepted above
+                                // Handle Media/Image directly if not intercepted above
                                 if (item.type === 'media') {
                                     broadcast({
                                         type: 'SHOW_CONTENT',
@@ -1986,6 +1986,35 @@ export default function DashboardPage() {
                                     return;
                                 }
 
+                                // Handle Scripture Items
+                                if (item.type === 'scripture') {
+                                    // Parse "Book Chapter:Verse" from title
+                                    // Default fallback
+                                    let book = item.title.split(' ')[0];
+                                    let chapter = 1;
+                                    let verse = 1;
+
+                                    // Try robust regex match "1 John 1:9" or "John 3:16"
+                                    const match = item.title.match(/(.+) (\d+):(\d+)/);
+                                    if (match) {
+                                        book = match[1];
+                                        chapter = parseInt(match[2]);
+                                        verse = parseInt(match[3]);
+                                    }
+
+                                    goLive({
+                                        id: item.id,
+                                        reference: item.title,
+                                        text: slide.content,
+                                        version: item.meta?.version || 'KJV',
+                                        book: book,
+                                        chapter: chapter,
+                                        verseNum: verse,
+                                        timestamp: new Date()
+                                    });
+                                    return;
+                                }
+
                                 // Fallback for songs and other existing types
                                 goLive({
                                     id: item.id,
@@ -2006,10 +2035,10 @@ export default function DashboardPage() {
                 {/* Restore Library Trigger (Floating at bottom when closed) */}
                 {
                     !isLibraryOpen && (
-                        <div className="absolute bottom-0 left-0 right-0 h-20 flex items-center justify-center z-[70] animate-in slide-in-from-bottom-5 duration-300">
+                        <div className="absolute bottom-0 left-0 right-0 h-20 flex items-center justify-center z-[70] animate-in slide-in-from-bottom-5 duration-300 pointer-events-none">
                             <button
                                 onClick={() => setIsLibraryOpen(true)}
-                                className="bg-indigo-600 dark:bg-zinc-900 border border-indigo-500 dark:border-white/10 text-white px-6 py-2 rounded-full shadow-2xl hover:bg-indigo-500 dark:hover:bg-zinc-800 transition-all flex items-center gap-2 group font-bold text-xs"
+                                className="bg-indigo-600 dark:bg-zinc-900 border border-indigo-500 dark:border-white/10 text-white px-6 py-2 rounded-full shadow-2xl hover:bg-indigo-500 dark:hover:bg-zinc-800 transition-all flex items-center gap-2 group font-bold text-xs pointer-events-auto"
                             >
                                 <Library size={14} className="group-hover:text-indigo-400" />
                                 RESOURCE LIBRARY
