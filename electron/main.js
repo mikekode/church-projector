@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, Menu, dialog, shell, desktopCapturer } = require('electron');
+const { app, BrowserWindow, ipcMain, Menu, dialog, shell, desktopCapturer, session, systemPreferences } = require('electron');
 // electron-updater loaded lazily after app ready to avoid getVersion() crash
 let autoUpdater = null;
 const path = require('path');
@@ -1063,6 +1063,27 @@ app.on('ready', async () => {
     // Initialize semantic Bible search
     initOpenAI();
     loadBibleEmbeddings();
+
+    // macOS microphone permission handling
+    session.defaultSession.setPermissionRequestHandler((webContents, permission, callback) => {
+        if (permission === 'media') {
+            callback(true);
+        } else {
+            callback(true);
+        }
+    });
+
+    session.defaultSession.setPermissionCheckHandler((webContents, permission) => {
+        if (permission === 'media') return true;
+        return true;
+    });
+
+    // Request microphone access on macOS
+    if (process.platform === 'darwin') {
+        systemPreferences.askForMediaAccess('microphone').then(granted => {
+            console.log('[Audio] Microphone access:', granted ? 'granted' : 'denied');
+        });
+    }
 
     createWindow();
     if (app.isPackaged) {
