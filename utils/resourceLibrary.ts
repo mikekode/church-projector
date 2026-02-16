@@ -69,6 +69,35 @@ export async function saveResource(item: ResourceItem): Promise<void> {
     }
 }
 
+export async function saveResourcesBatch(
+    items: ResourceItem[],
+    onProgress?: (saved: number, total: number) => void
+): Promise<void> {
+    if (typeof window === 'undefined' || items.length === 0) return;
+
+    const BATCH_SIZE = 100;
+    const total = items.length;
+
+    for (let i = 0; i < total; i += BATCH_SIZE) {
+        const batch = items.slice(i, i + BATCH_SIZE);
+        const db = await openDB();
+        const tx = db.transaction(STORE_NAME, 'readwrite');
+        const store = tx.objectStore(STORE_NAME);
+
+        for (const item of batch) {
+            store.put(item);
+        }
+
+        await new Promise<void>((resolve, reject) => {
+            tx.oncomplete = () => resolve();
+            tx.onerror = () => reject(tx.error);
+        });
+
+        onProgress?.(Math.min(i + batch.length, total), total);
+        await new Promise(resolve => setTimeout(resolve, 0));
+    }
+}
+
 export async function getResources(): Promise<ResourceItem[]> {
     if (typeof window === 'undefined') return [];
     try {
@@ -167,6 +196,7 @@ export interface ProjectorTheme {
         showVerseNumbers: boolean;
         referenceColor?: string;
         versionColor?: string;
+        versionScale?: number;
         verseNumberColor?: string;
         verseNumberScale?: number;
         contentPadding?: number;

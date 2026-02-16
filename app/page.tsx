@@ -131,6 +131,7 @@ export default function Home() {
                                     {[
                                         { f: "AI Voice Tracking", a: true, b: false, c: false },
                                         { f: "Zero-Prep Scripture Search", a: true, b: "Manual", c: "Laggy" },
+                                        { f: "Import EasyWorship Songs", a: "1-Click", b: "N/A", c: false },
                                         { f: "Learning Curve", a: "Minutes", b: "Weeks", c: "Days" },
                                         { f: "Volunteer Satisfaction", a: "High", b: "Stressed", c: "Okay" },
                                         { f: "Monthly Cost", a: "From $15", b: "$40+", c: "$20+" },

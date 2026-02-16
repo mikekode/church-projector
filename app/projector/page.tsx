@@ -7,6 +7,7 @@ import { ProjectorTheme, DEFAULT_THEMES } from '@/utils/themes';
 import { useLicense } from '@/hooks/useLicense';
 import DemoWatermark from '@/components/DemoWatermark';
 import LiveFeedStream from '@/components/projector/LiveFeedStream';
+import AnnouncementTicker from '@/components/AnnouncementTicker';
 
 /**
  * Sanitize and render formatted text (allows only safe tags: b, i, span with style)
@@ -112,6 +113,7 @@ export default function ProjectorPage() {
     const [activeBackground, setActiveBackground] = useState<string | null>(null);
     const [activeTheme, setActiveTheme] = useState<ProjectorTheme>(DEFAULT_THEMES[0]);
     const [activeAlert, setActiveAlert] = useState<string | null>(null);
+    const [announcement, setAnnouncement] = useState({ text: '', isActive: false, bgColor: '#ef4444', textColor: '#ffffff', speed: 20 });
 
     // Video References
     const videoRef = useRef<HTMLVideoElement>(null);
@@ -169,6 +171,9 @@ export default function ProjectorPage() {
         else if (msg.type === 'ALERT') {
             setActiveAlert(msg.payload.text);
             setTimeout(() => setActiveAlert(null), msg.payload.duration || 5000);
+        }
+        else if (msg.type === 'UPDATE_ANNOUNCEMENT') {
+            setAnnouncement(msg.payload);
         }
         else if (msg.type === 'MEDIA_ACTION') {
             const { action, value } = msg.payload;
@@ -329,7 +334,10 @@ export default function ProjectorPage() {
         const refScale = layout.referenceScale || 1;
         const verseNumScale = layout.verseNumberScale || 0.5;
 
-        const ReferenceComponent = (activeContent.title || activeContent.meta) ? (
+        // User requested: Hide titles for songs on live output
+        const shouldShowTitle = activeContent.type !== 'song';
+
+        const ReferenceComponent = (shouldShowTitle && (activeContent.title || activeContent.meta)) ? (
             <div className="opacity-90 w-full mb-8 relative z-20" style={{
                 textAlign: activeTheme.styles.textAlign,
                 order: layout.referencePosition === 'top' ? -1 : 1,
@@ -343,7 +351,7 @@ export default function ProjectorPage() {
                     lineHeight: 1.1
                 }}>{activeContent.title}</h2>
                 {activeContent.meta && (
-                    <p className="text-sm opacity-70" style={{ color: layout.versionColor || activeTheme.styles.color }}>
+                    <p className="opacity-70" style={{ color: layout.versionColor || activeTheme.styles.color, fontSize: `${0.35 * (layout.versionScale || 0.8) * refScale}em`, lineHeight: 1.2 }}>
                         {activeContent.meta}
                     </p>
                 )}
@@ -446,9 +454,33 @@ export default function ProjectorPage() {
                 content={renderContent()}
                 alert={activeAlert}
                 fullBleed={activeContent?.type === 'media' || activeContent?.type === 'live_feed'}
+                style={{ height: announcement.isActive ? 'calc(100% - 5rem)' : '100%' }}
             />
             {/* Show watermark for demo/unlicensed users */}
             {isDemo && !loading && <DemoWatermark />}
+
+            {/* Scrolling Announcement Ticker */}
+            {(() => {
+                const baseFontSize = Number(activeTheme.styles.fontSize) || 48;
+                let fontScale = 1;
+
+                if (activeContent && (activeContent.type === 'verse' || activeContent.type === 'song')) {
+                    fontScale = calculateFontScale(activeContent.body, 1, activeTheme.layout?.textScale);
+                }
+
+                const currentFontSize = (baseFontSize * fontScale) * 1.25; // 25% larger than before
+
+                return (
+                    <AnnouncementTicker
+                        text={announcement.text}
+                        isActive={announcement.isActive}
+                        bgColor={announcement.bgColor}
+                        textColor={announcement.textColor}
+                        speed={announcement.speed}
+                        fontSize={currentFontSize}
+                    />
+                );
+            })()}
         </div>
     );
 }

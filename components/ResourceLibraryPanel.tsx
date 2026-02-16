@@ -6,9 +6,10 @@ import { getBibleBooks, getChapterVerseCount, lookupVerseAsync, SUPPORTED_VERSIO
 import { DEFAULT_THEMES, GOOGLE_FONTS, DEFAULT_LAYOUT } from '@/utils/themes';
 import { ScheduleItem } from '@/utils/scheduleManager';
 import { extractTextFromFile, parseLyrics, isCcliCopy, parseCcliCopy, parsePresentationFile } from '@/utils/lyricsParser';
-import { Search, Music, Monitor, FileText, Image as ImageIcon, Book, Plus, Play, Trash2, Folder, FolderPlus, X, Video, Check, Eye, ImagePlus, Bold, Italic, ChevronDown, Sun } from 'lucide-react';
+import { Search, Music, Monitor, FileText, Image as ImageIcon, Book, Plus, Play, Trash2, Folder, FolderPlus, X, Video, Check, Eye, ImagePlus, Bold, Italic, ChevronDown, Sun, Database } from 'lucide-react';
 import PreviewModal from './PreviewModal';
 import SongImportModal from './SongImportModal';
+import EasyWorshipImportModal from './EasyWorshipImportModal';
 import LiveFeedSelector from './LiveFeedSelector';
 import { MOTION_BACKGROUNDS } from '@/utils/motionBackgrounds';
 
@@ -67,6 +68,7 @@ export default function ResourceLibraryPanel({
     const [newCollectionName, setNewCollectionName] = useState('');
     const [previewItem, setPreviewItem] = useState<ScheduleItem | null>(null);
     const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+    const [isEWImportOpen, setIsEWImportOpen] = useState(false);
 
     // Online Search State (SongSelect-like)
     const [isOnlineMode, setIsOnlineMode] = useState(false);
@@ -199,12 +201,8 @@ export default function ResourceLibraryPanel({
                 lyricsContent = `Title: ${song.title} \nArtist: ${song.artist} \n\n(Lyrics could not be found automatically.\nPlease edit this song to paste lyrics here.)`;
             }
 
-            // Parse text into slides (simple paragraph split)
-            const slidesStr = lyricsContent.split(/\n\n+/).filter(s => s.trim());
-            const slides = slidesStr.map((txt, i) => ({
-                id: String(i + 1),
-                content: txt.trim()
-            }));
+            // Parse lyrics into slides using the smart parser (respects 6-line limit)
+            const slides = parseLyrics(lyricsContent);
 
             // Use Thumbnail as background?
             // song.thumbnail is usually small (60x60). Get bigger one?
@@ -520,6 +518,11 @@ export default function ResourceLibraryPanel({
         setResources(prev => [song, ...prev]);
         setIsImportModalOpen(false);
         setEditingResource(song);
+    };
+
+    const handleEWImportComplete = async (count: number) => {
+        setIsEWImportOpen(false);
+        await loadData();
     };
 
     const renderAddCard = () => (
@@ -1290,6 +1293,27 @@ export default function ResourceLibraryPanel({
                                         </div>
                                     </div>
 
+                                    <div className="space-y-2 mt-4">
+                                        <label className="text-xs font-bold text-zinc-500 uppercase">Version/Translation Size</label>
+                                        <input
+                                            type="range" min="0.3" max="2" step="0.1"
+                                            value={editingTheme.layout?.versionScale || 0.8}
+                                            onChange={(e) => setEditingTheme({
+                                                ...editingTheme,
+                                                layout: {
+                                                    ...DEFAULT_LAYOUT,
+                                                    referenceColor: editingTheme.styles.color,
+                                                    versionColor: editingTheme.styles.color,
+                                                    verseNumberColor: editingTheme.styles.color,
+                                                    ...editingTheme.layout,
+                                                    versionScale: parseFloat(e.target.value)
+                                                }
+                                            })}
+                                            className="w-full accent-indigo-500 h-1.5"
+                                        />
+                                        <div className="text-[10px] text-zinc-500 text-right">{(editingTheme.layout?.versionScale || 0.8).toFixed(1)}x</div>
+                                    </div>
+
                                     <div className="grid grid-cols-2 gap-4">
                                         <div className="space-y-2">
                                             <label className="text-[10px] font-bold text-zinc-500 uppercase">Verse # Color</label>
@@ -1413,8 +1437,9 @@ export default function ResourceLibraryPanel({
                                                 </div>
                                                 <div style={{
                                                     color: editingTheme.layout?.versionColor || editingTheme.styles.color,
-                                                    fontSize: '0.4em',
-                                                    opacity: 0.7
+                                                    fontSize: `${0.35 * (editingTheme.layout?.versionScale || 0.8) * (editingTheme.layout?.referenceScale || 1.5)}em`,
+                                                    opacity: 0.7,
+                                                    lineHeight: 1.2
                                                 }}>
                                                     KJV
                                                 </div>
@@ -1527,12 +1552,22 @@ export default function ResourceLibraryPanel({
                         <FileText size={16} />
                     </button>
                     <button
-                        onClick={() => setIsCreateCollectionOpen(true)} // Fix: Previously this was opening the collection input logic?
+                        onClick={() => setIsCreateCollectionOpen(true)}
                         className="bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-600 dark:text-zinc-300 p-1.5 rounded-lg transition-colors mr-1"
                         title="New Collection"
                     >
                         <FolderPlus size={16} />
                     </button>
+                    {activeTab === 'song' && (
+                        <button
+                            onClick={() => setIsEWImportOpen(true)}
+                            className="flex items-center gap-1 bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-600 dark:text-zinc-300 px-2 py-1.5 rounded-lg transition-colors mr-1 text-[10px] font-bold"
+                            title="Import from EasyWorship"
+                        >
+                            <Database size={12} />
+                            EasyWorship
+                        </button>
+                    )}
                     <div className="w-px h-6 bg-zinc-200 dark:bg-white/10 mx-1" />
                     <div className="w-px h-6 bg-zinc-200 dark:bg-white/10 mx-1" />
                     <input
@@ -1755,6 +1790,11 @@ export default function ResourceLibraryPanel({
                     }}
                 />
             )}
+            <EasyWorshipImportModal
+                isOpen={isEWImportOpen}
+                onClose={() => setIsEWImportOpen(false)}
+                onImportComplete={handleEWImportComplete}
+            />
         </div>
     );
 }

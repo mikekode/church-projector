@@ -29,6 +29,7 @@ export interface ProjectorTheme {
         showVerseNumbers: boolean;
         referenceColor?: string;
         versionColor?: string;
+        versionScale?: number; // multiplier for version/translation label size
         verseNumberColor?: string;
         verseNumberScale?: number; // Default 0.5
         contentPadding?: number; // px
@@ -43,10 +44,11 @@ export const GOOGLE_FONTS = [
     "Nunito", "Titillium Web", "Rubik", "Mukta", "Work Sans"
 ];
 
-export const DEFAULT_LAYOUT = {
+export const DEFAULT_LAYOUT: NonNullable<ProjectorTheme['layout']> = {
     referencePosition: 'top' as const,
     referenceScale: 1.5,
     showVerseNumbers: true,
+    versionScale: 0.8,
     verseNumberScale: 0.5,
     contentPadding: 80,
     textScale: 1

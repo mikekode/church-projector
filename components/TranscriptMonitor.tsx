@@ -24,7 +24,7 @@ const VoiceWave = ({ level, active }: { level: number, active: boolean }) => {
         <div className="flex items-center gap-[3px] h-8 px-1">
             {sensitivities.map((sensitivity, i) => {
                 // More energetic: higher multiplier (5x), more responsive, min 0.15 when active
-                const scale = active ? Math.max(0.15, level * sensitivity * 5) : 0.05;
+                const scale = active ? Math.min(1, Math.max(0.15, level * sensitivity * 5)) : 0.05;
                 const baseHeight = 32; // Taller bars
 
                 const bgColor = 'bg-indigo-500 dark:bg-white';

@@ -1,6 +1,6 @@
 'use client';
 import Link from 'next/link';
-import { Check, X, ArrowRight, Monitor, Laptop, Mic, Zap, Shield } from 'lucide-react';
+import { Check, X, ArrowRight, Monitor, Laptop, Mic, Zap, Shield, Database } from 'lucide-react';
 
 export default function EasyWorshipAlternativePage() {
     return (
@@ -28,7 +28,7 @@ export default function EasyWorshipAlternativePage() {
                         The Smarter <span className="text-emerald-500">EasyWorship Alternative</span>
                     </h1>
                     <p className="text-xl text-zinc-400 max-w-3xl mx-auto mb-12 leading-relaxed">
-                        EasyWorship is easy, but <strong className="text-white">Creenly is smarter</strong>. Our AI listens to your pastor and projects Bible verses automatically. No more manual searching during sermons.
+                        EasyWorship is easy, but <strong className="text-white">Creenly is smarter</strong>. Our AI listens to your pastor and projects Bible verses automatically. Plus, <strong className="text-white">import your entire EasyWorship song library in just a few clicks</strong>—switching has never been easier.
                     </p>
                     <div className="flex flex-col sm:flex-row gap-4 justify-center">
                         <Link href="/#download-section" className="px-8 py-4 rounded-2xl bg-emerald-600 font-bold text-lg hover:bg-emerald-500 transition-all flex items-center justify-center gap-2">
@@ -58,6 +58,7 @@ export default function EasyWorshipAlternativePage() {
                                 {[
                                     { feature: 'AI Voice Recognition', creenly: true, easyworship: false },
                                     { feature: 'Auto Bible Verse Detection', creenly: true, easyworship: false },
+                                    { feature: 'Import EasyWorship Song Library', creenly: '1-Click', easyworship: 'N/A' },
                                     { feature: 'Monthly Price', creenly: '$15', easyworship: '$20+' },
                                     { feature: 'Mac Support', creenly: true, easyworship: false },
                                     { feature: 'Windows Support', creenly: true, easyworship: true },
@@ -93,7 +94,7 @@ export default function EasyWorshipAlternativePage() {
                 {/* Benefits */}
                 <section className="mb-24">
                     <h2 className="text-3xl font-black text-center mb-12">Why Creenly Beats EasyWorship</h2>
-                    <div className="grid md:grid-cols-3 gap-8">
+                    <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-8">
                         {[
                             {
                                 icon: <Mic size={28} />,
@@ -109,6 +110,11 @@ export default function EasyWorshipAlternativePage() {
                                 icon: <Zap size={28} />,
                                 title: 'Modern & Fast',
                                 desc: 'Built with modern technology, Creenly is faster, more stable, and has a cleaner interface than EasyWorship.'
+                            },
+                            {
+                                icon: <Database size={28} />,
+                                title: 'Import Your Songs',
+                                desc: 'Switching is effortless. Import your entire EasyWorship song library in just a few clicks—no manual re-entry required.'
                             },
                         ].map((item, i) => (
                             <div key={i} className="p-8 rounded-3xl bg-zinc-900/50 border border-white/5">
@@ -126,7 +132,7 @@ export default function EasyWorshipAlternativePage() {
                 <section className="text-center py-20 px-8 rounded-[40px] bg-gradient-to-b from-emerald-500/10 to-transparent border border-emerald-500/20">
                     <h2 className="text-4xl font-black mb-6">Upgrade from EasyWorship Today</h2>
                     <p className="text-zinc-400 mb-10 max-w-xl mx-auto">
-                        Experience the future of church presentation. AI-powered, cross-platform, and volunteer-friendly.
+                        Experience the future of church presentation. AI-powered, cross-platform, and volunteer-friendly. Bring your entire EasyWorship song library with you.
                     </p>
                     <Link href="/#download-section" className="inline-flex items-center gap-2 px-10 py-5 rounded-2xl bg-emerald-600 font-black text-lg hover:bg-emerald-500 transition-all">
                         Download Free <ArrowRight size={20} />

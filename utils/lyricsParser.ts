@@ -7,8 +7,8 @@ import JSZip from 'jszip';
  * based on natural breaks (double newlines, verse markers) and word limits.
  */
 
-const MAX_WORDS_PER_SLIDE = 25; // Updated to 25 per user request
-const MAX_LINES_PER_SLIDE = 4;
+export const MAX_WORDS_PER_SLIDE = 25; // Updated to 25 per user request
+export const MAX_LINES_PER_SLIDE = 6;
 
 export type LyricSlide = {
     id: string;
@@ -50,7 +50,7 @@ function detectSectionLabel(text: string): string | null {
 /**
  * Splits a block of text into slides based on word/line limits
  */
-function splitBlockIntoSlides(block: string, baseLabel: string): LyricSlide[] {
+export function splitBlockIntoSlides(block: string, baseLabel: string): LyricSlide[] {
     const lines = block.split('\n').filter(l => l.trim());
     const slides: LyricSlide[] = [];
 
@@ -209,7 +209,7 @@ export function parseLyrics(rawLyrics: string): LyricSlide[] {
         const content = contentLines.join('\n').trim();
         if (content) {
             // If content is very long, split it. Otherwise keep as one slide (CCLI blocks are usually good)
-            if (contentLines.length > MAX_LINES_PER_SLIDE + 2) {
+            if (contentLines.length > MAX_LINES_PER_SLIDE) {
                 const sectionSlides = splitBlockIntoSlides(content, label);
                 allSlides.push(...sectionSlides);
             } else {
@@ -222,8 +222,21 @@ export function parseLyrics(rawLyrics: string): LyricSlide[] {
         }
     }
 
+    // Enforce max lines: split any slide that still exceeds the limit
+    const enforced: LyricSlide[] = [];
+    for (const slide of allSlides) {
+        const lines = slide.content.split('\n').filter(l => l.trim());
+        if (lines.length > MAX_LINES_PER_SLIDE) {
+            // Re-split this slide
+            const subSlides = splitBlockIntoSlides(slide.content, slide.label);
+            enforced.push(...subSlides);
+        } else {
+            enforced.push(slide);
+        }
+    }
+
     // Re-number slides
-    return allSlides.map((slide, idx) => ({
+    return enforced.map((slide, idx) => ({
         ...slide,
         id: `slide-${idx + 1}-${Date.now()}`
     }));
@@ -371,11 +384,20 @@ async function extractSlidesFromPptx(file: File): Promise<LyricSlide[]> {
             }
 
             if (refinedText.trim()) {
-                slides.push({
-                    id: `slide-${slideFile.num}-${Date.now()}`,
-                    content: refinedText.trim(),
-                    label: `Slide ${slideFile.num}`
-                });
+                const content = refinedText.trim();
+                const lines = content.split('\n').filter(l => l.trim());
+
+                if (lines.length > MAX_LINES_PER_SLIDE) {
+                    // Split long PPTX slides into multiple Creenly slides
+                    const subSlides = splitBlockIntoSlides(content, `Slide ${slideFile.num}`);
+                    slides.push(...subSlides);
+                } else {
+                    slides.push({
+                        id: `slide-${slideFile.num}-${Date.now()}`,
+                        content: content,
+                        label: `Slide ${slideFile.num}`
+                    });
+                }
             }
         }
 

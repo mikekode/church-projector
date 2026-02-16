@@ -118,7 +118,7 @@ function findBookKey(input: string): string | null {
     const books = Object.keys(BOOK_MAP);
 
     // BLACKLIST: Common words that should never match a book via short abbrev
-    const RISKY_WORDS = ['is', 'am', 'so', 'at', 'on', 'by', 'to', 'if', 'it', 'the', 'was', 'as'];
+    const RISKY_WORDS = ['is', 'am', 'so', 'at', 'on', 'by', 'to', 'if', 'it', 'the', 'was', 'as', 'number', 'point', 'item', 'step', 'part', 'page'];
     if (RISKY_WORDS.includes(raw)) return null;
 
     let bestMatch = { key: null as string | null, score: 0 };
