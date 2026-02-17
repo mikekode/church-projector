@@ -65,15 +65,27 @@ export default function DeepgramRecognizer({ isListening, onTranscript, onInteri
             console.log("Starting Deepgram...");
 
             // 1. Get RAW microphone stream - let Deepgram's AI handle the noise separation
+            console.log("[STT] Requesting microphone access...");
+
+            // Timeout for getUserMedia (sometimes it hangs on permission prompts or locked hardware)
+            const mediaTimeout = setTimeout(() => {
+                console.warn("[STT] Microphone request timed out (5s). Hardware may be locked.");
+                setErrorMsg("Microphone request timed out. Check permissions or restart browser.");
+                setStatus("error");
+            }, 5000);
+
             const stream = await navigator.mediaDevices.getUserMedia({
                 audio: {
-                    echoCancellation: false, // Disable all browser processing for cleanest raw signal
-                    noiseSuppression: false,
+                    echoCancellation: true,
+                    noiseSuppression: true,
                     autoGainControl: false,
                     sampleRate: 16000,
                     channelCount: 1
                 }
             });
+
+            clearTimeout(mediaTimeout);
+            console.log("[STT] Microphone access granted ✓");
 
             // Bail out if cancelled during async wait (React StrictMode double-mount)
             if (cancelledRef.current) {
@@ -90,16 +102,28 @@ export default function DeepgramRecognizer({ isListening, onTranscript, onInteri
             let apiKey: string;
 
             try {
-                const tokenResponse = await fetch(`${API_PROXY_URL}/api/deepgram-token`);
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 3000); // 3s timeout
+
+                const tokenResponse = await fetch(`${API_PROXY_URL}/api/deepgram-token`, {
+                    signal: controller.signal
+                });
+
+                clearTimeout(timeoutId);
+
                 if (!tokenResponse.ok) {
                     throw new Error('Failed to fetch Deepgram token');
                 }
                 const tokenData = await tokenResponse.json();
                 apiKey = tokenData.token;
-            } catch (fetchError) {
-                console.warn("Could not fetch token from proxy, using fallback");
+            } catch (fetchError: any) {
+                console.warn("Could not fetch token from proxy (timeout or error), using fallbackKey if present");
                 // Fallback to env var for development
                 apiKey = process.env.NEXT_PUBLIC_DEEPGRAM_API_KEY || '';
+
+                if (!apiKey && fetchError.name === 'AbortError') {
+                    throw new Error("Connection timeout - internet may be too slow for Deepgram");
+                }
             }
 
             // Bail out if cancelled during token fetch
@@ -129,19 +153,30 @@ export default function DeepgramRecognizer({ isListening, onTranscript, onInteri
 
             // Deepgram Tuning for Fast Speech:
             // - filler_words=true: gracefully handles "um", "uh" without breaking regex chains
-            // - endpointing=500: waits slightly longer for fast speakers to finish a sentence
+            // - endpointing=1500: waits longer during musical swells/slow speech
             // - keywords: weighted biblical dictionary
             const wsUrl = `wss://api.deepgram.com/v1/listen?` +
                 `encoding=linear16&sample_rate=16000&channels=1&` +
                 `model=nova-2&language=en&` +
-                `interim_results=true&punctuate=true&smart_format=true&filler_words=true&endpointing=1000&` +
+                `interim_results=true&punctuate=true&smart_format=true&filler_words=true&endpointing=1500&` +
                 `keywords=${encodeURIComponent(weightedKeywords)}`;
 
-            console.log("Connecting to Deepgram...");
+            console.log("Connecting to Deepgram WebSocket...");
             const ws = new WebSocket(wsUrl, ["token", apiKey]);
             wsRef.current = ws;
 
+            // WebSocket Connection Timeout (Fast Fallback)
+            const wsTimeout = setTimeout(() => {
+                if (ws.readyState !== WebSocket.OPEN) {
+                    console.warn("Deepgram socket connection timed out! Falling back to offline...");
+                    ws.close();
+                    setErrorMsg("Connection timed out - switching to offline mode");
+                    setStatus("error");
+                }
+            }, 3000); // 3 seconds to establish socket
+
             ws.onopen = async () => {
+                clearTimeout(wsTimeout);
                 console.log("Deepgram WebSocket connected!");
                 setStatus("listening");
 
@@ -156,13 +191,29 @@ export default function DeepgramRecognizer({ isListening, onTranscript, onInteri
 
                 const source = audioContext.createMediaStreamSource(stream);
 
-                // 4. Add Dynamic Range Compressor (Smooths levels without AGC "pumping")
+                // 4. Voice Guard (Frequency Isolation Chain)
+                // Goal: Remove low-end (kick, bass, rumble) and high-end (cymbals, hiss)
+
+                // High-Pass Filter (Cut below 400Hz)
+                const highPass = audioContext.createBiquadFilter();
+                highPass.type = 'highpass';
+                highPass.frequency.setValueAtTime(400, audioContext.currentTime);
+                highPass.Q.setValueAtTime(1.0, audioContext.currentTime);
+
+                // Low-Pass Filter (Cut above 3500Hz)
+                const lowPass = audioContext.createBiquadFilter();
+                lowPass.type = 'lowpass';
+                lowPass.frequency.setValueAtTime(3500, audioContext.currentTime);
+                lowPass.Q.setValueAtTime(1.0, audioContext.currentTime);
+
+                // 5. Dynamic Range Compressor (Vocal Leveling)
+                // Aggressive settings to keep voice entry-level consistent despite music swells
                 const compressor = audioContext.createDynamicsCompressor();
-                compressor.threshold.setValueAtTime(-24, audioContext.currentTime);
-                compressor.knee.setValueAtTime(30, audioContext.currentTime);
-                compressor.ratio.setValueAtTime(12, audioContext.currentTime);
-                compressor.attack.setValueAtTime(0.003, audioContext.currentTime);
-                compressor.release.setValueAtTime(0.25, audioContext.currentTime);
+                compressor.threshold.setValueAtTime(-20, audioContext.currentTime);
+                compressor.knee.setValueAtTime(20, audioContext.currentTime);
+                compressor.ratio.setValueAtTime(16, audioContext.currentTime); // High ratio for leveling
+                compressor.attack.setValueAtTime(0.005, audioContext.currentTime);
+                compressor.release.setValueAtTime(0.15, audioContext.currentTime);
 
                 // Lower buffer size (1024) significantly reduces latency (64ms vs 256ms)
                 const processor = audioContext.createScriptProcessor(1024, 1, 1);
@@ -182,11 +233,13 @@ export default function DeepgramRecognizer({ isListening, onTranscript, onInteri
                         const level = Math.min(1, rms * 8);
 
                         // Optimization: Only update if change is significant (> 0.02)
-                        // SAFETY: Use nullish coalescing to avoid NaN comparison if _lastLevel is undefined
-                        const lastLevel = (processorRef.current as any)._lastLevel ?? 0;
-                        if (Math.abs(level - lastLevel) > 0.01) {
-                            (processorRef.current as any)._lastLevel = level;
-                            onVolumeRef.current?.(level);
+                        // SAFETY: Guard against processorRef being nulled during stopListening()
+                        if (processorRef.current) {
+                            const lastLevel = (processorRef.current as any)._lastLevel ?? 0;
+                            if (Math.abs(level - lastLevel) > 0.01) {
+                                (processorRef.current as any)._lastLevel = level;
+                                onVolumeRef.current?.(level);
+                            }
                         }
 
                         const pcmData = floatTo16BitPCM(inputData);
@@ -194,7 +247,9 @@ export default function DeepgramRecognizer({ isListening, onTranscript, onInteri
                     }
                 };
 
-                source.connect(compressor);
+                source.connect(highPass);
+                highPass.connect(lowPass);
+                lowPass.connect(compressor);
                 compressor.connect(processor);
                 processor.connect(audioContext.destination);
             };

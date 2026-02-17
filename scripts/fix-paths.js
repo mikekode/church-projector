@@ -2,6 +2,16 @@ const fs = require('fs');
 const path = require('path');
 
 const outDir = path.join(__dirname, '../out');
+const publicDir = path.join(__dirname, '../public');
+
+// Ensure critical assets are present in out/ (Next.js sometimes misses binaries in export)
+if (fs.existsSync(path.join(publicDir, 'sql-wasm.wasm'))) {
+    console.log('Ensuring sql-wasm.wasm is in out/...');
+    fs.copyFileSync(
+        path.join(publicDir, 'sql-wasm.wasm'),
+        path.join(outDir, 'sql-wasm.wasm')
+    );
+}
 
 function processFile(filePath) {
     let content = fs.readFileSync(filePath, 'utf-8');
@@ -20,11 +30,12 @@ function processFile(filePath) {
         '/favicon.ico',
         '/pastor-mike.png',
         '/sarah-creative.png',
-        '/manifest.json'
+        '/manifest.json',
+        '/sql-wasm.wasm'
     ];
 
     absolutePatterns.forEach(pattern => {
-        // Match both "pattern and 'pattern
+        // Match both ="pattern and ='pattern
         const escapedPattern = pattern.replace(/\./g, '\\.');
         const regexDouble = new RegExp(`="(${escapedPattern})`, 'g');
         const regexSingle = new RegExp(`='(${escapedPattern})`, 'g');
@@ -33,10 +44,14 @@ function processFile(filePath) {
         content = content.replace(regexSingle, `='${prefix}${pattern.substring(1)}`);
     });
 
-    // 2. Fix JS specific strings that don't have =
+    // 2. Fix JS specific strings that don't have = (like in fetch protocols)
     if (filePath.endsWith('.js')) {
         content = content.split('"/_next').join('"' + prefix + '_next');
         content = content.split("'/_next").join("'" + prefix + "_next");
+
+        // Also handle /sql-wasm.wasm in fetch('/sql-wasm.wasm')
+        content = content.split('"/sql-wasm.wasm').join('"' + prefix + 'sql-wasm.wasm');
+        content = content.split("'/sql-wasm.wasm").join("'" + prefix + "sql-wasm.wasm");
     }
 
     // 3. Robust fix for double slashes which often cause issues in packaged apps

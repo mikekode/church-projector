@@ -142,18 +142,23 @@ export default function NativeSpeechRecognizer({ isListening, onTranscript, onIn
             if (event.error === 'not-allowed') {
                 setErrorMsg("Microphone blocked. Allow access and reload.");
                 setStatus("error");
+                // Stop retrying — user must fix permissions
+                isListeningRef.current = false;
             } else if (event.error === 'no-speech') {
                 // Normal - user paused, just continue
             } else if (event.error === 'network') {
-                // This can happen with some recognition backends
-                setErrorMsg("Network issue - retrying...");
+                // Chrome's Web Speech API requires internet — it's cloud-based even in Electron
+                setErrorMsg("Voice recognition requires internet. Connect and restart.");
+                setStatus("error");
+                // Stop retrying to avoid infinite loop
+                isListeningRef.current = false;
             } else if (event.error === 'aborted') {
                 // User stopped - normal
             }
         };
 
         recognition.onend = () => {
-            // Auto-restart if we're still supposed to be listening
+            // Auto-restart if we're still supposed to be listening (and not in an error state)
             if (isListeningRef.current && recognitionRef.current) {
                 try {
                     recognitionRef.current.start();
@@ -220,7 +225,7 @@ export default function NativeSpeechRecognizer({ isListening, onTranscript, onIn
 
             <div className="flex flex-col">
                 <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">
-                    {status === 'listening' ? 'LIVE (Zero Lag)' : status === 'error' ? 'ERROR' : 'Mic Off'}
+                    {status === 'listening' ? 'LIVE' : status === 'error' ? 'ERROR' : 'Mic Off'}
                 </span>
                 {errorMsg && (
                     <span className="text-[9px] text-red-400 mt-0.5">{errorMsg}</span>

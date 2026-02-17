@@ -7,6 +7,7 @@ import { useLicense } from '@/hooks/useLicense';
 import DemoWatermark from '@/components/DemoWatermark';
 import { ProjectorTheme, DEFAULT_THEMES } from '@/utils/themes';
 import LiveFeedStream from '@/components/projector/LiveFeedStream';
+import AnnouncementTicker from '@/components/AnnouncementTicker';
 
 /**
  * Render formatted text with allowed HTML tags (b, i, font/span with color)
@@ -112,6 +113,7 @@ export default function StageDisplayPage() {
     const [showHint, setShowHint] = useState(true);
     const [isFullscreen, setIsFullscreen] = useState(false);
     const [activeTheme, setActiveTheme] = useState<ProjectorTheme>(DEFAULT_THEMES[0]);
+    const [announcement, setAnnouncement] = useState({ text: '', isActive: false, bgColor: '#ef4444', textColor: '#ffffff', speed: 20 });
 
     // Video and Layout References
     const videoRef = useRef<HTMLVideoElement>(null);
@@ -272,8 +274,9 @@ export default function StageDisplayPage() {
                     setElapsedTime(`${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`);
                 }
             }
+        } else if (message.type === 'UPDATE_ANNOUNCEMENT') {
+            setAnnouncement(message.payload);
         } else if (message.type === 'APPLY_THEME') {
-            console.log('[Stage] Applying new theme:', message.payload.name);
             setActiveTheme(message.payload);
         }
     });
@@ -523,8 +526,8 @@ export default function StageDisplayPage() {
                 style={{
                     paddingTop: activeTheme.layout?.contentPadding !== undefined ?
                         (content?.type === 'media' || content?.type === 'live_feed' ? `${activeTheme.layout.contentPadding}px` : `${Math.max(activeTheme.layout.contentPadding, 96)}px`) : '6rem',
-                    paddingBottom: activeTheme.layout?.contentPadding !== undefined ?
-                        (content?.type === 'media' || content?.type === 'live_feed' ? `${activeTheme.layout.contentPadding}px` : `${Math.max(activeTheme.layout.contentPadding, 80)}px`) : '5rem',
+                    paddingBottom: (activeTheme.layout?.contentPadding !== undefined ?
+                        (content?.type === 'media' || content?.type === 'live_feed' ? activeTheme.layout.contentPadding : Math.max(activeTheme.layout.contentPadding, 80)) : 80) + (announcement.isActive ? 120 : 0),
                     paddingLeft: activeTheme.layout?.contentPadding !== undefined ? `${activeTheme.layout.contentPadding}px` : '2rem',
                     paddingRight: activeTheme.layout?.contentPadding !== undefined ? `${activeTheme.layout.contentPadding}px` : '2rem',
                 }}
@@ -640,7 +643,7 @@ export default function StageDisplayPage() {
                                     fontSize: `${0.6 * (activeTheme.layout?.referenceScale || 1)}em`
                                 }}
                             >
-                                {content.title} • Slide {(content.slideIndex || 0) + 1}/{content.totalSlides || 1}
+                                {content.type === 'song' ? `Slide ${(content.slideIndex || 0) + 1}/${content.totalSlides || 1}` : `${content.title} • Slide ${(content.slideIndex || 0) + 1}/${content.totalSlides || 1}`}
                             </p>
                             <p
                                 className={`font-bold leading-tight transition-all duration-300`}
@@ -705,8 +708,30 @@ export default function StageDisplayPage() {
                 Double-click to toggle fullscreen • Stage Display
             </div>
 
-            {/* Demo Watermark if unlicensed */}
             {isDemo && !loading && <DemoWatermark />}
+
+            {/* Scrolling Announcement Ticker */}
+            {(() => {
+                const baseFontSize = Number(activeTheme.styles.fontSize) || 48;
+                let fontScale = 1;
+
+                // Reuse content logic or calculate scale based on text
+                const textToMeasure = content?.type === 'song' ? content.currentSlide : content?.text;
+                if (textToMeasure) {
+                    fontScale = calculateFontScale(textToMeasure, 1);
+                }
+
+                return (
+                    <AnnouncementTicker
+                        text={announcement.text}
+                        isActive={announcement.isActive}
+                        bgColor={announcement.bgColor}
+                        textColor={announcement.textColor}
+                        speed={announcement.speed}
+                        fontSize={baseFontSize * fontScale * 1.25}
+                    />
+                );
+            })()}
         </div>
     );
 }

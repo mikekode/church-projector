@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { X, FileText, Upload, Music, Check, AlertCircle } from 'lucide-react';
 import { ResourceItem } from '@/utils/resourceLibrary';
+import { parseLyrics } from '@/utils/lyricsParser';
 
 interface SongImportModalProps {
     isOpen: boolean;
@@ -30,16 +31,8 @@ export default function SongImportModal({ isOpen, onClose, onImport }: SongImpor
             return;
         }
 
-        // Auto-segment lyrics
-        // Split by double newlines or blank lines
-        const segments = lyrics.split(/\n\s*\n/).filter(s => s.trim().length > 0);
-
-        const slides = segments.map((text, i) => ({
-            id: Date.now().toString() + i,
-            content: text.trim(),
-            label: `Slide ${i + 1}`,
-            activeSlideIndex: 0
-        }));
+        // Auto-segment lyrics using the smart parser (respects 6-line limit)
+        const slides = parseLyrics(lyrics);
 
         const newSong: ResourceItem = {
             id: Date.now().toString(),

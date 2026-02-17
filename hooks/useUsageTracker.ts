@@ -37,22 +37,32 @@ export function useUsageTracker(isListening: boolean, licenseKey: string | null)
         console.log(`[UsageTracker] Syncing ${hoursToSync.toFixed(4)} hours to database`);
 
         try {
+            // Local Sync: Update the cache first so offline calculation is accurate immediately
+            const LICENSE_CACHE_STORAGE = 'creenly_license_cache';
+            const cachedData = localStorage.getItem(LICENSE_CACHE_STORAGE);
+            if (cachedData) {
+                const cached = JSON.parse(cachedData);
+                cached.usageHoursUsed = (cached.usageHoursUsed || 0) + hoursToSync;
+                if (cached.hoursRemaining !== null) {
+                    cached.hoursRemaining = Math.max(0, cached.hoursRemaining - hoursToSync);
+                }
+                localStorage.setItem(LICENSE_CACHE_STORAGE, JSON.stringify(cached));
+            }
+
             const { data, error } = await supabase.rpc('increment_usage', {
                 p_license_key: licenseKey,
                 p_hours: hoursToSync
             });
 
             if (error) {
-                console.error('[UsageTracker] Sync failed:', error.message);
-                // Keep accumulated time for next sync attempt
-                return;
-            }
-
-            if (data === false) {
+                console.error('[UsageTracker] Online sync failed:', error.message);
+                // We DON'T return here because we already updated the local cache. 
+                // The local cache is now the source of truth for offline mode.
+            } else if (data === false) {
                 console.warn('[UsageTracker] Usage limit may be reached');
             }
 
-            // Reset accumulated time on successful sync
+            // Reset accumulated time on successful (or local) sync
             accumulatedSecondsRef.current = 0;
             lastSyncRef.current = Date.now();
         } catch (err) {

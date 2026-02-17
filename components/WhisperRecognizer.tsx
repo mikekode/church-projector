@@ -44,23 +44,45 @@ export default function WhisperRecognizer({ isListening, onTranscript, onInterim
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
             streamRef.current = stream;
 
-            // 1. Audio Analysis (VAD) setup
+            // 1. Audio analysis & filtering (Voice Guard)
             const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
             audioContextRef.current = audioCtx;
+            const source = audioCtx.createMediaStreamSource(stream);
+            sourceRef.current = source;
+
+            // High-Pass (Cut bass/rumble)
+            const highPass = audioCtx.createBiquadFilter();
+            highPass.type = 'highpass';
+            highPass.frequency.setValueAtTime(400, audioCtx.currentTime);
+            highPass.Q.setValueAtTime(1.0, audioCtx.currentTime);
+
+            // Low-Pass (Cut cymbals/hiss)
+            const lowPass = audioCtx.createBiquadFilter();
+            lowPass.type = 'lowpass';
+            lowPass.frequency.setValueAtTime(3500, audioCtx.currentTime);
+            lowPass.Q.setValueAtTime(1.0, audioCtx.currentTime);
+
+            // Analyser for VAD (Using filtered audio)
             const analyser = audioCtx.createAnalyser();
             analyser.fftSize = 256;
             analyserRef.current = analyser;
-            const source = audioCtx.createMediaStreamSource(stream);
-            source.connect(analyser);
-            sourceRef.current = source;
+
+            // Destination for MediaRecorder (Filtered audio)
+            const destination = audioCtx.createMediaStreamDestination();
+
+            // Connect Chain
+            source.connect(highPass);
+            highPass.connect(lowPass);
+            lowPass.connect(analyser); // VAD on filtered audio is more stable
+            lowPass.connect(destination);
 
             // 2. MediaRecorder setup
-            // Use WebM Opus for efficiency
+            // Use the filtered stream for recording
             const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
                 ? 'audio/webm;codecs=opus'
                 : 'audio/webm';
 
-            const recorder = new MediaRecorder(stream, { mimeType });
+            const recorder = new MediaRecorder(destination.stream, { mimeType });
             mediaRecorderRef.current = recorder;
             chunksRef.current = [];
 

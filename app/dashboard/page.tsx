@@ -16,6 +16,7 @@ import DeepgramRecognizer from '@/components/DeepgramRecognizer';
 import TranscriptMonitor from '@/components/TranscriptMonitor';
 import { detectVersesInText, lookupVerseAsync, SUPPORTED_VERSIONS } from '@/utils/bible';
 import { DEFAULT_THEMES, ProjectorTheme } from '@/utils/themes';
+import { parseLyrics } from '@/utils/lyricsParser';
 import Link from 'next/link';
 import OmniSearch from '@/components/OmniSearch';
 import ServiceSchedulePanel from '@/components/ServiceSchedulePanel';
@@ -26,6 +27,7 @@ import LiveFeedStream from '@/components/projector/LiveFeedStream';
 import { ScheduleItem, ServiceSchedule, createBlankSchedule, loadSchedule, saveSchedule } from '@/utils/scheduleManager';
 import { getThemes, ResourceItem } from '@/utils/resourceLibrary';
 import { loadPastorProfile, PastorProfile, savePastorProfile } from '@/lib/pastorProfile';
+import { useBibleOfflineSync } from '@/hooks/useBibleOfflineSync';
 
 /**
  * Render formatted text with allowed HTML tags (b, i, font/span with color)
@@ -78,6 +80,7 @@ type DetectedItem = {
     additionalVerses?: { verseNum: number; text: string; reference: string }[];
     // Source type for semantic detection (never auto-push)
     sourceType?: 'regex' | 'ai' | 'song' | 'semantic';
+    options?: any;
 };
 
 
@@ -150,8 +153,9 @@ export default function DashboardPage() {
     const [voiceLevel, setVoiceLevel] = useState(0); // Audio RMS level (0-1)
 
     // License and usage tracking
-    const { license, isLicensed, hoursRemaining, isLowHours } = useLicense();
+    const { license, isLicensed, hoursRemaining, isLowHours, loading: licenseLoading } = useLicense();
     useUsageTracker(isListening, license?.licenseKey || null);
+    useBibleOfflineSync(); // Background-download public-domain Bibles when online
     const [detectedQueue, setDetectedQueue] = useState<DetectedItem[]>([]);
     const [activeItem, setActiveItem] = useState<DetectedItem | null>(null);
     const [autoMode, setAutoMode] = useState(true);
@@ -159,6 +163,24 @@ export default function DashboardPage() {
     const [lastSignal, setLastSignal] = useState<DetectionSignal>('WAIT');
     const [confidenceThreshold, setConfidenceThreshold] = useState(85);
     const [isScheduleCollapsed, setIsScheduleCollapsed] = useState(false);
+
+    // Background Preload Status (Offline Engine)
+    const [preloadPercent, setPreloadPercent] = useState<number | null>(null);
+    const [isPreloadReady, setIsPreloadReady] = useState(false);
+
+    useEffect(() => {
+        const onProgress = (e: any) => setPreloadPercent(e.detail);
+        const onReady = () => {
+            setIsPreloadReady(true);
+            setPreloadPercent(null);
+        };
+        window.addEventListener('whisper-preload-progress', onProgress);
+        window.addEventListener('whisper-preload-ready', onReady);
+        return () => {
+            window.removeEventListener('whisper-preload-progress', onProgress);
+            window.removeEventListener('whisper-preload-ready', onReady);
+        };
+    }, []);
 
 
     // WebSocket (Deepgram) Status Management
@@ -173,7 +195,9 @@ export default function DashboardPage() {
     const [showVersionMenu, setShowVersionMenu] = useState(false);
 
     const [isLicenseModalOpen, setIsLicenseModalOpen] = useState(false);
+    const [selectedLiveFeed, setSelectedLiveFeed] = useState<string | null>(null);
     const [isLibraryOpen, setIsLibraryOpen] = useState(false);
+    const [announcement, setAnnouncement] = useState({ text: '', isActive: false, bgColor: '#ef4444', textColor: '#ffffff', speed: 20 });
     const [isMidiSettingsOpen, setIsMidiSettingsOpen] = useState(false);
     const [isDisplaySettingsOpen, setIsDisplaySettingsOpen] = useState(false);
     const [isSourceLibraryOpen, setIsSourceLibraryOpen] = useState(false);
@@ -250,6 +274,8 @@ export default function DashboardPage() {
                     });
                 }
             }
+            // Resend current announcement state
+            broadcast({ type: 'UPDATE_ANNOUNCEMENT', payload: announcementRef.current });
         }
     });
 
@@ -408,7 +434,7 @@ export default function DashboardPage() {
     const selectedVersionRef = useRef(selectedVersion);
     const verseCountRef = useRef(verseCount);
     const confidenceThresholdRef = useRef(confidenceThreshold);
-    // Transcript refs for performance isolation in sub-components
+    const announcementRef = useRef(announcement);
 
     // Keep refs in sync
     useEffect(() => {
@@ -420,7 +446,11 @@ export default function DashboardPage() {
         selectedVersionRef.current = selectedVersion;
         verseCountRef.current = verseCount;
         confidenceThresholdRef.current = confidenceThreshold;
-    }, [transcript, detectedQueue, autoMode, activeItem, livePresentation, selectedVersion, verseCount, confidenceThreshold]);
+        announcementRef.current = announcement;
+
+        // Broadcast announcement updates immediately when state changes
+        broadcast({ type: 'UPDATE_ANNOUNCEMENT', payload: announcement });
+    }, [transcript, detectedQueue, autoMode, activeItem, livePresentation, selectedVersion, verseCount, confidenceThreshold, announcement, broadcast]);
 
     // Broadcast Theme Changes
     useEffect(() => {
@@ -571,35 +601,46 @@ export default function DashboardPage() {
     const goLive = useCallback(async (item: DetectedItem) => {
         // Handle Songs with Navigation Controls
         if (item.version === 'SONG' && item.songData) {
+            // Safety: Ensure all slides in songData respect the 6-line limit
+            // This fixes existing songs that were imported before the limit was enforced
+            const needsReParsing = item.songData.slides.some((s: any) => s.content.split('\n').filter((l: string) => l.trim()).length > 6);
+
+            let songToUse = item.songData;
+            if (needsReParsing) {
+                console.log('[Safety] Re-parsing song to enforce 6-line limit');
+                const fullText = item.songData.slides.map((s: any) => s.content).join('\n\n');
+                const newSlides = parseLyrics(fullText);
+                songToUse = { ...item.songData, slides: newSlides };
+            }
+
             // User request: Always start detected songs at the FIRST slide (index 0)
-            // regardless of which specific line was matched.
             const initialSlideIndex = 0;
-            const initialSlide = item.songData.slides[initialSlideIndex];
+            const initialSlide = songToUse.slides[initialSlideIndex];
 
             // Set state for navigation
             setLivePresentation({
-                item: item.songData,
+                item: songToUse,
                 slideIndex: initialSlideIndex
             });
 
             // Update active item to reflect First Slide content
             setActiveItem({
                 ...item,
+                songData: songToUse,
                 text: initialSlide.content
             });
 
             // Broadcast content to Projector
-            // Using SHOW_CONTENT matches the format used by handleSlideNavigation for songs
             broadcast({
                 type: 'SHOW_CONTENT',
                 payload: {
                     type: 'song',
-                    title: item.reference, // item.reference holds the Title for songs in detectedQueue
+                    title: item.reference,
                     body: initialSlide.content,
                     slideIndex: initialSlideIndex,
-                    totalSlides: item.songData.slides.length,
-                    meta: item.songData.author,
-                    nextSlide: item.songData.slides[initialSlideIndex + 1]?.content
+                    totalSlides: songToUse.slides.length,
+                    meta: songToUse.author,
+                    nextSlide: songToUse.slides[initialSlideIndex + 1]?.content
                 }
             });
             return;
@@ -1261,6 +1302,7 @@ export default function DashboardPage() {
                                             <span>MIDI Configuration</span>
                                         </button>
 
+
                                         <div className="mx-2 my-2 border-t border-zinc-100 dark:border-white/5 pt-2">
                                             <div className="px-2 py-1 flex items-center gap-2 mb-2">
                                                 <Clock size={12} className="text-zinc-500" />
@@ -1343,110 +1385,183 @@ export default function DashboardPage() {
                     </div>
 
                     <div
-                        className={`flex-1 min-h-0 transition-all duration-300 ease-in-out pointer-events-auto overflow-hidden rounded-2xl bg-white dark:bg-zinc-900/50 border border-zinc-200 dark:border-white/5 shadow-sm dark:shadow-none ${isScheduleCollapsed ? 'opacity-0 hidden' : 'opacity-100'
+                        className={`flex-1 flex flex-col min-h-0 transition-all duration-300 ease-in-out pointer-events-auto overflow-hidden rounded-2xl bg-white dark:bg-zinc-900/50 border border-zinc-200 dark:border-white/5 shadow-sm dark:shadow-none ${isScheduleCollapsed ? 'opacity-0 hidden' : 'opacity-100'
                             }`}
                     >
-                        <ServiceSchedulePanel
-                            schedule={schedule}
-                            onScheduleChange={setSchedule}
-                            onGoLive={(item: ScheduleItem, slideIndex: number) => {
-                                const slide = item.slides[slideIndex];
-                                const content = slide?.content || '';
+                        <div className="flex-1 overflow-y-auto no-scrollbar">
+                            <ServiceSchedulePanel
+                                schedule={schedule}
+                                onScheduleChange={setSchedule}
+                                onGoLive={(item: ScheduleItem, slideIndex: number) => {
+                                    const slide = item.slides[slideIndex];
+                                    const content = slide?.content || '';
 
-                                // Check if this is actually a video (not an image)
-                                const isVideo = item.type === 'live_feed' ||
-                                    content.startsWith('data:video') ||
-                                    content.match(/\.(mp4|webm|mov|ogg)(\?|$)/i) !== null;
+                                    // Check if this is actually a video (not an image)
+                                    const isVideo = item.type === 'live_feed' ||
+                                        content.startsWith('data:video') ||
+                                        content.match(/\.(mp4|webm|mov|ogg)(\?|$)/i) !== null;
 
-                                // Intercept ONLY Live Feed and Video items for Audio Mode Selection
-                                if (isVideo) {
-                                    setPendingLiveItem({ item, slideIndex });
-                                    setShowAudioPrompt(true);
-                                    return;
-                                }
+                                    // Intercept ONLY Live Feed and Video items for Audio Mode Selection
+                                    if (isVideo) {
+                                        setPendingLiveItem({ item, slideIndex });
+                                        setShowAudioPrompt(true);
+                                        return;
+                                    }
 
 
 
-                                // Update Live Presentation State
-                                if (['song', 'media'].includes(item.type)) {
-                                    setLivePresentation({ item, slideIndex });
-                                } else {
-                                    setLivePresentation(null);
-                                }
+                                    if (item.type === 'song') {
+                                        // Safety: Enforce 6-line limit even for items in schedule
+                                        const needsReParsing = item.slides.some(s => s.content.split('\n').filter(l => l.trim()).length > 6);
+                                        let songToUse = item;
+                                        let activeSlide = slide;
+                                        let activeIdx = slideIndex;
 
-                                if (item.type === 'song') {
-                                    // Set active item for Dashboard preview too
-                                    setActiveItem({
-                                        id: item.id,
-                                        reference: item.title,
-                                        text: slide.content,
-                                        version: 'SONG',
-                                        book: 'Song',
-                                        chapter: 0,
-                                        verseNum: 0,
-                                        timestamp: new Date()
-                                    });
-                                    broadcast({
-                                        type: 'SHOW_CONTENT',
-                                        payload: {
-                                            type: 'song',
-                                            title: item.title,
-                                            body: slide.content,
-                                            meta: item.meta?.author,
-                                            background: typeof item.meta?.background === 'object' ? (item.meta?.background as any)?.value : item.meta?.background
+                                        if (needsReParsing) {
+                                            console.log('[Safety] Re-parsing schedule song to enforce 6-line limit');
+                                            const fullText = item.slides.map(s => s.content).join('\n\n');
+                                            const newSlides = parseLyrics(fullText);
+                                            songToUse = { ...item, slides: newSlides };
+
+                                            // Try to find the closest slide index if possible, otherwise reset to 0
+                                            // For simplicity and since user usually clicks the first slide or a specific slide, 
+                                            // we'll use activeIdx but pin it to the new slide count.
+                                            activeIdx = Math.min(activeIdx, newSlides.length - 1);
+                                            activeSlide = newSlides[activeIdx];
                                         }
-                                    });
-                                } else if (item.type === 'scripture') {
-                                    // Update local preview immediately so handshake works
-                                    setActiveItem({
-                                        id: item.id,
-                                        reference: item.title,
-                                        text: slide.content,
-                                        version: item.meta?.version || 'KJV',
-                                        book: item.title.split(' ')[0],
-                                        chapter: parseInt(item.title.split(' ')[1]?.split(':')[0]) || 0,
-                                        verseNum: parseInt(item.title.split(':')[1]) || 0,
-                                        timestamp: new Date()
-                                    });
 
-                                    broadcast({
-                                        type: 'SHOW_CONTENT',
-                                        payload: {
-                                            type: 'verse',
-                                            title: item.title,
-                                            body: slide.content,
-                                            meta: item.meta?.version
-                                        }
-                                    });
-                                } else if (item.type === 'media') {
-                                    // Handle Media/Image
-                                    broadcast({
-                                        type: 'SHOW_CONTENT',
-                                        payload: {
-                                            type: 'media',
-                                            title: item.title,
-                                            body: slide.content, // Data URL
-                                            meta: 'Image',
-                                            options: {
-                                                imageMode: item.meta?.imageMode
+                                        // Update Live Presentation State with re-parsed item
+                                        setLivePresentation({ item: songToUse, slideIndex: activeIdx });
+
+                                        // Set active item for Dashboard preview too
+                                        setActiveItem({
+                                            id: item.id,
+                                            reference: item.title,
+                                            text: activeSlide.content,
+                                            version: 'SONG',
+                                            book: 'Song',
+                                            chapter: 0,
+                                            verseNum: 0,
+                                            timestamp: new Date(),
+                                            songData: {
+                                                id: songToUse.id,
+                                                title: songToUse.title,
+                                                author: songToUse.meta?.author || 'Unknown',
+                                                slides: songToUse.slides
                                             }
-                                        }
-                                    });
+                                        });
 
-                                    // Update local preview
-                                    setActiveItem({
-                                        id: item.id,
-                                        reference: item.title,
-                                        text: slide.content, // Store Data URL in text
-                                        version: 'MEDIA',    // Use version as flag
-                                        book: 'Media',
-                                        chapter: 0,
-                                        verseNum: 0,
-                                        timestamp: new Date()
-                                    });
-                                }
-                            }}
-                        />
+                                        broadcast({
+                                            type: 'SHOW_CONTENT',
+                                            payload: {
+                                                type: 'song',
+                                                title: songToUse.title,
+                                                body: activeSlide.content,
+                                                meta: songToUse.meta?.author,
+                                                background: typeof songToUse.meta?.background === 'object' ? (songToUse.meta?.background as any)?.value : songToUse.meta?.background,
+                                                slideIndex: activeIdx,
+                                                totalSlides: songToUse.slides.length,
+                                                nextSlide: songToUse.slides[activeIdx + 1]?.content
+                                            }
+                                        });
+                                    }
+                                    else if (item.type === 'scripture') {
+                                        // Update local preview immediately so handshake works
+                                        setActiveItem({
+                                            id: item.id,
+                                            reference: item.title,
+                                            text: slide.content,
+                                            version: item.meta?.version || 'KJV',
+                                            book: item.title.split(' ')[0],
+                                            chapter: parseInt(item.title.split(' ')[1]?.split(':')[0]) || 0,
+                                            verseNum: parseInt(item.title.split(':')[1]) || 0,
+                                            timestamp: new Date()
+                                        });
+
+                                        broadcast({
+                                            type: 'SHOW_CONTENT',
+                                            payload: {
+                                                type: 'verse',
+                                                title: item.title,
+                                                body: slide.content,
+                                                meta: item.meta?.version
+                                            }
+                                        });
+                                    } else if (item.type === 'media') {
+                                        // Update Live Presentation State for media navigation
+                                        setLivePresentation({ item, slideIndex });
+
+                                        // Handle Media/Image
+                                        broadcast({
+                                            type: 'SHOW_CONTENT',
+                                            payload: {
+                                                type: 'media',
+                                                title: item.title,
+                                                body: slide.content, // Data URL
+                                                meta: 'Image',
+                                                options: {
+                                                    imageMode: item.meta?.imageMode
+                                                }
+                                            }
+                                        });
+
+                                        // Update local preview
+                                        setActiveItem({
+                                            id: item.id,
+                                            reference: item.title,
+                                            text: slide.content, // Store Data URL in text
+                                            version: 'MEDIA',    // Use version as flag
+                                            book: 'Media',
+                                            chapter: 0,
+                                            verseNum: 0,
+                                            timestamp: new Date()
+                                        });
+                                    }
+                                }}
+                            />
+                        </div>
+
+                        {/* ANNOUNCEMENT CONTROLS */}
+                        <div className="p-3 border-t border-zinc-200 dark:border-white/5 space-y-3">
+                            <div className="flex items-center justify-between">
+                                <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Live Announcement</span>
+                                <button
+                                    onClick={() => setAnnouncement(prev => ({ ...prev, isActive: !prev.isActive }))}
+                                    className={`w-10 h-5 rounded-full transition-all relative ${announcement.isActive ? 'bg-red-500' : 'bg-zinc-300 dark:bg-zinc-700'}`}
+                                >
+                                    <div className={`w-3 h-3 rounded-full bg-white absolute top-1 transition-all ${announcement.isActive ? 'right-1' : 'left-1'}`} />
+                                </button>
+                            </div>
+
+                            <input
+                                value={announcement.text}
+                                onChange={(e) => setAnnouncement(prev => ({ ...prev, text: e.target.value }))}
+                                placeholder="TYPE SCROLLING ANNOUNCEMENT..."
+                                className="w-full bg-zinc-50 dark:bg-black/40 border border-zinc-200 dark:border-white/10 rounded-lg px-3 py-2 text-[10px] font-bold tracking-wider focus:outline-none focus:border-red-500/50"
+                            />
+
+                            <div className="flex gap-2">
+                                <div className="flex-1 flex gap-1 items-center">
+                                    {['#ef4444', '#10b981', '#3b82f6', '#f59e0b'].map(color => (
+                                        <button
+                                            key={color}
+                                            onClick={() => setAnnouncement(prev => ({ ...prev, bgColor: color }))}
+                                            className={`w-4 h-4 rounded-full border border-white/10 ${announcement.bgColor === color ? 'ring-2 ring-white/50 scale-110' : 'hover:scale-110'}`}
+                                            style={{ backgroundColor: color }}
+                                        />
+                                    ))}
+                                </div>
+                                <select
+                                    value={announcement.speed}
+                                    onChange={(e) => setAnnouncement(prev => ({ ...prev, speed: parseInt(e.target.value) }))}
+                                    className="bg-transparent text-[9px] font-bold text-zinc-500 focus:outline-none"
+                                >
+                                    <option value="30">Slow</option>
+                                    <option value="20">Med</option>
+                                    <option value="10">Fast</option>
+                                </select>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
@@ -1481,6 +1596,7 @@ export default function DashboardPage() {
                         </div>
 
                         <button
+                            suppressHydrationWarning={true}
                             onClick={() => {
                                 if (!isLicensed) {
                                     setIsLicenseModalOpen(true);
@@ -1488,9 +1604,13 @@ export default function DashboardPage() {
                                 }
                                 if (isMicLoading) return;
                                 setIsMicLoading(true);
+                                if (!isListening) {
+                                    setDeepgramError(null);
+                                    setDeepgramStatus({ status: 'connecting', error: null });
+                                }
                                 setIsListening(!isListening);
-                                // Auto-unlock after 1.5s to prevent toggle spamming
-                                setTimeout(() => setIsMicLoading(false), 1500);
+                                // Auto-unlock after 800ms to prevent toggle spamming
+                                setTimeout(() => setIsMicLoading(false), 800);
                             }}
                             className={`w-full py-2 rounded-xl font-black text-xs tracking-wider shadow-xl transition-all flex items-center justify-center gap-3 relative overflow-hidden group
                                     ${deepgramStatus.status === 'listening'
@@ -1500,32 +1620,52 @@ export default function DashboardPage() {
                                         : 'bg-indigo-600 text-white hover:bg-indigo-500 hover:scale-[1.02] active:scale-[0.98]'
                                 } `}
                         >
-                            {deepgramStatus.status === 'listening' ? (
-                                <>
-                                    <span className="relative flex h-3 w-3">
-                                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
-                                        <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500"></span>
-                                    </span>
-                                    <span>LISTENING...</span>
-                                    <span className="text-[10px] font-normal opacity-60 ml-2">CLICK TO STOP</span>
-                                </>
-                            ) : (deepgramStatus.status === 'connecting' || isMicLoading) ? (
-                                <>
-                                    <div className="w-4 h-4 border-2 border-yellow-400 border-t-transparent rounded-full animate-spin" />
-                                    <span>STARTING MIC...</span>
-                                </>
-                            ) : (
-                                <>
-                                    <div className="p-1.5 bg-white/20 rounded-full group-hover:bg-white/30 transition-colors">
-                                        {isLicensed ? (
-                                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><line x1="12" y1="19" x2="12" y2="23"></line><line x1="8" y1="23" x2="16" y2="23"></line></svg>
-                                        ) : (
-                                            <Lock size={16} strokeWidth={3} />
-                                        )}
-                                    </div>
-                                    {isLicensed ? 'START LISTENING' : 'ACTIVATE LICENSE TO START'}
-                                </>
-                            )}
+                            {/* HYDRATION SAFE WRAPPER: Matches DOM structure on Server & Client */}
+                            <div className="flex items-center justify-center gap-3" suppressHydrationWarning={true}>
+                                {deepgramStatus.status === 'listening' ? (
+                                    <>
+                                        <span className="relative flex h-3 w-3">
+                                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                                            <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500"></span>
+                                        </span>
+                                        <span>LISTENING...</span>
+                                        <span className="text-[10px] font-normal opacity-60 ml-2">CLICK TO STOP</span>
+                                    </>
+                                ) : (deepgramStatus.status === 'connecting' || isMicLoading) ? (
+                                    <>
+                                        <div className="w-4 h-4 border-2 border-yellow-400 border-t-transparent rounded-full animate-spin" />
+                                        <span>STARTING MIC...</span>
+                                    </>
+                                ) : (
+                                    <>
+                                        <div className="p-1.5 bg-white/20 rounded-full group-hover:bg-white/30 transition-colors flex items-center justify-center relative w-8 h-8 overflow-hidden">
+                                            <div className="grid grid-cols-1 grid-rows-1 place-items-center w-full h-full">
+                                                <div className={`col-start-1 row-start-1 ${(!isLicensed && !licenseLoading) ? "block" : "hidden"}`}>
+                                                    <Lock size={16} strokeWidth={3} />
+                                                </div>
+                                                <div className={`col-start-1 row-start-1 ${(licenseLoading && !isLicensed) ? "block" : "hidden"}`}>
+                                                    <div className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin" />
+                                                </div>
+                                                <div className={`col-start-1 row-start-1 ${(isLicensed) ? "block" : "hidden"}`}>
+                                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><line x1="12" y1="19" x2="12" y2="23"></line><line x1="8" y1="23" x2="16" y2="23"></line></svg>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div className="grid grid-cols-1 grid-rows-1 place-items-center">
+                                            <span className={`col-start-1 row-start-1 text-[10px] font-bold uppercase ${(!isLicensed && !licenseLoading) ? "block" : "hidden"}`}>
+                                                ACTIVATE TO START LISTENING
+                                            </span>
+                                            <span className={`col-start-1 row-start-1 text-[10px] font-bold uppercase ${(licenseLoading && !isLicensed) ? "block" : "hidden"}`}>
+                                                VERIFYING LICENSE...
+                                            </span>
+                                            <span className={`col-start-1 row-start-1 text-[10px] font-bold uppercase ${(isLicensed) ? "block" : "hidden"}`}>
+                                                START LISTENING
+                                            </span>
+                                        </div>
+                                    </>
+                                )}
+                            </div>
                         </button>
 
                         {/* MANUAL INPUT */}
@@ -1565,20 +1705,21 @@ export default function DashboardPage() {
                         <div className="bg-white dark:bg-zinc-900/30 border border-zinc-100 dark:border-white/5 rounded-2xl flex-1 flex flex-col min-h-0 overflow-hidden shadow-none">
                             <header className="p-4 border-b border-zinc-200/50 dark:border-white/5 flex justify-between items-center bg-zinc-50/50 dark:bg-zinc-900/50 backdrop-blur-sm shrink-0">
                                 <h3 className="text-xs font-bold text-zinc-500 uppercase tracking-wider shrink-0 whitespace-nowrap">Detection Queue</h3>
-                                <div className="flex flex-col items-end shrink-0">
-                                    <div className="flex items-center gap-2 shrink-0">
-                                        <span className={`text-[9px] font-black uppercase tracking-[0.1em] transition-colors ${autoMode ? 'text-zinc-900 dark:text-white' : 'text-zinc-500'}`}>
-                                            Auto-Push
-                                        </span>
-                                        <button
-                                            onClick={() => setAutoMode(!autoMode)}
-                                            className={`w-8 h-4 rounded-full transition-all duration-300 relative focus:outline-none border ${autoMode ? 'bg-zinc-900 dark:bg-white border-zinc-900 dark:border-white' : 'bg-transparent border-zinc-300 dark:border-zinc-700'}`}
-                                            title={autoMode ? "Auto-Push Enabled" : "Auto-Push Disabled"}
-                                        >
-                                            <div className={`w-2.5 h-2.5 rounded-full absolute top-[1px] shadow-sm transition-transform duration-300 ${autoMode ? 'translate-x-[16px] bg-white dark:bg-black' : 'translate-x-[3px] bg-zinc-400'}`} />
-                                        </button>
+                                <div className="flex items-center gap-3 shrink-0">
+                                    <div className="flex flex-col items-end">
+                                        <div className="flex items-center gap-2 shrink-0">
+                                            <span className={`text-[9px] font-black uppercase tracking-[0.1em] transition-colors ${autoMode ? 'text-zinc-900 dark:text-white' : 'text-zinc-500'}`}>
+                                                Auto-Push
+                                            </span>
+                                            <button
+                                                onClick={() => setAutoMode(!autoMode)}
+                                                className={`w-8 h-4 rounded-full transition-all duration-300 relative focus:outline-none border ${autoMode ? 'bg-zinc-900 dark:bg-white border-zinc-900 dark:border-white' : 'bg-transparent border-zinc-300 dark:border-zinc-700'}`}
+                                                title={autoMode ? "Auto-Push Enabled" : "Auto-Push Disabled"}
+                                            >
+                                                <div className={`w-2.5 h-2.5 rounded-full absolute top-[1px] shadow-sm transition-transform duration-300 ${autoMode ? 'translate-x-[16px] bg-white dark:bg-black' : 'translate-x-[3px] bg-zinc-400'}`} />
+                                            </button>
+                                        </div>
                                     </div>
-
                                 </div>
                             </header>
                             <div
@@ -1670,7 +1811,14 @@ export default function DashboardPage() {
                                     >
                                         <Tv2 size={16} />
                                     </button>
-                                    <button onClick={clearProjector} className="text-[10px] font-bold text-red-400 hover:text-red-300 shrink-0">CLEAR</button>
+                                    <button
+                                        onClick={() => setAnnouncement(prev => ({ ...prev, isActive: !prev.isActive }))}
+                                        className={`p-1.5 rounded-lg transition-colors shrink-0 ${announcement.isActive ? 'text-red-500 bg-red-500/10' : 'text-zinc-400 hover:text-white hover:bg-white/10'}`}
+                                        title="Toggle Announcement Ticker"
+                                    >
+                                        <Mic size={14} className={announcement.isActive ? 'animate-pulse' : ''} />
+                                    </button>
+                                    <button onClick={clearProjector} className="text-[10px] font-bold text-red-500 border border-red-500/30 px-2 py-0.5 rounded hover:bg-red-500 hover:text-white transition-all shrink-0">CLEAR</button>
                                 </div>
                             </header>
 
@@ -1959,6 +2107,7 @@ export default function DashboardPage() {
 
                                 const meta = (item as any).meta || {};
 
+                                // Handle incoming broadcast messages (from other windows if needed)
                                 // Handle Media/Image directly if not intercepted above
                                 if (item.type === 'media') {
                                     broadcast({
@@ -2024,7 +2173,13 @@ export default function DashboardPage() {
                                     book: 'Song',
                                     chapter: 0,
                                     verseNum: 0,
-                                    timestamp: new Date()
+                                    timestamp: new Date(),
+                                    songData: item.type === 'song' ? {
+                                        id: item.id,
+                                        title: item.title,
+                                        author: item.meta?.author || 'Unknown',
+                                        slides: item.slides
+                                    } : undefined
                                 });
                             }}
                             isLibraryOpen={isLibraryOpen}
@@ -2081,9 +2236,21 @@ export default function DashboardPage() {
                         setDetectedQueue(prev => [bibleItem, ...prev].slice(0, 50));
                         goLive(bibleItem);
                     } else if (item.type === 'song') {
-                        // Broadcast generic content for Song
-                        // Find first verse or chorus
-                        const firstSlide = item.content.lyrics[0];
+                        // Ensure lyrics are parsed correctly into 6-line segments
+                        // OmniSearch might return raw blocks in item.content.lyrics[0].content
+                        const rawLyrics = item.content.lyrics.map((l: any) => l.content).join('\n\n');
+                        const parsedSlides = parseLyrics(rawLyrics);
+                        const firstSlide = parsedSlides[0];
+
+                        // Set up presentation for navigation
+                        setLivePresentation({
+                            item: {
+                                ...item.content,
+                                slides: parsedSlides
+                            } as any,
+                            slideIndex: 0
+                        });
+
                         broadcast({
                             type: 'SHOW_CONTENT',
                             payload: {
@@ -2092,8 +2259,8 @@ export default function DashboardPage() {
                                 body: firstSlide.content,
                                 meta: item.subtitle, // Author
                                 slideIndex: 0,
-                                totalSlides: item.content.lyrics.length,
-                                nextSlide: item.content.lyrics[1]?.content
+                                totalSlides: parsedSlides.length,
+                                nextSlide: parsedSlides[1]?.content
                             }
                         });
 

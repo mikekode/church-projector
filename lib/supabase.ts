@@ -138,103 +138,175 @@ export async function activateLicenseKey(keyCode: string): Promise<{ success: bo
 }
 
 /**
- * Validate license online
- * Checks if subscription is still active
+ * Validate license online with a timeout
  */
 export async function validateLicenseOnline(licenseKey: string): Promise<License> {
     const deviceId = await getDeviceId();
 
-    const { data: license, error } = await supabase
-        .from('licenses')
-        .select('*')
-        .eq('license_key', licenseKey)
-        .single();
+    try {
+        const fetchPromise = supabase
+            .from('licenses')
+            .select('*')
+            .eq('license_key', licenseKey)
+            .single();
 
-    if (error || !license) {
-        return { status: 'demo' };
-    }
+        // Use Promise.race for a 3s timeout
+        const timeoutPromise = new Promise((_, reject) =>
+            setTimeout(() => reject(new Error('Timeout')), 3000)
+        );
 
-    // Check if bound to this device
-    if (license.device_id && license.device_id !== deviceId) {
-        return { status: 'demo' }; // Wrong device
-    }
+        const result = await Promise.race([fetchPromise, timeoutPromise]) as any;
 
-    // Check subscription status
-    if (license.status !== 'active') {
+        if (result instanceof Error) { // Check if the timeout promise rejected
+            throw result;
+        }
+
+        const { data: license, error } = result;
+
+        if (error || !license) {
+            return { status: 'demo' };
+        }
+
+        // Check if bound to this device
+        if (license.device_id && license.device_id !== deviceId) {
+            return { status: 'demo' }; // Wrong device
+        }
+
+        // Check subscription status
+        if (license.status !== 'active') {
+            return {
+                status: license.status as LicenseStatus,
+                licenseKey,
+                email: license.email
+            };
+        }
+
+        // Check expiry date
+        const expiresAt = license.current_period_end ? new Date(license.current_period_end) : null;
+        const now = new Date();
+
+        if (expiresAt && expiresAt < now) {
+            return {
+                status: 'expired',
+                licenseKey,
+                email: license.email,
+                expiresAt: license.current_period_end
+            };
+        }
+
+        // Calculate days remaining
+        const daysRemaining = expiresAt
+            ? Math.ceil((expiresAt.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
+            : undefined;
+
+        // Calculate hours remaining
+        const usageHoursLimit = license.usage_hours_limit ?? null;
+        const usageHoursUsed = license.usage_hours_used ?? 0;
+        const hoursRemaining = usageHoursLimit !== null
+            ? Math.max(0, usageHoursLimit - usageHoursUsed)
+            : null;
+
+        // Check if usage is exhausted
+        if (usageHoursLimit !== null && usageHoursUsed >= usageHoursLimit) {
+            return {
+                status: 'expired',
+                licenseKey,
+                email: license.email,
+                expiresAt: license.current_period_end,
+                usageHoursLimit,
+                usageHoursUsed,
+                hoursRemaining: 0
+            };
+        }
+
         return {
-            status: license.status as LicenseStatus,
-            licenseKey,
-            email: license.email
-        };
-    }
-
-    // Check expiry date
-    const expiresAt = license.current_period_end ? new Date(license.current_period_end) : null;
-    const now = new Date();
-
-    if (expiresAt && expiresAt < now) {
-        return {
-            status: 'expired',
-            licenseKey,
-            email: license.email,
-            expiresAt: license.current_period_end
-        };
-    }
-
-    // Calculate days remaining
-    const daysRemaining = expiresAt
-        ? Math.ceil((expiresAt.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
-        : undefined;
-
-    // Calculate hours remaining
-    const usageHoursLimit = license.usage_hours_limit ?? null;
-    const usageHoursUsed = license.usage_hours_used ?? 0;
-    const hoursRemaining = usageHoursLimit !== null
-        ? Math.max(0, usageHoursLimit - usageHoursUsed)
-        : null;
-
-    // Check if usage is exhausted
-    if (usageHoursLimit !== null && usageHoursUsed >= usageHoursLimit) {
-        return {
-            status: 'expired',
+            status: 'active',
             licenseKey,
             email: license.email,
             expiresAt: license.current_period_end,
+            daysRemaining,
             usageHoursLimit,
             usageHoursUsed,
-            hoursRemaining: 0
+            hoursRemaining
         };
+    } catch (err) {
+        console.warn('[License] Online validation failed or timed out:', err);
+        return { status: 'demo' };
     }
-
-    return {
-        status: 'active',
-        licenseKey,
-        email: license.email,
-        expiresAt: license.current_period_end,
-        daysRemaining,
-        usageHoursLimit,
-        usageHoursUsed,
-        hoursRemaining
-    };
 }
 
 /**
  * Get current license status
  * Hardened: Forces a server-side check every app session to prevent LocalStorage injection.
+ * Fully Offline Capable: If offline, calculates status based on secure cache + local time.
  */
 let sessionValidated = false;
+
+/**
+ * Synchronously get the last cached license data (optimistic)
+ */
+export function getCachedLicense(): License {
+    // We only do this in the browser
+    if (typeof window === 'undefined') return { status: 'demo' };
+
+    try {
+        const cachedData = localStorage.getItem(LICENSE_CACHE_STORAGE);
+        const storedKey = localStorage.getItem(LICENSE_KEY_STORAGE);
+
+        if (!cachedData) {
+            // If we have a key but no cache, we MUST show loading/demo until first check
+            return { status: 'demo', licenseKey: storedKey || undefined };
+        }
+
+        const cached = JSON.parse(cachedData) as License & { cachedAt: number };
+
+        // Immediate status check
+        if (cached.status === 'expired' || cached.status === 'cancelled') {
+            return cached;
+        }
+
+        // Check Offline Grace Period (3 days)
+        // Hardening: If we have an active state in cache and we're within the 3 day window,
+        // we TRUST it immediately for zero-flicker UI.
+        const cacheAge = Date.now() - (cached.cachedAt || 0);
+        const OFFLINE_GRACE_PERIOD = 3 * 24 * 60 * 60 * 1000;
+
+        if (cacheAge < OFFLINE_GRACE_PERIOD && cached.status === 'active') {
+            return {
+                ...cached,
+                status: 'active'
+            };
+        }
+    } catch (e) {
+        console.error('Cache parse error:', e);
+    }
+
+    return { status: 'demo' };
+}
 
 export async function getCurrentLicense(): Promise<License> {
     const storedKey = localStorage.getItem(LICENSE_KEY_STORAGE);
     const cachedData = localStorage.getItem(LICENSE_CACHE_STORAGE);
+    const lastSystemTimeStr = localStorage.getItem('creenly_last_sys_time');
 
     // No stored key = demo mode
     if (!storedKey) {
         return { status: 'demo' };
     }
 
+    // 1. Clock Tampering Protection
+    const now = Date.now();
+    if (lastSystemTimeStr) {
+        const lastTime = parseInt(lastSystemTimeStr, 10);
+        if (now < lastTime - 1000 * 60 * 5) { // 5-min grace for small shifts
+            console.warn('[License] Clock tampering detected (system time moved backwards)');
+            return { status: 'demo', email: 'TAMPER_DETECTED' };
+        }
+    }
+    localStorage.setItem('creenly_last_sys_time', now.toString());
+
+    // 2. Online Validation Check
     // Secure Check: If we haven't validated this SESSION yet, force an online check.
-    // This prevents someone from manually editing localStorage while offline.
     const forceCheck = !sessionValidated;
 
     if (forceCheck || !cachedData) {
@@ -255,27 +327,17 @@ export async function getCurrentLicense(): Promise<License> {
 
             return onlineResult;
         } catch (error) {
-            console.warn('Online license check failed, falling back to secure cache');
+            console.warn('Online license check failed, falling back to internal offline logic');
         }
     }
 
-    // Offline Fallback: Use cached data ONLY if within strict grace period
-    if (cachedData) {
-        try {
-            const cached = JSON.parse(cachedData);
-            const cacheAge = Date.now() - cached.cachedAt;
-
-            // Cache still valid (shortened to 3 days for higher security)
-            const STRICT_CACHE_DURATION = 3 * 24 * 60 * 60 * 1000;
-            if (cacheAge < STRICT_CACHE_DURATION) {
-                return cached as License;
-            }
-        } catch (e) {
-            console.error('Cache parse error:', e);
-        }
+    // 3. Offline Logic (Internal Calculation)
+    const cached = getCachedLicense();
+    if (cached.status !== 'demo') {
+        return cached;
     }
 
-    // Default to demo if online fails and cache is old
+    // Default to demo if online fails and cache is invalid/old
     return { status: 'demo' };
 }
 

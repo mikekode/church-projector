@@ -211,6 +211,11 @@ export function useSmartDetection(
     const processWindowRef = useRef<() => Promise<void>>();
     const songLibraryRef = useRef<ResourceItem[]>([]);
 
+    // Embeddings worker for local semantic search (Priority 3)
+    const embeddingsWorkerRef = useRef<Worker | null>(null);
+    const embeddingsReadyRef = useRef<boolean>(false);
+    const embeddingsIndexReadyRef = useRef<boolean>(false);
+
     // Keep currentVerse ref in sync and update chapter anchor
     useEffect(() => {
         currentVerseRef.current = currentVerse;
@@ -233,6 +238,33 @@ export function useSmartDetection(
             // Filter only songs
             songLibraryRef.current = resources.filter(r => r.category === 'song');
         });
+    }, []);
+
+    // Initialize embeddings worker for local semantic search
+    useEffect(() => {
+        if (typeof window === 'undefined') return;
+        try {
+            const worker = new Worker(
+                new URL('../workers/embeddings.worker.ts', import.meta.url),
+                { type: 'module' }
+            );
+            worker.onmessage = (e) => {
+                const msg = e.data;
+                if (msg.type === 'ready') {
+                    embeddingsReadyRef.current = true;
+                    embeddingsIndexReadyRef.current = !!msg.indexLoaded;
+                    console.log(`[SmartDetect] Embeddings ready (index: ${msg.indexLoaded ? msg.verseCount + ' verses' : 'empty'})`);
+                } else if (msg.type === 'error') {
+                    console.warn('[SmartDetect] Embeddings error:', msg.message);
+                }
+            };
+            embeddingsWorkerRef.current = worker;
+            // Lazy load — send load message after short delay to not compete with initial page activity
+            setTimeout(() => worker.postMessage({ type: 'load' }), 5000);
+            return () => { worker.terminate(); embeddingsWorkerRef.current = null; };
+        } catch {
+            console.warn('[SmartDetect] Embeddings worker unavailable');
+        }
     }, []);
 
     /**
@@ -677,6 +709,69 @@ export function useSmartDetection(
                     wordBufferRef.current = [];
                     processingRef.current = false;
                     return;
+                }
+            }
+
+            // PRIORITY 3: LOCAL SEMANTIC SEARCH — paraphrase detection via embeddings worker
+            // Only runs if: worker is ready, index is loaded, and text is long enough
+            if (
+                embeddingsWorkerRef.current &&
+                embeddingsReadyRef.current &&
+                embeddingsIndexReadyRef.current &&
+                textWindow.length >= 20
+            ) {
+                try {
+                    const semanticResults = await semanticSearchLocal(embeddingsWorkerRef.current, textWindow);
+                    if (semanticResults.length > 0) {
+                        const semanticScriptures: DetectedScripture[] = [];
+
+                        for (const sr of semanticResults) {
+                            // Parse ref like "John 3:16" -> { book: "John", chapter: 3, verse: 16 }
+                            const refMatch = sr.ref.match(/^(.+?)\s+(\d+):(\d+)$/);
+                            if (!refMatch) continue;
+
+                            const [, book, chStr, vStr] = refMatch;
+                            const chapter = parseInt(chStr);
+                            const verse = parseInt(vStr);
+
+                            // Check recent detections
+                            const key = `${book}-${chapter}-${verse}`;
+                            const lastDetected = recentDetectionsRef.current.get(key);
+                            if (lastDetected && Date.now() - lastDetected < 5000) continue;
+
+                            // Look up text for the active version
+                            let text = sr.text;
+                            if (version !== 'KJV') {
+                                const asyncText = await lookupVerseAsync(book, chapter, verse, version);
+                                if (asyncText) text = asyncText;
+                            }
+
+                            if (text) {
+                                semanticScriptures.push({
+                                    book,
+                                    chapter,
+                                    verse,
+                                    text,
+                                    reference: sr.ref,
+                                    confidence: sr.confidence,
+                                    matchType: 'paraphrase',
+                                });
+                                recentDetectionsRef.current.set(key, Date.now());
+                                chapterContextRef.current = `${book} ${chapter}`;
+                            }
+                        }
+
+                        if (semanticScriptures.length > 0) {
+                            console.log('[SmartDetect] LOCAL SEMANTIC MATCH:', semanticScriptures.map(s => s.reference).join(', '));
+                            onDetect(semanticScriptures, [], 'SWITCH', 1);
+                            wordBufferRef.current = [];
+                            processingRef.current = false;
+                            return;
+                        }
+                    }
+                } catch (err) {
+                    console.warn('[SmartDetect] Semantic search error:', err);
+                    // Fall through to API
                 }
             }
 
@@ -1229,4 +1324,47 @@ export function useSmartDetection(
         updateSermonContext,
         getPastorProfile,
     };
+}
+
+// ─── Semantic Search Helper ───────────────────────────────────────────────────
+
+interface SemanticResult {
+    ref: string;
+    text: string;
+    confidence: number;
+}
+
+/**
+ * Sends search text to the embeddings worker and returns semantic matches.
+ * Returns an empty array if no results or timeout (3s).
+ */
+function semanticSearchLocal(
+    worker: Worker,
+    text: string,
+    threshold = 0.50,
+    maxResults = 3
+): Promise<SemanticResult[]> {
+    return new Promise((resolve) => {
+        const handler = (e: MessageEvent) => {
+            const msg = e.data;
+            if (msg.type === 'results') {
+                worker.removeEventListener('message', handler);
+                clearTimeout(timer);
+                resolve(msg.results || []);
+            } else if (msg.type === 'error') {
+                worker.removeEventListener('message', handler);
+                clearTimeout(timer);
+                resolve([]);
+            }
+        };
+
+        worker.addEventListener('message', handler);
+        worker.postMessage({ type: 'search', text, threshold, maxResults });
+
+        // Safety timeout — don't block the detection pipeline
+        const timer = setTimeout(() => {
+            worker.removeEventListener('message', handler);
+            resolve([]);
+        }, 3000);
+    });
 }

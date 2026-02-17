@@ -97,3 +97,5 @@ interface Window {
         onUpdateError: (cb: (err: string) => void) => () => void;
     };
 }
+
+declare module 'sql.js';

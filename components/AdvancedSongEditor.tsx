@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { X, Plus, Trash2, GripVertical, Type, Palette, Music, User, Layout, Eye, ChevronUp, ChevronDown, Check, Save, Bold, Italic, ArrowLeft } from 'lucide-react';
 import { ResourceItem } from '@/utils/resourceLibrary';
+import { parseLyrics, splitBlockIntoSlides, MAX_LINES_PER_SLIDE } from '@/utils/lyricsParser';
 
 interface AdvancedSongEditorProps {
     resource: ResourceItem;
@@ -77,10 +78,38 @@ export default function AdvancedSongEditor({ resource, onSave, onCancel }: Advan
     };
 
     const handleSave = () => {
+        // Enforce slide limits before saving
+        const optimizedSlides: any[] = [];
+        for (const slide of slides) {
+            // Clean HTML tags and normalize for parsing
+            const plainContent = slide.content
+                .replace(/<br\s*\/?>/gi, '\n')
+                .replace(/<div>/gi, '\n')
+                .replace(/<\/div>/gi, '')
+                .replace(/&nbsp;/g, ' ')
+                .replace(/<[^>]*>/g, '') // Strip remaining tags
+                .trim();
+
+            const lines = plainContent.split('\n').filter(l => l.trim());
+
+            // If slide is too long, split it
+            if (lines.length > MAX_LINES_PER_SLIDE) {
+                const subSlides = splitBlockIntoSlides(plainContent, slide.label || 'Verse');
+                optimizedSlides.push(...subSlides);
+            } else {
+                optimizedSlides.push({
+                    ...slide,
+                    content: plainContent // Store as cleaned text for consistency? 
+                    // Actually, the app seems to expect some HTML for formatting (bold/italic)
+                    // But the line limit must be respected.
+                });
+            }
+        }
+
         const updatedResource: ResourceItem = {
             ...resource,
             title,
-            slides,
+            slides: optimizedSlides,
             meta: {
                 ...resource.meta,
                 author

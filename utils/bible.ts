@@ -1,6 +1,7 @@
 
 import kjvData from './kjv.json';
 import { textToNumbers } from './textNormalization';
+import { getOfflineVerse, cacheVerse as idbCacheVerse, migrateLocalStorageCache } from './bibleOfflineCache';
 
 /**
  * Fuzzy string matching using Sørensen–Dice coefficient
@@ -271,6 +272,8 @@ if (typeof window !== 'undefined') {
     } catch (e) {
         console.warn('Failed to load bible cache', e);
     }
+    // Migrate localStorage cache to IndexedDB (one-time, non-blocking)
+    migrateLocalStorageCache().catch(() => {});
 }
 
 const saveCache = () => {
@@ -306,6 +309,15 @@ export async function lookupVerseAsync(
     const bookKey = findBookKey(bookStr);
     if (!bookKey) return null; // Can't look up if we don't know the book
     const canonicalBook = getCanonicalBookName(bookKey); // Use canonical for Cache Key consistency
+
+    // 0.5. Check IndexedDB offline cache (full Bibles + cached verses)
+    try {
+        const offlineResult = await getOfflineVerse(version, bookKey, c, v);
+        if (offlineResult) {
+            console.log(`[IndexedDB] Hit: ${version} ${canonicalBook} ${c}:${v}`);
+            return offlineResult;
+        }
+    } catch { /* IndexedDB unavailable — continue */ }
 
     // 1. Check Electron IPC (Offline functionality via Main Process)
     if (typeof window !== 'undefined' && (window as any).electronAPI?.getVerse) {
@@ -354,6 +366,8 @@ export async function lookupVerseAsync(
                 if (!VERSE_CACHE[version][canonicalBook][c]) VERSE_CACHE[version][canonicalBook][c] = {};
                 VERSE_CACHE[version][canonicalBook][c][v] = result.text;
                 saveCache();
+                // Also persist to IndexedDB
+                idbCacheVerse(version, bookKey, c, v, result.text).catch(() => {});
                 return result.text;
             }
         } catch (e) {
@@ -379,6 +393,8 @@ export async function lookupVerseAsync(
 
                 VERSE_CACHE[version][canonicalBook][c][v] = data.text;
                 saveCache();
+                // Also persist to IndexedDB
+                idbCacheVerse(version, bookKey, c, v, data.text).catch(() => {});
                 return data.text;
             }
         }

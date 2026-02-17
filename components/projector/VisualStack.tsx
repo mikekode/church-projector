@@ -11,9 +11,10 @@ interface VisualStackProps {
     overlay?: React.ReactNode;  // Props layer (Corner logo, etc)
     alert?: string | null;      // Alert message
     fullBleed?: boolean;        // If true, ignore padding (for edge-to-edge media)
+    style?: React.CSSProperties;
 }
 
-export default function VisualStack({ background, theme, content, overlay, alert, fullBleed }: VisualStackProps) {
+export default function VisualStack({ background, theme, content, overlay, alert, fullBleed, style }: VisualStackProps) {
     const [activeBg, setActiveBg] = useState<string | null>(null);
     const [isVisible, setIsVisible] = useState(false);
 
@@ -30,7 +31,7 @@ export default function VisualStack({ background, theme, content, overlay, alert
     }, [background]);
 
     return (
-        <div className="fixed inset-0 bg-black overflow-hidden select-none cursor-none">
+        <div className="fixed inset-0 bg-black overflow-hidden select-none cursor-none" style={style}>
 
             {/* LAYER 1: BACKGROUND (Z-0) */}
             <div className="absolute inset-0 z-0 bg-black transition-opacity duration-1000">
