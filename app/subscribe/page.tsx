@@ -48,6 +48,8 @@ export default function SubscribePage() {
                         <div className="space-y-3 mb-10 w-full">
                             {[
                                 "AI Voice Recognition",
+                                "Works Offline (Whisper AI)",
+                                "Semantic Bible Search",
                                 "Unlimited Bible Versions",
                                 "Atem & MIDI Integration",
                                 "Cloud Song Library",
@@ -90,6 +92,7 @@ export default function SubscribePage() {
                         <div className="space-y-3 mb-10 w-full">
                             {[
                                 "Everything in Monthly",
+                                "Offline Mode + Semantic Search",
                                 "Priority Email Support",
                                 "Early Access to New Features",
                                 "Extended Hours Pool",
@@ -128,6 +131,7 @@ export default function SubscribePage() {
                         <div className="space-y-3 mb-10 w-full">
                             {[
                                 "Everything in 6-Month",
+                                "Full Offline Suite",
                                 "Direct Phone Support",
                                 "1:1 Onboarding Session",
                                 "Custom Theme Design",

@@ -1,6 +1,6 @@
 'use client';
 import Link from 'next/link';
-import { Check, X, ArrowRight, Monitor, Laptop, Mic, Zap, Shield, Database } from 'lucide-react';
+import { Check, X, ArrowRight, Monitor, Laptop, Mic, Zap, Shield, Database, WifiOff } from 'lucide-react';
 
 export default function EasyWorshipAlternativePage() {
     return (
@@ -28,7 +28,7 @@ export default function EasyWorshipAlternativePage() {
                         The Smarter <span className="text-emerald-500">EasyWorship Alternative</span>
                     </h1>
                     <p className="text-xl text-zinc-400 max-w-3xl mx-auto mb-12 leading-relaxed">
-                        EasyWorship is easy, but <strong className="text-white">Creenly is smarter</strong>. Our AI listens to your pastor and projects Bible verses automatically. Plus, <strong className="text-white">import your entire EasyWorship song library in just a few clicks</strong>—switching has never been easier.
+                        EasyWorship is easy, but <strong className="text-white">Creenly is smarter</strong>. Our AI listens to your pastor and projects Bible verses automatically — <strong className="text-white">even without internet</strong>. Plus, <strong className="text-white">import your entire EasyWorship song library in just a few clicks</strong>—switching has never been easier.
                     </p>
                     <div className="flex flex-col sm:flex-row gap-4 justify-center">
                         <Link href="/#download-section" className="px-8 py-4 rounded-2xl bg-emerald-600 font-bold text-lg hover:bg-emerald-500 transition-all flex items-center justify-center gap-2">
@@ -57,6 +57,8 @@ export default function EasyWorshipAlternativePage() {
                             <tbody>
                                 {[
                                     { feature: 'AI Voice Recognition', creenly: true, easyworship: false },
+                                    { feature: 'Works Offline', creenly: true, easyworship: false },
+                                    { feature: 'Semantic Bible Search', creenly: true, easyworship: false },
                                     { feature: 'Auto Bible Verse Detection', creenly: true, easyworship: false },
                                     { feature: 'Import EasyWorship Song Library', creenly: '1-Click', easyworship: 'N/A' },
                                     { feature: 'Monthly Price', creenly: '$15', easyworship: '$20+' },
@@ -115,6 +117,11 @@ export default function EasyWorshipAlternativePage() {
                                 icon: <Database size={28} />,
                                 title: 'Import Your Songs',
                                 desc: 'Switching is effortless. Import your entire EasyWorship song library in just a few clicks—no manual re-entry required.'
+                            },
+                            {
+                                icon: <WifiOff size={28} />,
+                                title: 'Works Offline',
+                                desc: 'On-device Whisper AI, cached Bible verses, and semantic search — all running locally. No internet required for your Sunday service.'
                             },
                         ].map((item, i) => (
                             <div key={i} className="p-8 rounded-3xl bg-zinc-900/50 border border-white/5">

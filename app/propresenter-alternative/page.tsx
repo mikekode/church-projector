@@ -1,6 +1,6 @@
 'use client';
 import Link from 'next/link';
-import { Check, X, ArrowRight, Monitor, Laptop, Mic, Users, Zap, DollarSign } from 'lucide-react';
+import { Check, X, ArrowRight, Monitor, Laptop, Mic, Users, Zap, DollarSign, WifiOff } from 'lucide-react';
 
 export default function ProPresenterAlternativePage() {
     return (
@@ -28,7 +28,7 @@ export default function ProPresenterAlternativePage() {
                         Looking for a <span className="text-indigo-500">ProPresenter Alternative</span>?
                     </h1>
                     <p className="text-xl text-zinc-400 max-w-3xl mx-auto mb-12 leading-relaxed">
-                        ProPresenter is powerful but expensive and complex. <strong className="text-white">Creenly</strong> gives you AI-powered worship presentation for a fraction of the cost, with a learning curve measured in minutes, not weeks.
+                        ProPresenter is powerful but expensive and complex. <strong className="text-white">Creenly</strong> gives you AI-powered worship presentation that works <strong className="text-white">even without internet</strong> — for a fraction of the cost, with a learning curve measured in minutes, not weeks.
                     </p>
                     <div className="flex flex-col sm:flex-row gap-4 justify-center">
                         <Link href="/#download-section" className="px-8 py-4 rounded-2xl bg-indigo-600 font-bold text-lg hover:bg-indigo-500 transition-all flex items-center justify-center gap-2">
@@ -57,6 +57,8 @@ export default function ProPresenterAlternativePage() {
                             <tbody>
                                 {[
                                     { feature: 'AI Voice Recognition', creenly: true, propresenter: false },
+                                    { feature: 'Works Offline', creenly: true, propresenter: false },
+                                    { feature: 'Semantic Bible Search', creenly: true, propresenter: false },
                                     { feature: 'Auto Bible Verse Detection', creenly: true, propresenter: false },
                                     { feature: 'Learning Curve', creenly: '5 minutes', propresenter: '2-4 weeks' },
                                     { feature: 'Monthly Price', creenly: '$15', propresenter: '$40+' },
@@ -110,6 +112,11 @@ export default function ProPresenterAlternativePage() {
                                 icon: <Mic size={28} />,
                                 title: 'AI Does the Work',
                                 desc: 'Our AI listens to your pastor and projects verses automatically. No more missed cues or frantic searching.'
+                            },
+                            {
+                                icon: <WifiOff size={28} />,
+                                title: 'Works Without Internet',
+                                desc: 'On-device Whisper AI, cached Bible verses, and semantic search all run locally. ProPresenter can\'t do that.'
                             },
                         ].map((item, i) => (
                             <div key={i} className="p-8 rounded-3xl bg-zinc-900/50 border border-white/5">

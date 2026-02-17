@@ -5,7 +5,7 @@ import "./globals.css";
 export const metadata: Metadata = {
     metadataBase: new URL('https://www.creenly.com'),
     title: "Creenly | AI Church Projector Software - Auto Bible Verse Display",
-    description: "The world's first AI church projector software. Automatically detect and project Bible verses in real-time during sermons. Easier than ProPresenter, smarter than EasyWorship. Used by 500+ churches. Free download.",
+    description: "The world's first AI church projector software that works offline. Automatically detect and project Bible verses in real-time during sermons using on-device Whisper AI. Easier than ProPresenter, smarter than EasyWorship. Used by 500+ churches. Free download.",
     keywords: [
         // Primary keywords
         "church projector software",
@@ -18,7 +18,9 @@ export const metadata: Metadata = {
         "automatic Bible verse display software",
         "church presentation software for volunteers",
         "AI sermon scripture projector",
-        "best church projector software 2025",
+        "best church projector software 2026",
+        "offline church projector software",
+        "church presentation software works offline",
         "easy worship software for small churches",
         "church lyrics projection software",
         "Sunday service presentation software",
@@ -31,7 +33,7 @@ export const metadata: Metadata = {
     ],
     openGraph: {
         title: "Creenly | AI Church Projector Software - Automatic Scripture Display",
-        description: "Zero-Click AI listens to your pastor and projects Bible verses automatically. 500+ churches trust Creenly. Free download for Windows & Mac.",
+        description: "Zero-Click AI listens to your pastor and projects Bible verses automatically — even offline. On-device Whisper AI, semantic Bible search, and cached verses. 500+ churches trust Creenly. Free download for Windows & Mac.",
         url: "https://www.creenly.com",
         siteName: "Creenly",
         images: [
@@ -117,7 +119,7 @@ export default function RootLayout({
                             "@type": "SoftwareApplication",
                             "name": "Creenly",
                             "alternateName": "Creenly AI Church Projector",
-                            "description": "AI-powered church projector software that automatically detects and displays Bible verses during sermons",
+                            "description": "AI-powered church projector software that works offline. Automatically detects and displays Bible verses during sermons using on-device Whisper AI and semantic search.",
                             "operatingSystem": "Windows 10, Windows 11, macOS 12.0+",
                             "applicationCategory": "MultimediaApplication",
                             "applicationSubCategory": "Church Presentation Software",
@@ -137,7 +139,7 @@ export default function RootLayout({
                             },
                             "downloadUrl": "https://www.creenly.com/#download-section",
                             "screenshot": "https://www.creenly.com/screenshot.png",
-                            "featureList": "AI Voice Recognition, Automatic Bible Verse Detection, Multiple Bible Versions, ATEM Integration, MIDI Support, Cloud Song Library"
+                            "featureList": "AI Voice Recognition, Automatic Bible Verse Detection, Works Offline, Semantic Bible Search, On-Device Whisper AI, Multiple Bible Versions, ATEM Integration, MIDI Support, Cloud Song Library, EasyWorship Import"
                         })
                     }}
                 />
@@ -172,7 +174,7 @@ export default function RootLayout({
                                     "name": "What is Creenly church projector software?",
                                     "acceptedAnswer": {
                                         "@type": "Answer",
-                                        "text": "Creenly is AI-powered church presentation software that automatically listens to sermons and projects Bible verses in real-time. It's designed to be easier than ProPresenter and smarter than EasyWorship, perfect for volunteer-run churches."
+                                        "text": "Creenly is AI-powered church presentation software that automatically listens to sermons and projects Bible verses in real-time — even without internet. On-device Whisper AI handles voice detection offline, while semantic search lets you find verses by topic or meaning. It's designed to be easier than ProPresenter and smarter than EasyWorship, perfect for volunteer-run churches."
                                     }
                                 },
                                 {

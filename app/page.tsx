@@ -3,7 +3,7 @@
 
 import Link from 'next/link';
 import { useState } from 'react';
-import { Check, ArrowRight, Zap, Shield, Mic, Monitor, Music, Clock, Users, Cloud, Star, Download, Laptop, LayoutGrid, Info, CheckCircle, ChevronRight } from 'lucide-react';
+import { Check, ArrowRight, Zap, Shield, Mic, Monitor, Music, Clock, Users, Cloud, Star, Download, Laptop, LayoutGrid, Info, CheckCircle, ChevronRight, WifiOff, Brain } from 'lucide-react';
 
 export default function Home() {
     return (
@@ -43,7 +43,7 @@ export default function Home() {
 
                     <div className="max-w-7xl mx-auto text-center space-y-12">
                         <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 text-xs font-bold tracking-widest uppercase mb-4">
-                            Stop Stressing. Start Projecting.
+                            <WifiOff size={12} /> Works Online. Works Offline. Works Period.
                         </div>
                         <h1 className="text-5xl md:text-8xl lg:text-[120px] font-black tracking-tighter leading-[0.9] bg-gradient-to-b from-white via-white to-white/40 bg-clip-text text-transparent">
                             <span className="block text-2xl md:text-4xl lg:text-5xl text-indigo-400 not-italic mb-4">AI Church Projector Software</span>
@@ -51,7 +51,7 @@ export default function Home() {
                         </h1>
                         <div className="max-w-3xl mx-auto space-y-10">
                             <p className="text-xl md:text-2xl text-zinc-400 font-medium leading-relaxed">
-                                ProPresenter is too complex. PowerPoint is too manual. <span className="text-white font-bold">Creenly is the only AI system</span> that listens to your Pastor and projects the right verse instantly. Finally, a worship tool that works as hard as you do.
+                                ProPresenter is too complex. PowerPoint is too manual. <span className="text-white font-bold">Creenly is the only AI system</span> that listens to your Pastor and projects the right verse instantly — <span className="text-indigo-400 font-bold">even without internet</span>. On-device Whisper AI means zero dependency on cloud services. Your worship never drops.
                             </p>
 
                             <div className="flex flex-col sm:flex-row gap-6 items-center justify-center">
@@ -107,6 +107,28 @@ export default function Home() {
                             </p>
                         </div>
                     </div>
+
+                    {/* Offline-First Row */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mt-8">
+                        <div className="p-10 rounded-[40px] bg-gradient-to-br from-indigo-950/40 to-zinc-900/50 border border-indigo-500/20 space-y-6 hover:border-indigo-500/40 transition-all group">
+                            <div className="w-14 h-14 bg-indigo-600/20 rounded-2xl flex items-center justify-center text-indigo-400 mb-6 group-hover:scale-110 transition-transform">
+                                <WifiOff size={28} />
+                            </div>
+                            <h3 className="text-3xl font-black">Works Offline</h3>
+                            <p className="text-zinc-500 leading-relaxed font-medium">
+                                No internet? No problem. On-device Whisper AI handles voice detection, Bible verses are cached locally, and semantic search runs entirely on your machine. Your worship never depends on a Wi-Fi signal.
+                            </p>
+                        </div>
+                        <div className="p-10 rounded-[40px] bg-gradient-to-br from-purple-950/40 to-zinc-900/50 border border-purple-500/20 space-y-6 hover:border-purple-500/40 transition-all group">
+                            <div className="w-14 h-14 bg-purple-600/20 rounded-2xl flex items-center justify-center text-purple-400 mb-6 group-hover:scale-110 transition-transform">
+                                <Brain size={28} />
+                            </div>
+                            <h3 className="text-3xl font-black">Semantic Search</h3>
+                            <p className="text-zinc-500 leading-relaxed font-medium">
+                                Say "that verse about love" and Creenly finds 1 Corinthians 13. AI embeddings understand meaning, not just keywords. Search the way your Pastor thinks — by topic, by theme, by feel.
+                            </p>
+                        </div>
+                    </div>
                 </section>
 
                 {/* Comparison Table */}
@@ -130,6 +152,8 @@ export default function Home() {
                                 <tbody>
                                     {[
                                         { f: "AI Voice Tracking", a: true, b: false, c: false },
+                                        { f: "Works Offline", a: true, b: false, c: false },
+                                        { f: "Semantic Bible Search", a: true, b: false, c: false },
                                         { f: "Zero-Prep Scripture Search", a: true, b: "Manual", c: "Laggy" },
                                         { f: "Import EasyWorship Songs", a: "1-Click", b: "N/A", c: false },
                                         { f: "Learning Curve", a: "Minutes", b: "Weeks", c: "Days" },
@@ -202,7 +226,7 @@ export default function Home() {
                         </div>
 
                         <p className="text-zinc-500 text-xs font-bold uppercase tracking-widest italic">
-                            Version 2.1.6 • 100% Virus Free • Certified Open Source Build
+                            Version 2.1.28 • 100% Virus Free • Certified Open Source Build
                         </p>
                         <div className="max-w-md mx-auto p-4 rounded-xl bg-indigo-500/5 border border-indigo-500/10">
                             <p className="text-[10px] text-indigo-400 font-bold uppercase tracking-widest mb-2 flex items-center justify-center gap-2">
@@ -244,7 +268,7 @@ export default function Home() {
                             <span className="text-2xl font-black tracking-tighter leading-none">CREENLY</span>
                         </div>
                         <p className="text-zinc-500 text-sm max-w-sm mb-6 font-medium">
-                            Next-generation worship software designed for the modern sanctuary.
+                            AI-powered worship software that works online and offline.
                             Built so you can focus on the Spirit, not the software.
                         </p>
                     </div>
