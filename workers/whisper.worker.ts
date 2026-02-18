@@ -9,6 +9,7 @@
  * (closes gap with PewBeam's Faster Whisper approach).
  */
 
+import './worker-polyfill';
 import { pipeline, env } from '@xenova/transformers';
 
 // Cache models in browser IndexedDB

@@ -15,6 +15,7 @@
  *   ← { type: 'error', message }    — Error
  */
 
+import './worker-polyfill';
 import { pipeline, env, type FeatureExtractionPipeline } from '@xenova/transformers';
 
 // Configure cache
