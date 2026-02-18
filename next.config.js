@@ -1,3 +1,5 @@
+const webpack = require('webpack');
+
 module.exports = {
     output: process.env.VERCEL ? undefined : 'export',
     assetPrefix: process.env.VERCEL ? undefined : './',
@@ -28,6 +30,18 @@ module.exports = {
             test: /\.node$/,
             use: 'null-loader',
         });
+
+        // Polyfill window=self for Web Workers. @xenova/transformers and
+        // onnxruntime-web reference `window` at module init, but Workers
+        // only have `self`. BannerPlugin injects this at the very top of
+        // every output file — before any webpack runtime or module code.
+        // Safe everywhere: browser (window exists → no-op), server (no self → no-op).
+        config.plugins.push(
+            new webpack.BannerPlugin({
+                banner: 'if(typeof window==="undefined"&&typeof self!=="undefined"){self.window=self;}',
+                raw: true,
+            })
+        );
 
         if (!isServer) {
             config.output.globalObject = 'self';

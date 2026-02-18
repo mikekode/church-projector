@@ -7,18 +7,20 @@
  *
  * Model upgrade: tiny.en → base.en for significantly better accuracy
  * (closes gap with PewBeam's Faster Whisper approach).
+ *
+ * NOTE: The `window` polyfill for Web Workers is injected by
+ * webpack BannerPlugin in next.config.js — no inline polyfill needed.
  */
 
-// Polyfill: Web Workers don't have `window`, but @xenova/transformers
-// and onnxruntime-web reference it at module init. This MUST run before
-// any library code — so we use dynamic import() below instead of static imports.
-if (typeof window === 'undefined') {
-    (self as any).window = self;
-}
+import { pipeline, env } from '@xenova/transformers';
 
-let pipelineFn: any;
-let envObj: any;
-let transcriber: any;
+// Cache models in browser IndexedDB
+env.allowLocalModels = false;
+env.useBrowserCache = true;
+// Only allow remote model fetching if we are actually online
+env.allowRemoteModels = typeof navigator !== 'undefined' ? navigator.onLine : true;
+
+let transcriber: ReturnType<typeof pipeline> extends Promise<infer T> ? T : never;
 
 self.addEventListener('message', async (e: MessageEvent) => {
     const { type, audio } = e.data;
@@ -26,24 +28,14 @@ self.addEventListener('message', async (e: MessageEvent) => {
     if (type === 'load') {
         console.log("[WhisperWorker] Received 'load' command. Initializing pipeline...");
 
+        // Prevent download if offline and allowRemoteModels is false
+        if (!navigator.onLine && !env.useBrowserCache) {
+            self.postMessage({ type: 'error', message: 'Offline: Cannot download AI model. Please connect to the internet once.' });
+            return;
+        }
+
         try {
-            // Dynamic import — guarantees the polyfill above runs first
-            if (!pipelineFn) {
-                const mod = await import('@xenova/transformers');
-                pipelineFn = mod.pipeline;
-                envObj = mod.env;
-                envObj.allowLocalModels = false;
-                envObj.useBrowserCache = true;
-                envObj.allowRemoteModels = typeof navigator !== 'undefined' ? navigator.onLine : true;
-            }
-
-            // Prevent download if offline
-            if (!navigator.onLine && !envObj.useBrowserCache) {
-                self.postMessage({ type: 'error', message: 'Offline: Cannot download AI model. Please connect to the internet once.' });
-                return;
-            }
-
-            transcriber = await pipelineFn(
+            transcriber = await pipeline(
                 'automatic-speech-recognition',
                 'Xenova/whisper-base.en',
                 {
@@ -56,7 +48,7 @@ self.addEventListener('message', async (e: MessageEvent) => {
                         self.postMessage({ type: 'progress', data: progress });
                     }
                 }
-            );
+            ) as any;
             console.log("[WhisperWorker] Pipeline ready ✓");
             self.postMessage({ type: 'ready' });
         } catch (err: any) {
