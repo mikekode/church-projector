@@ -17,8 +17,9 @@ import { pipeline, env } from '@xenova/transformers';
 // Cache models in browser IndexedDB
 env.allowLocalModels = false;
 env.useBrowserCache = true;
-// Only allow remote model fetching if we are actually online
-env.allowRemoteModels = typeof navigator !== 'undefined' ? navigator.onLine : true;
+// Always allow remote — when offline, useBrowserCache loads from IndexedDB cache.
+// Setting this to false when offline causes "both local and remote disabled" error.
+env.allowRemoteModels = true;
 
 let transcriber: ReturnType<typeof pipeline> extends Promise<infer T> ? T : never;
 
