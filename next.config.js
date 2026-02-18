@@ -1,5 +1,3 @@
-const webpack = require('webpack');
-
 module.exports = {
     output: process.env.VERCEL ? undefined : 'export',
     assetPrefix: process.env.VERCEL ? undefined : './',
@@ -14,13 +12,12 @@ module.exports = {
         ignoreDuringBuilds: true
     },
     webpack: (config, { isServer }) => {
-        // Exclude onnxruntime-node entirely (native Node bindings) — we use onnxruntime-web.
-        // IgnorePlugin strips it from the bundle; resolve.alias replaces it with an empty
-        // module so dynamic import() calls in @xenova/transformers resolve gracefully
-        // instead of throwing at runtime (especially in Electron where `process` exists).
-        config.plugins.push(
-            new webpack.IgnorePlugin({ resourceRegExp: /^onnxruntime-node$/ })
-        );
+        // Replace onnxruntime-node (native Node bindings) with an empty module.
+        // @xenova/transformers tries to import it when `process` exists (Electron),
+        // but we only use onnxruntime-web. resolve.alias: false provides an empty
+        // module so the import resolves gracefully and the library falls back.
+        // NOTE: Do NOT combine with IgnorePlugin — it strips the import entirely,
+        // causing an uncaught "Cannot find module" error at runtime.
         config.resolve.alias = {
             ...config.resolve.alias,
             'onnxruntime-node': false,
