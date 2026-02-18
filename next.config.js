@@ -14,10 +14,17 @@ module.exports = {
         ignoreDuringBuilds: true
     },
     webpack: (config, { isServer }) => {
-        // Exclude onnxruntime-node entirely (native Node bindings) — we use onnxruntime-web
+        // Exclude onnxruntime-node entirely (native Node bindings) — we use onnxruntime-web.
+        // IgnorePlugin strips it from the bundle; resolve.alias replaces it with an empty
+        // module so dynamic import() calls in @xenova/transformers resolve gracefully
+        // instead of throwing at runtime (especially in Electron where `process` exists).
         config.plugins.push(
             new webpack.IgnorePlugin({ resourceRegExp: /^onnxruntime-node$/ })
         );
+        config.resolve.alias = {
+            ...config.resolve.alias,
+            'onnxruntime-node': false,
+        };
 
         // Ignore .node native binary files
         config.module.rules.push({
