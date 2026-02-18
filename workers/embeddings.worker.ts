@@ -15,14 +15,14 @@
  *   ← { type: 'error', message }    — Error
  */
 
-import './worker-polyfill';
-import { pipeline, env, type FeatureExtractionPipeline } from '@xenova/transformers';
+// Polyfill: Web Workers don't have `window`, but @xenova/transformers
+// and onnxruntime-web reference it at module init. This MUST run before
+// any library code — so we use dynamic import() below instead of static imports.
+if (typeof window === 'undefined') {
+    (self as any).window = self;
+}
 
-// Configure cache
-env.useBrowserCache = true;
-env.allowLocalModels = false;
-
-let embedder: FeatureExtractionPipeline | null = null;
+let embedder: any = null;
 
 // Verse embeddings index: array of { ref, text, emb: Float32Array }
 let verseIndex: { ref: string; text: string; emb: Float32Array }[] = [];
@@ -105,6 +105,11 @@ self.addEventListener('message', async (e: MessageEvent) => {
 
     if (type === 'load') {
         try {
+            // Dynamic import — guarantees the polyfill above runs first
+            const { pipeline, env } = await import('@xenova/transformers');
+            env.useBrowserCache = true;
+            env.allowLocalModels = false;
+
             // Load the sentence embedding model
             embedder = await pipeline(
                 'feature-extraction',
@@ -114,7 +119,7 @@ self.addEventListener('message', async (e: MessageEvent) => {
                         self.postMessage({ type: 'progress', data: progress });
                     }
                 }
-            ) as FeatureExtractionPipeline;
+            );
 
             // Load verse index from IndexedDB
             const loaded = await loadVerseIndex();
