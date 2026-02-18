@@ -90,26 +90,47 @@ function preloadWhisperModel(): Promise<void> {
                 { type: 'module' }
             );
 
-            let maxProgress = 0;
+            // Track per-file loaded/total bytes for accurate overall progress.
+            // Each model file (config, tokenizer, ONNX weights) reports its own
+            // 0-100% progress independently — we sum bytes across ALL files.
+            const fileBytes = new Map<string, { loaded: number; total: number }>();
+            let lastDispatchedPct = 0;
+
             worker.onmessage = (e) => {
                 const msg = e.data;
                 if (msg.type === 'progress') {
-                    const status = msg.data?.status;
-                    const pct = msg.data?.progress;
+                    const { status, file, loaded, total } = msg.data || {};
 
-                    if (status === 'progress' && pct !== undefined) {
-                        // Xenova downloads 7+ files sequentially. 
-                        // We track the highest progress seen across any file to prevent resets.
-                        const currentPct = Math.round(pct);
-                        if (currentPct > maxProgress) {
-                            maxProgress = currentPct;
-                            window.dispatchEvent(new CustomEvent('whisper-preload-progress', { detail: maxProgress }));
+                    if (status === 'initiate' && file) {
+                        // A new file download is starting
+                        fileBytes.set(file, { loaded: 0, total: 0 });
+                        if (lastDispatchedPct === 0) {
+                            lastDispatchedPct = 1;
+                            window.dispatchEvent(new CustomEvent('whisper-preload-progress', { detail: 1 }));
                         }
-                    } else if (status === 'initiate') {
-                        // When a new file starts, give a tiny bump to show activity
-                        if (maxProgress === 0) {
-                            maxProgress = 2;
-                            window.dispatchEvent(new CustomEvent('whisper-preload-progress', { detail: maxProgress }));
+                    } else if (status === 'progress' && file && loaded !== undefined && total !== undefined) {
+                        // Update this file's byte counts
+                        fileBytes.set(file, { loaded, total });
+
+                        // Sum across ALL files for overall progress
+                        let totalSize = 0;
+                        let totalLoaded = 0;
+                        fileBytes.forEach((fp) => {
+                            totalSize += fp.total;
+                            totalLoaded += fp.loaded;
+                        });
+
+                        const overallPct = totalSize > 0 ? Math.round((totalLoaded / totalSize) * 100) : 0;
+                        // Only dispatch if it moved forward (avoid jitter)
+                        if (overallPct > lastDispatchedPct) {
+                            lastDispatchedPct = overallPct;
+                            window.dispatchEvent(new CustomEvent('whisper-preload-progress', { detail: overallPct }));
+                        }
+                    } else if (status === 'done') {
+                        // File finished — mark as complete
+                        const existing = fileBytes.get(file);
+                        if (existing && existing.total > 0) {
+                            fileBytes.set(file, { loaded: existing.total, total: existing.total });
                         }
                     }
                 } else if (msg.type === 'ready') {
@@ -125,6 +146,13 @@ function preloadWhisperModel(): Promise<void> {
                 }
             };
 
+            worker.onerror = (e) => {
+                console.warn('[WhisperPreload] Worker error:', e.message);
+                window.dispatchEvent(new CustomEvent('whisper-preload-error', { detail: e.message }));
+                worker.terminate();
+                resolve();
+            };
+
             worker.postMessage({ type: 'load' });
 
             // Safety timeout: don't hang forever (5 min max for slow connections)
@@ -132,8 +160,8 @@ function preloadWhisperModel(): Promise<void> {
                 worker.terminate();
                 resolve();
             }, 5 * 60 * 1000);
-        } catch {
-            console.warn('[WhisperPreload] Worker creation failed — will download on first use');
+        } catch (e: any) {
+            console.warn('[WhisperPreload] Worker creation failed:', e?.message);
             resolve();
         }
     });

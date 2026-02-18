@@ -54,6 +54,9 @@ export default function OfflineSpeechRecognizer({ isListening, onTranscript, onI
     const onInterimRef = useRef(onInterim);
     const onVolumeRef = useRef(onVolume);
 
+    // Per-file byte tracking for accurate overall download progress
+    const fileBytesRef = useRef(new Map<string, { loaded: number; total: number }>());
+
     // Audio buffer for accumulating PCM samples
     const audioBufferRef = useRef<Float32Array[]>([]);
     const lastSpeechTimeRef = useRef<number>(0);
@@ -105,11 +108,21 @@ export default function OfflineSpeechRecognizer({ isListening, onTranscript, onI
                 }
 
                 const d = msg.data;
-                if (d.progress !== undefined) {
-                    setLoadPercent(Math.round(d.progress));
-                } else if (d.loaded && d.total) {
-                    setLoadPercent(Math.round((d.loaded / d.total) * 100));
+                const fb = fileBytesRef.current;
+
+                if (d.status === 'initiate' && d.file) {
+                    fb.set(d.file, { loaded: 0, total: 0 });
+                } else if (d.status === 'progress' && d.file && d.loaded !== undefined && d.total !== undefined) {
+                    fb.set(d.file, { loaded: d.loaded, total: d.total });
+                    let totalSize = 0, totalLoaded = 0;
+                    fb.forEach((fp) => { totalSize += fp.total; totalLoaded += fp.loaded; });
+                    const pct = totalSize > 0 ? Math.round((totalLoaded / totalSize) * 100) : 0;
+                    setLoadPercent(pct);
+                } else if (d.status === 'done' && d.file) {
+                    const existing = fb.get(d.file);
+                    if (existing && existing.total > 0) fb.set(d.file, { loaded: existing.total, total: existing.total });
                 }
+
                 if (statusRef.current !== 'loading') setStatus('loading');
             } else if (msg.type === 'ready') {
                 if (loadTimeoutRef.current) {

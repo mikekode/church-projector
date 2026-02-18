@@ -37,13 +37,12 @@ self.addEventListener('message', async (e: MessageEvent) => {
                 'Xenova/whisper-base.en',
                 {
                     progress_callback: (progress: any) => {
-                        // Only report progress if we are actually making some
-                        if (progress.status === 'progress') {
-                            if (Math.round(progress.progress) % 20 === 0) {
-                                console.log(`[WhisperWorker] Download progress: ${Math.round(progress.progress)}%`);
-                            }
-                            self.postMessage({ type: 'progress', data: progress });
+                        // Forward ALL events (initiate, progress, done) so the
+                        // preloader can track per-file bytes for accurate overall %
+                        if (progress.status === 'progress' && Math.round(progress.progress) % 20 === 0) {
+                            console.log(`[WhisperWorker] ${progress.file || ''} ${Math.round(progress.progress)}%`);
                         }
+                        self.postMessage({ type: 'progress', data: progress });
                     }
                 }
             ) as any;
