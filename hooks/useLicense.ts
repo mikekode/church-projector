@@ -15,22 +15,29 @@ export function useLicense() {
     const [loading, setLoading] = useState(initialLicense.status === 'demo');
 
     useEffect(() => {
-        // Create a promise that rejects after 2 seconds to prevent hanging on "VERIFYING..."
-        const timeout = new Promise<never>((_, reject) =>
-            setTimeout(() => reject(new Error('timeout')), 2000)
-        );
+        let resolved = false;
 
-        // Background verification with timeout fallback
-        Promise.race([getCurrentLicense(), timeout])
-            .then((result) => {
-                setLicense(result);
-                setLoading(false);
-            })
-            .catch((err) => {
-                console.warn('[useLicense] Online check failed or timed out, falling back to cache:', err);
-                // On timeout or failure, we stay with the initialLicense (from cache) but stop loading
-                setLoading(false);
-            });
+        const finish = (result?: License) => {
+            if (resolved) return;
+            resolved = true;
+            if (result) setLicense(result);
+            setLoading(false);
+        };
+
+        // Background verification
+        getCurrentLicense()
+            .then((result) => finish(result))
+            .catch(() => finish());
+
+        // Hard timeout — 2s fallback to stop spinner
+        const timer = setTimeout(() => finish(), 2000);
+
+        // Chromium throttles timers in unfocused windows (Electron opens unfocused).
+        // When the window gains visibility, resolve immediately if still loading.
+        const onVisibility = () => {
+            if (document.visibilityState === 'visible') finish();
+        };
+        document.addEventListener('visibilitychange', onVisibility);
 
         // Re-check every 5 minutes
         const interval = setInterval(async () => {
@@ -38,7 +45,11 @@ export function useLicense() {
             setLicense(freshLicense);
         }, 5 * 60 * 1000);
 
-        return () => clearInterval(interval);
+        return () => {
+            clearTimeout(timer);
+            clearInterval(interval);
+            document.removeEventListener('visibilitychange', onVisibility);
+        };
     }, []);
 
     const isLicensed = license.status === 'active';

@@ -260,22 +260,15 @@ export function getCachedLicense(): License {
 
         const cached = JSON.parse(cachedData) as License & { cachedAt: number };
 
-        // Immediate status check
+        // Expired/cancelled — return as-is
         if (cached.status === 'expired' || cached.status === 'cancelled') {
             return cached;
         }
 
-        // Check Offline Grace Period (3 days)
-        // Hardening: If we have an active state in cache and we're within the 3 day window,
-        // we TRUST it immediately for zero-flicker UI.
-        const cacheAge = Date.now() - (cached.cachedAt || 0);
-        const OFFLINE_GRACE_PERIOD = 3 * 24 * 60 * 60 * 1000;
-
-        if (cacheAge < OFFLINE_GRACE_PERIOD && cached.status === 'active') {
-            return {
-                ...cached,
-                status: 'active'
-            };
+        // Trust cached 'active' status optimistically for instant UI.
+        // The background check in useLicense() will correct if stale.
+        if (cached.status === 'active') {
+            return { ...cached, status: 'active' };
         }
     } catch (e) {
         console.error('Cache parse error:', e);
