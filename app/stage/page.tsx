@@ -580,24 +580,21 @@ export default function StageDisplayPage() {
                                     (() => {
                                         const totalText = content.verses.map(v => v.text).join(' ');
                                         const fontScale = calculateFontScale(totalText, content.verses.length);
+                                        const vnColor = activeTheme.layout?.verseNumberColor || activeTheme.styles.color;
+                                        const vnScale = (activeTheme.layout?.verseNumberScale || 0.65) * 100;
                                         return (
                                             <div className="space-y-4 w-full">
                                                 {content.verses.map((v, idx) => (
-                                                    <div key={idx} className="flex items-start gap-4" style={{ justifyContent: activeTheme.styles.textAlign === 'center' ? 'center' : activeTheme.styles.textAlign === 'right' ? 'flex-end' : 'flex-start' }}>
-                                                        {(activeTheme.layout?.showVerseNumbers !== false) && (
-                                                            <span className="opacity-60 font-mono mt-1 flex-shrink-0" style={{
-                                                                color: activeTheme.layout?.verseNumberColor || activeTheme.styles.color,
-                                                                fontSize: `${(activeTheme.layout?.verseNumberScale || 0.5) * 100}%`
-                                                            }}>
-                                                                {v.verseNum}
-                                                            </span>
-                                                        )}
-                                                        <div
-                                                            className="text-left transition-all duration-300"
-                                                            style={{ fontSize: `${fontScale}em` }}
-                                                            dangerouslySetInnerHTML={{ __html: renderFormattedText(v.text) }}
-                                                        />
-                                                    </div>
+                                                    <div key={idx}
+                                                        className="transition-all duration-300"
+                                                        style={{ fontSize: `${fontScale}em`, textAlign: activeTheme.styles.textAlign || 'center' }}
+                                                        dangerouslySetInnerHTML={{ __html:
+                                                            (activeTheme.layout?.showVerseNumbers !== false
+                                                                ? `<span style="opacity:0.5;font-size:${vnScale}%;color:${vnColor};margin-right:0.2em;vertical-align:super;font-weight:bold">${v.verseNum}</span>`
+                                                                : '')
+                                                            + renderFormattedText(v.text)
+                                                        }}
+                                                    />
                                                 ))}
                                             </div>
                                         );
@@ -605,22 +602,20 @@ export default function StageDisplayPage() {
                                 ) : (
                                     (() => {
                                         const fontScale = calculateFontScale(content.text, 1);
+                                        const vnColor = activeTheme.layout?.verseNumberColor || activeTheme.styles.color;
+                                        const vnScale = (activeTheme.layout?.verseNumberScale || 0.65) * 100;
+                                        const singleVerseNum = content.verses?.[0]?.verseNum || content.reference?.split(':').pop()?.trim();
                                         return (
-                                            <div className="flex items-start gap-4" style={{ justifyContent: activeTheme.styles.textAlign === 'center' ? 'center' : activeTheme.styles.textAlign === 'right' ? 'flex-end' : 'flex-start' }}>
-                                                {(activeTheme.layout?.showVerseNumbers !== false) && content.reference && (
-                                                    <span className="opacity-60 font-mono mt-2 flex-shrink-0" style={{
-                                                        color: activeTheme.layout?.verseNumberColor || activeTheme.styles.color,
-                                                        fontSize: `${(activeTheme.layout?.verseNumberScale || 0.5) * 100}%`
-                                                    }}>
-                                                        {content.reference.split(':').pop()?.trim()}
-                                                    </span>
-                                                )}
-                                                <div
-                                                    className="transition-all duration-300"
-                                                    style={{ fontSize: `${fontScale}em` }}
-                                                    dangerouslySetInnerHTML={{ __html: renderFormattedText(content.text) }}
-                                                />
-                                            </div>
+                                            <div
+                                                className="transition-all duration-300"
+                                                style={{ fontSize: `${fontScale}em`, textAlign: activeTheme.styles.textAlign || 'center' }}
+                                                dangerouslySetInnerHTML={{ __html:
+                                                    (activeTheme.layout?.showVerseNumbers !== false && singleVerseNum
+                                                        ? `<span style="opacity:0.5;font-size:${vnScale}%;color:${vnColor};margin-right:0.2em;vertical-align:super;font-weight:bold">${singleVerseNum}</span>`
+                                                        : '')
+                                                    + renderFormattedText(content.text)
+                                                }}
+                                            />
                                         );
                                     })()
                                 )}

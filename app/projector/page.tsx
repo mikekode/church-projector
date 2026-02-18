@@ -332,7 +332,7 @@ export default function ProjectorPage() {
 
         const layout = activeTheme.layout || { referencePosition: 'bottom', referenceScale: 1, showVerseNumbers: true };
         const refScale = layout.referenceScale || 1;
-        const verseNumScale = layout.verseNumberScale || 0.5;
+        const verseNumScale = layout.verseNumberScale || 0.65;
 
         // User requested: Hide titles for songs on live output
         const shouldShowTitle = activeContent.type !== 'song';
@@ -374,61 +374,50 @@ export default function ProjectorPage() {
                 {/* Body Text - with smart auto-sizing */}
                 {activeContent.verses && activeContent.verses.length > 1 ? (
                     (() => {
-                        // Calculate total text for auto-sizing
                         const totalText = activeContent.verses.map(v => v.text).join(' ');
                         const fontScale = calculateFontScale(totalText, activeContent.verses.length, activeTheme.layout?.textScale);
+                        const vnColor = layout.verseNumberColor || activeTheme.styles.color;
 
                         return (
                             <div className="space-y-2 w-full">
                                 {activeContent.verses.map((v, idx) => (
-                                    <div key={idx} className="flex items-start gap-4" style={{ justifyContent: activeTheme.styles.textAlign === 'center' ? 'center' : activeTheme.styles.textAlign === 'right' ? 'flex-end' : 'flex-start' }}>
-                                        {layout.showVerseNumbers && (
-                                            <span className="opacity-60 font-mono mt-2 flex-shrink-0" style={{
-                                                color: layout.verseNumberColor || activeTheme.styles.color,
-                                                fontSize: `${verseNumScale * 100}%`,
-                                                lineHeight: 1.5
-                                            }}>{v.verseNum}</span>
-                                        )}
-                                        <p style={{
-                                            ...themeStyle,
-                                            // Dynamic font scaling based on total text length
-                                            fontSize: `${fontScale}em`,
-                                            textAlign: 'left',
-                                            lineHeight: 1.25,
-                                            transition: 'font-size 0.3s ease-out'
+                                    <p key={idx} style={{
+                                        ...themeStyle,
+                                        fontSize: `${fontScale}em`,
+                                        lineHeight: 1.25,
+                                        transition: 'font-size 0.3s ease-out'
+                                    }}
+                                        dangerouslySetInnerHTML={{ __html:
+                                            (layout.showVerseNumbers
+                                                ? `<span style="opacity:0.5;font-size:${verseNumScale * 100}%;color:${vnColor};margin-right:0.2em;vertical-align:super;font-weight:bold">${v.verseNum}</span>`
+                                                : '')
+                                            + renderFormattedText(v.text)
                                         }}
-                                            dangerouslySetInnerHTML={{ __html: renderFormattedText(v.text) }}
-                                        />
-                                    </div>
+                                    />
                                 ))}
                             </div>
                         );
                     })()
                 ) : (
                     (() => {
-                        // Calculate font scale for single verse
                         const fontScale = calculateFontScale(activeContent.body, 1, activeTheme.layout?.textScale);
+                        const vnColor = layout.verseNumberColor || activeTheme.styles.color;
+                        const singleVerseNum = activeContent.verses?.[0]?.verseNum;
 
                         return (
-                            <div className="flex items-start gap-4 relative w-full" style={{ justifyContent: activeTheme.styles.textAlign === 'center' ? 'center' : activeTheme.styles.textAlign === 'right' ? 'flex-end' : 'flex-start' }}>
-                                {layout.showVerseNumbers && activeContent.verses && activeContent.verses[0] && (
-                                    <span className="opacity-60 font-mono mt-[0.2em] flex-shrink-0 select-none" style={{
-                                        color: layout.verseNumberColor || activeTheme.styles.color,
-                                        fontSize: `${verseNumScale * 100}%`,
-                                        lineHeight: 1.5
-                                    }}>
-                                        {activeContent.verses[0].verseNum}
-                                    </span>
-                                )}
-                                <p style={{
-                                    ...themeStyle,
-                                    fontSize: `${fontScale}em`,
-                                    lineHeight: 1.25,
-                                    transition: 'font-size 0.3s ease-out'
+                            <p style={{
+                                ...themeStyle,
+                                fontSize: `${fontScale}em`,
+                                lineHeight: 1.25,
+                                transition: 'font-size 0.3s ease-out'
+                            }}
+                                dangerouslySetInnerHTML={{ __html:
+                                    (layout.showVerseNumbers && singleVerseNum
+                                        ? `<span style="opacity:0.5;font-size:${verseNumScale * 100}%;color:${vnColor};margin-right:0.2em;vertical-align:super;font-weight:bold">${singleVerseNum}</span>`
+                                        : '')
+                                    + renderFormattedText(activeContent.body)
                                 }}
-                                    dangerouslySetInnerHTML={{ __html: renderFormattedText(activeContent.body) }}
-                                />
-                            </div>
+                            />
                         );
                     })()
                 )}
