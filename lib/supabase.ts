@@ -25,6 +25,7 @@ export type License = {
 const LICENSE_KEY_STORAGE = 'creenly_license_key';
 const LICENSE_CACHE_STORAGE = 'creenly_license_cache';
 const CACHE_DURATION_MS = 7 * 24 * 60 * 60 * 1000; // 7 days offline grace period
+const GRACE_PERIOD_MS = 3 * 24 * 60 * 60 * 1000; // 3-day grace after expiry
 
 /**
  * Generate a unique device fingerprint
@@ -260,8 +261,17 @@ export function getCachedLicense(): License {
 
         const cached = JSON.parse(cachedData) as License & { cachedAt: number };
 
-        // Expired/cancelled — return as-is
-        if (cached.status === 'expired' || cached.status === 'cancelled') {
+        // Expired/cancelled — check grace period first
+        if (cached.status === 'expired' && cached.expiresAt) {
+            const expiredAt = new Date(cached.expiresAt).getTime();
+            const now = Date.now();
+            if (now - expiredAt < GRACE_PERIOD_MS) {
+                // Within 3-day grace period — treat as active
+                return { ...cached, status: 'active' };
+            }
+            return cached;
+        }
+        if (cached.status === 'cancelled') {
             return cached;
         }
 
@@ -298,40 +308,50 @@ export async function getCurrentLicense(): Promise<License> {
     }
     localStorage.setItem('creenly_last_sys_time', now.toString());
 
-    // 2. Online Validation Check
-    // Secure Check: If we haven't validated this SESSION yet, force an online check.
-    const forceCheck = !sessionValidated;
-
-    if (forceCheck || !cachedData) {
-        try {
-            const onlineResult = await validateLicenseOnline(storedKey);
-
-            // Only mark session as valid if the server actually says 'active'
-            if (onlineResult.status === 'active') {
-                sessionValidated = true;
-            }
-
-            // Update cache with fresh data
-            const cacheData = {
-                ...onlineResult,
-                cachedAt: Date.now()
-            };
-            localStorage.setItem(LICENSE_CACHE_STORAGE, JSON.stringify(cacheData));
-
-            return onlineResult;
-        } catch (error) {
-            console.warn('Online license check failed, falling back to internal offline logic');
-        }
-    }
-
-    // 3. Offline Logic (Internal Calculation)
+    // 2. Offline-First Validation
+    // If we have a valid 'active' cache within the grace period (7 days),
+    // return it immediately to prevent UI buffering.
     const cached = getCachedLicense();
-    if (cached.status !== 'demo') {
+    const cachedObj = cachedData ? JSON.parse(cachedData) : null;
+    const isCacheFresh = cachedObj && (now - cachedObj.cachedAt < CACHE_DURATION_MS);
+
+    if (cached.status === 'active' && isCacheFresh) {
+        // Background sync to refresh the cache for next time
+        if (!sessionValidated) {
+            validateLicenseOnline(storedKey).then(fresh => {
+                if (fresh.status === 'active') {
+                    sessionValidated = true;
+                    localStorage.setItem(LICENSE_CACHE_STORAGE, JSON.stringify({
+                        ...fresh,
+                        cachedAt: Date.now()
+                    }));
+                }
+            }).catch(() => { });
+        }
         return cached;
     }
 
-    // Default to demo if online fails and cache is invalid/old
-    return { status: 'demo' };
+    // 3. Forced Online Validation
+    // Refresh if cache is missing, expired, or beyond the 7-day grace period.
+    try {
+        const onlineResult = await validateLicenseOnline(storedKey);
+
+        if (onlineResult.status === 'active') {
+            sessionValidated = true;
+        }
+
+        // Update cache with fresh data
+        const freshCache = {
+            ...onlineResult,
+            cachedAt: Date.now()
+        };
+        localStorage.setItem(LICENSE_CACHE_STORAGE, JSON.stringify(freshCache));
+
+        return onlineResult;
+    } catch (error) {
+        console.warn('Online license check failed, falling back to cached status');
+        return cached;
+    }
 }
 
 /**

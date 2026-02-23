@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
-import { Play, Pause, Square, SkipBack, SkipForward, Maximize2, Maximize, Mic, MicOff, Search, Settings, Monitor, CheckCircle, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Key, Download, X, Tv2, Music, Clock, Lock, PanelLeftOpen, PanelLeftClose, Sun, Moon, Book, User, Library } from 'lucide-react';
+import { Play, Pause, Square, SkipBack, SkipForward, Maximize2, Maximize, Mic, MicOff, Search, Settings, Monitor, CheckCircle, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Key, Download, X, Tv2, Music, Clock, PanelLeftOpen, PanelLeftClose, Sun, Moon, Book, User, Library } from 'lucide-react';
 import Fuse from 'fuse.js';
 
 import LicenseModal from '@/components/LicenseModal';
@@ -153,11 +153,13 @@ export default function DashboardPage() {
     const [voiceLevel, setVoiceLevel] = useState(0); // Audio RMS level (0-1)
 
     // License and usage tracking
-    const { license, isLicensed, hoursRemaining, isLowHours, loading: licenseLoading } = useLicense();
+    const { license, isLicensed, hoursRemaining, isLowHours } = useLicense();
     useUsageTracker(isListening, license?.licenseKey || null);
     useBibleOfflineSync(); // Background-download public-domain Bibles when online
     const [detectedQueue, setDetectedQueue] = useState<DetectedItem[]>([]);
     const [activeItem, setActiveItem] = useState<DetectedItem | null>(null);
+    const [manualVerseInput, setManualVerseInput] = useState("");
+    const [isEditingReference, setIsEditingReference] = useState(false);
     const [autoMode, setAutoMode] = useState(true);
     const [aiStatus, setAiStatus] = useState<'idle' | 'processing' | 'loading'>('idle');
     const [lastSignal, setLastSignal] = useState<DetectionSignal>('WAIT');
@@ -212,6 +214,18 @@ export default function DashboardPage() {
         }
         localStorage.setItem('creenly-theme', theme);
     }, [theme]);
+
+    // Sync live scripture reference to manual lookup input for quick editing
+    useEffect(() => {
+        // Only sync if it's a Bible reference (not a song or media)
+        if (activeItem && activeItem.version !== 'SONG' && activeItem.version !== 'MEDIA') {
+            const ref = activeItem.additionalVerses?.length
+                ? `${activeItem.book} ${activeItem.chapter}:${activeItem.verseNum}-${activeItem.additionalVerses[activeItem.additionalVerses.length - 1].verseNum}`
+                : activeItem.reference;
+            setManualVerseInput(ref);
+        }
+    }, [activeItem]);
+
     const [showTimerSettings, setShowTimerSettings] = useState(false);
     const [timerDuration, setTimerDuration] = useState(30); // Minutes
     const [timerState, setTimerState] = useState({ isRunning: false, isPaused: false });
@@ -651,6 +665,7 @@ export default function DashboardPage() {
 
         // If multi-verse mode, fetch additional verses
         let additionalVerses: { verseNum: number; text: string; reference: string }[] = [];
+        let mainText = item.text;
 
         if (currentVerseCount > 1) {
             const allVerses = await fetchMultipleVerses(
@@ -660,24 +675,27 @@ export default function DashboardPage() {
                 currentVerseCount,
                 currentVersion
             );
-            // Skip the first verse since it's already in item.text
-            additionalVerses = allVerses.slice(1);
+            if (allVerses.length > 0) {
+                mainText = allVerses[0].text;
+                additionalVerses = allVerses.slice(1);
+            }
         }
 
         const updatedItem: DetectedItem = {
             ...item,
+            text: mainText,
             additionalVerses: additionalVerses.length > 0 ? additionalVerses : undefined
         };
 
         setActiveItem(updatedItem);
 
         // Build combined text for broadcast
-        const allTexts = [item.text, ...additionalVerses.map(v => v.text)];
+        const allTexts = [mainText, ...additionalVerses.map(v => v.text)];
         const lastVerse = additionalVerses.length > 0
             ? additionalVerses[additionalVerses.length - 1].verseNum
             : item.verseNum;
         const displayReference = additionalVerses.length > 0
-            ? `${item.book} ${item.chapter}:${item.verseNum} -${lastVerse} `
+            ? `${item.book} ${item.chapter}:${item.verseNum}-${lastVerse}`
             : item.reference;
 
         broadcast({
@@ -686,7 +704,7 @@ export default function DashboardPage() {
                 reference: displayReference,
                 text: allTexts.join(' '),
                 version: currentVersion,
-                verses: [{ verseNum: item.verseNum, text: item.text }, ...additionalVerses]
+                verses: [{ verseNum: item.verseNum, text: mainText }, ...additionalVerses]
             }
         });
     }, [broadcast, fetchMultipleVerses]);
@@ -947,50 +965,11 @@ export default function DashboardPage() {
         if (!text) return; // Basic safety check
         setTranscript(prev => (prev + " " + text).slice(-1000));
 
-        // 0. Feed to Smart Detection for fuzzy matching and auto-navigation
-        // Pass true for isFinal as this is called for final results
+        // 0. Feed to Smart Detection for fuzzy matching, auto-navigation, and paraphrases
+        setAiStatus('processing');
         addToSmartDetection(text, true);
 
-        // 1. Fast regex detection - ONLY on the new text to prevent re-triggering old verses
-        const matches = detectVersesInText(text);
-
-        for (const match of matches) {
-            // For non-KJV, fetch the verse in the selected translation
-            let verseText = match.text;
-            const currentVersion = selectedVersionRef.current;
-
-            if (currentVersion !== 'KJV') {
-                const fetchedText = await lookupVerseAsync(
-                    match.book,
-                    match.chapter,
-                    match.verse,
-                    currentVersion
-                );
-                if (fetchedText) {
-                    verseText = fetchedText;
-                }
-            }
-
-            // Auto-switch verse count tab if a range is detected
-            if (match.verseEnd && match.verseEnd > match.verse) {
-                const detectedCount = Math.min(match.verseEnd - match.verse + 1, 3) as 1 | 2 | 3;
-                console.log('[REGEX] Detected verse range, auto-switching to', detectedCount, 'verse tab');
-                setVerseCount(detectedCount);
-            }
-
-            addToQueue({
-                book: match.book,
-                chapter: match.chapter,
-                verse: match.verse,
-                verseEnd: match.verseEnd,
-                text: verseText,
-                reference: match.reference,
-                confidence: 100, // Regex = exact match
-                matchType: 'exact',
-            }, 'regex');
-        }
-
-        // 2. Song Detection (Fuzzy Match) - Requires Context (10+ words)
+        // 1. Song Detection (Fuzzy Match) - Requires Context (10+ words)
         // Combine history with new text to get context
         const fullHistory = transcriptRef.current + " " + text;
         const recentWords = fullHistory.trim().split(/\s+/).slice(-20); // Look at last 20 words
@@ -1032,59 +1011,6 @@ export default function DashboardPage() {
                         songData: song // Pass full data
                     }, 'song');
                 }
-            }
-        }
-
-        // 3. Smart AI detection (debounced, catches natural language + paraphrases)
-        setAiStatus('processing');
-        addToSmartDetection(text);
-
-        // 4. Semantic search for paraphrased scriptures (requires 15+ words of context)
-        if (recentWords.length >= 15 && window.electronAPI?.semanticSearch) {
-            try {
-                // Incorporate sermon theme if available to bias semantic matching
-                const theme = pastorProfile?.sermonContext?.theme;
-                const baseText = recentWords.slice(-30).join(' ');
-                const semanticText = theme ? `[Theme: ${theme}] ${baseText}` : baseText;
-
-                // Convert threshold from percentage (e.g., 85) to decimal (0.85) for API
-                // Use a lower API threshold to get candidates, then filter by user threshold
-                const apiThreshold = Math.max(0.40, (confidenceThresholdRef.current - 10) / 100);
-                const result = await window.electronAPI.semanticSearch(semanticText, apiThreshold, 5);
-
-                if (result?.results?.length > 0) {
-                    // Filter by user's confidence threshold and take top 2 (User requested limit)
-                    const filteredResults = result.results
-                        .filter(m => m.confidence >= confidenceThresholdRef.current)
-                        .slice(0, 2);
-
-                    // Add semantic matches to queue (1-2 results, highest confidence first)
-                    for (const match of filteredResults) {
-                        // Parse the reference (e.g., "John 3:16" -> book: John, chapter: 3, verse: 16)
-                        const refMatch = match.ref.match(/^(.+?)\s+(\d+):(\d+)$/);
-                        if (refMatch) {
-                            const [, book, chapter, verse] = refMatch;
-
-                            // Check for duplicates (don't add if already in queue)
-                            const isDupe = detectedQueueRef.current.some(
-                                item => item.reference === match.ref
-                            );
-                            if (isDupe) continue;
-
-                            addToQueue({
-                                book: book,
-                                chapter: parseInt(chapter),
-                                verse: parseInt(verse),
-                                text: match.text,
-                                reference: match.ref,
-                                confidence: match.confidence,
-                                matchType: 'paraphrase',
-                            }, 'semantic');
-                        }
-                    }
-                }
-            } catch (err) {
-                console.error('[SEMANTIC] Search error:', err);
             }
         }
 
@@ -1148,36 +1074,89 @@ export default function DashboardPage() {
 
 
     // UI HELPER: Handle Manual Lookup (Debug / Override)
-    const handleManualLookup = async (e: React.FormEvent) => {
-        e.preventDefault();
-        const input = (e.target as any).verseInput.value;
+    const handleManualLookup = async (e?: React.FormEvent) => {
+        if (e) e.preventDefault();
+        const input = manualVerseInput;
         const matches = detectVersesInText(input);
 
         if (matches.length > 0) {
             const match = matches[0];
+            const currentCount = verseCountRef.current;
+            const currentVersion = selectedVersionRef.current;
 
-            // Fetch verse in selected translation
-            let verseText = match.text;
-            if (selectedVersion !== 'KJV') {
-                const fetchedText = await lookupVerseAsync(
-                    match.book,
-                    match.chapter,
-                    match.verse,
-                    selectedVersion
-                );
-                if (fetchedText) {
-                    verseText = fetchedText;
+            // Step 1: Calculate requested count from input (e.g., 1:1-2 -> count 2)
+            const requestedCount = match.verseEnd && match.verseEnd >= match.verse
+                ? (match.verseEnd - match.verse) + 1
+                : 1;
+
+            // Step 2: Determine resulting mode and logic
+            if (currentCount === 1) {
+                // RULE: If starting in 1-verse mode, STAY in 1-verse mode (Block Mode)
+                let verseText = match.text;
+                if (requestedCount > 1 && currentVersion !== 'KJV') {
+                    const allVerses = await fetchMultipleVerses(
+                        match.book,
+                        match.chapter,
+                        match.verse,
+                        requestedCount,
+                        currentVersion
+                    );
+                    verseText = allVerses.map(v => v.text).join(' ');
+                } else if (currentVersion !== 'KJV') {
+                    const fetchedText = await lookupVerseAsync(match.book, match.chapter, match.verse, currentVersion);
+                    if (fetchedText) verseText = fetchedText;
+                }
+
+                goLive({
+                    ...match,
+                    id: Date.now().toString(),
+                    text: verseText,
+                    version: currentVersion,
+                    verseNum: match.verse,
+                    timestamp: new Date()
+                });
+            } else {
+                // RULE: If in 2 or 3 verse mode, SWAP tab if requested count is 1, 2, or 3
+                if (requestedCount <= 3) {
+                    // Update UI buttons and global state to the specific requested count
+                    setVerseCount(requestedCount as 1 | 2 | 3);
+
+                    // Force goLive to use atomic splits (strip verseEnd)
+                    goLive({
+                        ...match,
+                        verseEnd: undefined,
+                        id: Date.now().toString(),
+                        version: currentVersion,
+                        verseNum: match.verse,
+                        timestamp: new Date()
+                    });
+                } else {
+                    // Switch back to Mode 1 (Block Mode) for large ranges
+                    setVerseCount(1);
+
+                    // Push as a combined block
+                    let verseText = match.text;
+                    if (currentVersion !== 'KJV') {
+                        const allVerses = await fetchMultipleVerses(
+                            match.book,
+                            match.chapter,
+                            match.verse,
+                            requestedCount,
+                            currentVersion
+                        );
+                        verseText = allVerses.map(v => v.text).join(' ');
+                    }
+
+                    goLive({
+                        ...match,
+                        id: Date.now().toString(),
+                        text: verseText,
+                        version: currentVersion,
+                        verseNum: match.verse,
+                        timestamp: new Date()
+                    });
                 }
             }
-
-            goLive({
-                ...match,
-                id: Date.now().toString(),
-                text: verseText,
-                version: selectedVersion,
-                verseNum: match.verse,
-                timestamp: new Date()
-            });
         }
     };
 
@@ -1571,9 +1550,10 @@ export default function DashboardPage() {
                     {/* LEFT: LIVE FEED & CONTROLS */}
                     <section className="flex-1 flex flex-col gap-3 min-h-0 min-w-[200px] shrink transition-all duration-300">
                         {/* TRANSCRIPT CARD */}
-                        <div className={`flex-1 bg-white dark:bg-zinc-900/50 border rounded-2xl p-6 flex flex-col min-h-0 overflow-hidden shadow-sm dark:shadow-none transition-all duration-700 ${isListening ? 'animate-glow-green border-green-500/30' : 'animate-glow-red border-zinc-200 dark:border-white/5'} ${isScheduleCollapsed ? 'pt-14' : 'pt-6'}`}>
+                        <div className={`flex-1 bg-white dark:bg-zinc-900/50 border rounded-2xl p-6 flex flex-col min-h-0 overflow-hidden shadow-sm dark:shadow-none transition-all duration-700 ${isListening ? 'animate-glow-green border-emerald-500/30' : 'animate-glow-red border-zinc-200 dark:border-white/5'} ${isScheduleCollapsed ? 'pt-14' : 'pt-6'}`}>
                             <TranscriptMonitor
                                 isListening={isListening}
+                                isLicensed={isLicensed}
                                 onTranscript={(text) => {
                                     processTranscript(text);
                                 }}
@@ -1598,10 +1578,6 @@ export default function DashboardPage() {
                         <button
                             suppressHydrationWarning={true}
                             onClick={() => {
-                                if (!isLicensed) {
-                                    setIsLicenseModalOpen(true);
-                                    return;
-                                }
                                 if (isMicLoading) return;
                                 setIsMicLoading(true);
                                 if (!isListening) {
@@ -1638,31 +1614,10 @@ export default function DashboardPage() {
                                     </>
                                 ) : (
                                     <>
-                                        <div className="p-1.5 bg-white/20 rounded-full group-hover:bg-white/30 transition-colors flex items-center justify-center relative w-8 h-8 overflow-hidden">
-                                            <div className="grid grid-cols-1 grid-rows-1 place-items-center w-full h-full">
-                                                <div className={`col-start-1 row-start-1 ${(!isLicensed && !licenseLoading) ? "block" : "hidden"}`}>
-                                                    <Lock size={16} strokeWidth={3} />
-                                                </div>
-                                                <div className={`col-start-1 row-start-1 ${(licenseLoading && !isLicensed) ? "block" : "hidden"}`}>
-                                                    <div className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin" />
-                                                </div>
-                                                <div className={`col-start-1 row-start-1 ${(isLicensed) ? "block" : "hidden"}`}>
-                                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><line x1="12" y1="19" x2="12" y2="23"></line><line x1="8" y1="23" x2="16" y2="23"></line></svg>
-                                                </div>
-                                            </div>
+                                        <div className="p-1.5 bg-white/20 rounded-full group-hover:bg-white/30 transition-colors flex items-center justify-center w-8 h-8">
+                                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><line x1="12" y1="19" x2="12" y2="23"></line><line x1="8" y1="23" x2="16" y2="23"></line></svg>
                                         </div>
-
-                                        <div className="grid grid-cols-1 grid-rows-1 place-items-center">
-                                            <span className={`col-start-1 row-start-1 text-[10px] font-bold uppercase ${(!isLicensed && !licenseLoading) ? "block" : "hidden"}`}>
-                                                ACTIVATE TO START LISTENING
-                                            </span>
-                                            <span className={`col-start-1 row-start-1 text-[10px] font-bold uppercase ${(licenseLoading && !isLicensed) ? "block" : "hidden"}`}>
-                                                VERIFYING LICENSE...
-                                            </span>
-                                            <span className={`col-start-1 row-start-1 text-[10px] font-bold uppercase ${(isLicensed) ? "block" : "hidden"}`}>
-                                                START LISTENING
-                                            </span>
-                                        </div>
+                                        <span className="text-[10px] font-bold uppercase">START LISTENING</span>
                                     </>
                                 )}
                             </div>
@@ -1671,8 +1626,14 @@ export default function DashboardPage() {
                         {/* MANUAL INPUT */}
                         <div className={`flex-shrink-0 bg-white dark:bg-zinc-900/50 border border-zinc-200 dark:border-white/5 rounded-2xl ${isScheduleCollapsed ? 'p-4' : 'p-3'} shadow-sm dark:shadow-none transition-all duration-300`}>
                             <form onSubmit={handleManualLookup} className="flex gap-2">
-                                <input name="verseInput" placeholder="Type 'John 3:16'..." className="flex-1 min-w-0 bg-white dark:bg-black/50 border border-zinc-300 dark:border-white/10 rounded-full px-4 py-2 text-sm focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/10 transition-all text-zinc-900 dark:text-zinc-200 placeholder:text-zinc-400 font-medium" />
-                                <button type="submit" className={`bg-blue-600 hover:bg-blue-700 text-white rounded-full text-xs font-bold shadow-md shadow-blue-500/20 transition-all flex items-center justify-center ${isScheduleCollapsed ? 'px-6' : 'px-4'}`}>GO</button>
+                                <input
+                                    name="verseInput"
+                                    value={manualVerseInput}
+                                    onChange={(e) => setManualVerseInput(e.target.value)}
+                                    placeholder="Type 'John 3:16'..."
+                                    className="flex-1 min-w-0 bg-white dark:bg-black/50 border border-zinc-300 dark:border-white/10 rounded-full px-4 py-2 text-sm focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/10 transition-all text-zinc-900 dark:text-zinc-200 placeholder:text-zinc-400 font-medium"
+                                />
+                                <button type="submit" className={`bg-indigo-600 hover:bg-indigo-500 text-white rounded-full text-xs font-bold shadow-md shadow-indigo-500/20 transition-all flex items-center justify-center ${isScheduleCollapsed ? 'px-6' : 'px-4'}`}>GO</button>
                             </form>
                         </div>
 
@@ -1776,8 +1737,8 @@ export default function DashboardPage() {
                     <section className="flex-1 flex flex-col gap-4 min-h-0 min-w-[200px] shrink transition-all duration-300 relative">
                         <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-white/5 rounded-2xl flex-1 flex flex-col min-h-0 relative shadow-sm dark:shadow-none">
                             <header className="px-3 py-2 border-b border-zinc-200 dark:border-white/5 flex justify-between items-center bg-zinc-50 dark:bg-zinc-950 rounded-t-2xl shrink-0 overflow-visible">
-                                <h3 className="text-xs font-bold text-green-500 uppercase tracking-wider flex items-center gap-2 shrink-0 whitespace-nowrap mr-4">
-                                    <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse shrink-0" /> Live Output
+                                <h3 className="text-xs font-bold text-emerald-500 uppercase tracking-wider flex items-center gap-2 shrink-0 whitespace-nowrap mr-4">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse shrink-0" /> Live Output
                                 </h3>
                                 {/* Media Controls (Only show if active item is video) */}
 
@@ -1908,12 +1869,43 @@ export default function DashboardPage() {
                                                     fontSize: `${0.6 * (currentTheme?.layout?.referenceScale || 1.5)}em`,
                                                     textAlign: currentTheme?.styles.textAlign
                                                 }}>
-                                                    <span style={{ color: currentTheme?.layout?.referenceColor || currentTheme?.styles.color }}>
-                                                        {activeItem.additionalVerses?.length
-                                                            ? `${activeItem.book} ${activeItem.chapter}:${activeItem.verseNum}-${activeItem.additionalVerses[activeItem.additionalVerses.length - 1].verseNum}`
-                                                            : activeItem.reference
-                                                        }
-                                                    </span>
+                                                    {isEditingReference ? (
+                                                        <input
+                                                            autoFocus
+                                                            value={manualVerseInput}
+                                                            onChange={(e) => setManualVerseInput(e.target.value)}
+                                                            onKeyDown={(e) => {
+                                                                if (e.key === 'Enter') {
+                                                                    handleManualLookup();
+                                                                    setIsEditingReference(false);
+                                                                } else if (e.key === 'Escape') {
+                                                                    setIsEditingReference(false);
+                                                                }
+                                                            }}
+                                                            onBlur={() => {
+                                                                handleManualLookup();
+                                                                setIsEditingReference(false);
+                                                            }}
+                                                            className="bg-black/40 border border-white/20 rounded px-2 py-0.5 text-center focus:outline-none focus:ring-1 focus:ring-blue-500 w-auto min-w-[200px]"
+                                                            style={{
+                                                                color: currentTheme?.layout?.referenceColor || currentTheme?.styles.color,
+                                                                fontSize: 'inherit',
+                                                                textTransform: 'none'
+                                                            }}
+                                                        />
+                                                    ) : (
+                                                        <span
+                                                            onClick={() => setIsEditingReference(true)}
+                                                            className="cursor-pointer hover:bg-white/5 px-2 rounded -mx-2 transition-colors inline-block"
+                                                            title="Click to edit"
+                                                            style={{ color: currentTheme?.layout?.referenceColor || currentTheme?.styles.color }}
+                                                        >
+                                                            {activeItem.additionalVerses?.length
+                                                                ? `${activeItem.book} ${activeItem.chapter}:${activeItem.verseNum}-${activeItem.additionalVerses[activeItem.additionalVerses.length - 1].verseNum}`
+                                                                : activeItem.reference
+                                                            }
+                                                        </span>
+                                                    )}
                                                     <span className="ml-2" style={{ color: currentTheme?.layout?.versionColor || currentTheme?.styles.color, opacity: 0.7 }}>
                                                         [{activeItem.version}]
                                                     </span>
@@ -1974,12 +1966,43 @@ export default function DashboardPage() {
                                                     fontSize: `${0.6 * (currentTheme?.layout?.referenceScale || 1.5)}em`,
                                                     textAlign: currentTheme?.styles.textAlign
                                                 }}>
-                                                    <span style={{ color: currentTheme?.layout?.referenceColor || currentTheme?.styles.color }}>
-                                                        {activeItem.additionalVerses?.length
-                                                            ? `${activeItem.book} ${activeItem.chapter}:${activeItem.verseNum}-${activeItem.additionalVerses[activeItem.additionalVerses.length - 1].verseNum}`
-                                                            : activeItem.reference
-                                                        }
-                                                    </span>
+                                                    {isEditingReference ? (
+                                                        <input
+                                                            autoFocus
+                                                            value={manualVerseInput}
+                                                            onChange={(e) => setManualVerseInput(e.target.value)}
+                                                            onKeyDown={(e) => {
+                                                                if (e.key === 'Enter') {
+                                                                    handleManualLookup();
+                                                                    setIsEditingReference(false);
+                                                                } else if (e.key === 'Escape') {
+                                                                    setIsEditingReference(false);
+                                                                }
+                                                            }}
+                                                            onBlur={() => {
+                                                                handleManualLookup();
+                                                                setIsEditingReference(false);
+                                                            }}
+                                                            className="bg-black/40 border border-white/20 rounded px-2 py-0.5 text-center focus:outline-none focus:ring-1 focus:ring-blue-500 w-auto min-w-[200px]"
+                                                            style={{
+                                                                color: currentTheme?.layout?.referenceColor || currentTheme?.styles.color,
+                                                                fontSize: 'inherit',
+                                                                textTransform: 'none'
+                                                            }}
+                                                        />
+                                                    ) : (
+                                                        <span
+                                                            onClick={() => setIsEditingReference(true)}
+                                                            className="cursor-pointer hover:bg-white/5 px-2 rounded -mx-2 transition-colors inline-block"
+                                                            title="Click to edit"
+                                                            style={{ color: currentTheme?.layout?.referenceColor || currentTheme?.styles.color }}
+                                                        >
+                                                            {activeItem.additionalVerses?.length
+                                                                ? `${activeItem.book} ${activeItem.chapter}:${activeItem.verseNum}-${activeItem.additionalVerses[activeItem.additionalVerses.length - 1].verseNum}`
+                                                                : activeItem.reference
+                                                            }
+                                                        </span>
+                                                    )}
                                                     <span className="ml-2" style={{ color: currentTheme?.layout?.versionColor || currentTheme?.styles.color, opacity: 0.7 }}>
                                                         [{activeItem.version}]
                                                     </span>

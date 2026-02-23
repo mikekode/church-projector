@@ -108,6 +108,11 @@ const BIBLE: BibleData = kjvData as any;
 function findBookKey(input: string): string | null {
     const raw = input.toLowerCase().replace(/\./g, '').trim();
 
+    // BLACKLIST: Common words that should never match a book via short abbrev
+    // This must happen BEFORE exact matches to prevent 'is' -> Isaiah or 'at' -> Acts
+    const RISKY_WORDS = ['is', 'am', 'so', 'at', 'on', 'by', 'to', 'if', 'it', 'the', 'was', 'as', 'number', 'point', 'item', 'step', 'part', 'page', 'nine', 'ten', 'now'];
+    if (RISKY_WORDS.includes(raw)) return null;
+
     // 1. Exact or alias match
     if (BOOK_MAP[raw]) return BOOK_MAP[raw];
 
@@ -117,10 +122,6 @@ function findBookKey(input: string): string | null {
 
     // 3. Fuzzy match using Dice coefficient (High typo tolerance)
     const books = Object.keys(BOOK_MAP);
-
-    // BLACKLIST: Common words that should never match a book via short abbrev
-    const RISKY_WORDS = ['is', 'am', 'so', 'at', 'on', 'by', 'to', 'if', 'it', 'the', 'was', 'as', 'number', 'point', 'item', 'step', 'part', 'page'];
-    if (RISKY_WORDS.includes(raw)) return null;
 
     let bestMatch = { key: null as string | null, score: 0 };
     for (const b of books) {
@@ -273,7 +274,7 @@ if (typeof window !== 'undefined') {
         console.warn('Failed to load bible cache', e);
     }
     // Migrate localStorage cache to IndexedDB (one-time, non-blocking)
-    migrateLocalStorageCache().catch(() => {});
+    migrateLocalStorageCache().catch(() => { });
 }
 
 const saveCache = () => {
@@ -367,7 +368,7 @@ export async function lookupVerseAsync(
                 VERSE_CACHE[version][canonicalBook][c][v] = result.text;
                 saveCache();
                 // Also persist to IndexedDB
-                idbCacheVerse(version, bookKey, c, v, result.text).catch(() => {});
+                idbCacheVerse(version, bookKey, c, v, result.text).catch(() => { });
                 return result.text;
             }
         } catch (e) {
@@ -375,31 +376,34 @@ export async function lookupVerseAsync(
         }
     }
 
-    // 4. For other versions, try the API (Online)
+    // 4. Direct fetch from bible-api.com (no API route needed)
     try {
+        let apiVersion = version.toLowerCase();
+        if (apiVersion === 'kjv21') apiVersion = 'kjv';
         console.time(`API-${version}-${canonicalBook}-${c}-${v}`);
         const response = await fetch(
-            `/api/verse-lookup?book=${encodeURIComponent(bookStr)}&chapter=${c}&verse=${v}&version=${version}`
+            `https://bible-api.com/${encodeURIComponent(bookStr)}+${c}:${v}?translation=${apiVersion}`
         );
         console.timeEnd(`API-${version}-${canonicalBook}-${c}-${v}`);
 
         if (response.ok) {
             const data = await response.json();
-            if (data.text) {
+            const text = data.text ? data.text.replace(/[\n\r]+/g, ' ').trim() : '';
+            if (text) {
                 // Save to Cache
                 if (!VERSE_CACHE[version]) VERSE_CACHE[version] = {};
                 if (!VERSE_CACHE[version][canonicalBook]) VERSE_CACHE[version][canonicalBook] = {};
                 if (!VERSE_CACHE[version][canonicalBook][c]) VERSE_CACHE[version][canonicalBook][c] = {};
 
-                VERSE_CACHE[version][canonicalBook][c][v] = data.text;
+                VERSE_CACHE[version][canonicalBook][c][v] = text;
                 saveCache();
                 // Also persist to IndexedDB
-                idbCacheVerse(version, bookKey, c, v, data.text).catch(() => {});
-                return data.text;
+                idbCacheVerse(version, bookKey, c, v, text).catch(() => { });
+                return text;
             }
         }
     } catch (error) {
-        console.error('[lookupVerseAsync] API error:', error);
+        console.error('[lookupVerseAsync] bible-api.com error:', error);
     }
 
     // Fallback to KJV if API fails

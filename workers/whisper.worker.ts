@@ -38,7 +38,7 @@ self.addEventListener('message', async (e: MessageEvent) => {
         try {
             transcriber = await pipeline(
                 'automatic-speech-recognition',
-                'Xenova/whisper-base.en',
+                'Xenova/whisper-small.en',
                 {
                     progress_callback: (progress: any) => {
                         // Forward ALL events (initiate, progress, done) so the
@@ -73,8 +73,8 @@ self.addEventListener('message', async (e: MessageEvent) => {
                 language: 'english',
                 task: 'transcribe',
                 return_timestamps: false,
-                chunk_length_s: 5,
-                stride_length_s: 1,
+                chunk_length_s: 10,
+                stride_length_s: 2,
             });
             self.postMessage({ type: 'result', text: (result as any).text });
         } catch (err: any) {

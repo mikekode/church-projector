@@ -106,7 +106,7 @@ type ProjectorContent = {
 
 export default function ProjectorPage() {
     // License check
-    const { isDemo, loading } = useLicense();
+    const { isDemo, isExpired, loading } = useLicense();
 
     // Separate State (The "Layers")
     const [activeContent, setActiveContent] = useState<ProjectorContent | null>(null);
@@ -387,11 +387,12 @@ export default function ProjectorPage() {
                                         lineHeight: 1.25,
                                         transition: 'font-size 0.3s ease-out'
                                     }}
-                                        dangerouslySetInnerHTML={{ __html:
-                                            (layout.showVerseNumbers
-                                                ? `<span style="opacity:0.5;font-size:${verseNumScale * 100}%;color:${vnColor};margin-right:0.2em;vertical-align:super;font-weight:bold">${v.verseNum}</span>`
-                                                : '')
-                                            + renderFormattedText(v.text)
+                                        dangerouslySetInnerHTML={{
+                                            __html:
+                                                (layout.showVerseNumbers
+                                                    ? `<span style="opacity:0.5;font-size:${verseNumScale * 100}%;color:${vnColor};margin-right:0.2em;vertical-align:super;font-weight:bold">${v.verseNum}</span>`
+                                                    : '')
+                                                + renderFormattedText(v.text)
                                         }}
                                     />
                                 ))}
@@ -411,11 +412,12 @@ export default function ProjectorPage() {
                                 lineHeight: 1.25,
                                 transition: 'font-size 0.3s ease-out'
                             }}
-                                dangerouslySetInnerHTML={{ __html:
-                                    (layout.showVerseNumbers && singleVerseNum
-                                        ? `<span style="opacity:0.5;font-size:${verseNumScale * 100}%;color:${vnColor};margin-right:0.2em;vertical-align:super;font-weight:bold">${singleVerseNum}</span>`
-                                        : '')
-                                    + renderFormattedText(activeContent.body)
+                                dangerouslySetInnerHTML={{
+                                    __html:
+                                        (layout.showVerseNumbers && singleVerseNum
+                                            ? `<span style="opacity:0.5;font-size:${verseNumScale * 100}%;color:${vnColor};margin-right:0.2em;vertical-align:super;font-weight:bold">${singleVerseNum}</span>`
+                                            : '')
+                                        + renderFormattedText(activeContent.body)
                                 }}
                             />
                         );
@@ -446,7 +448,7 @@ export default function ProjectorPage() {
                 style={{ height: announcement.isActive ? 'calc(100% - 5rem)' : '100%' }}
             />
             {/* Show watermark for demo/unlicensed users */}
-            {isDemo && !loading && <DemoWatermark />}
+            {(isDemo || isExpired) && !loading && <DemoWatermark />}
 
             {/* Scrolling Announcement Ticker */}
             {(() => {

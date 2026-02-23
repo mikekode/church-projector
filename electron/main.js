@@ -194,6 +194,12 @@ async function findSimilarVerses(text, threshold = 0.45, maxResults = 5) {
         return results;
 
     } catch (error) {
+        // Silent handling for offline/network errors
+        const msg = error.message || '';
+        if (msg.includes('fetch failed') || msg.includes('ENOTFOUND') || msg.includes('ECONNRESET')) {
+            console.warn('[Semantic] OpenAI unreachable (Offline)');
+            return [];
+        }
         console.error('[Semantic] Search error:', error.message);
         return [];
     }
@@ -818,6 +824,11 @@ ipcMain.handle('lookup-verse-online', async (event, { book, chapter, verse, vers
         return { error: 'Text not found in source' };
 
     } catch (e) {
+        const msg = e.message || '';
+        if (msg.includes('fetch failed') || msg.includes('ENOTFOUND') || msg.includes('ECONNRESET')) {
+            // Expected when offline, no need to log error
+            return { error: 'OFFLINE' };
+        }
         console.error("Online lookup failed:", e);
         if (e.name === 'AbortError') {
             return { error: 'Request timed out - please try again' };
@@ -888,7 +899,7 @@ const API_PROXY_URL = process.env.API_PROXY_URL || 'http://localhost:3001';
 
 ipcMain.handle('smart-detect', async (event, payload) => {
     try {
-        const { text, context, pastorHints, currentVerse, chapterContext } = payload;
+        const { text, context, pastorHints, currentVerse, chapterContext, suggestions, history } = payload;
 
         // Quick validation
         if (!text || text.trim().length < 3) {
@@ -909,7 +920,9 @@ ipcMain.handle('smart-detect', async (event, payload) => {
                 context,
                 pastorHints,
                 currentVerse,
-                chapterContext
+                chapterContext,
+                suggestions,
+                history
             })
         });
 
@@ -921,6 +934,11 @@ ipcMain.handle('smart-detect', async (event, payload) => {
         return await response.json();
 
     } catch (error) {
+        // Silent handling for connection errors (common when offline)
+        const msg = error.message || '';
+        if (msg.includes('fetch failed') || msg.includes('ENOTFOUND') || msg.includes('ECONNRESET')) {
+            return { error: 'OFFLINE', message: 'Smart detection unavailable offline' };
+        }
         console.error("Smart detection error:", error);
         return { error: error.message };
     }

@@ -40,6 +40,7 @@ module.exports = {
             new webpack.BannerPlugin({
                 banner: 'if(typeof window==="undefined"&&typeof self!=="undefined"){self.window=self;}',
                 raw: true,
+                test: /\.js$/,
             })
         );
 
@@ -49,15 +50,16 @@ module.exports = {
         return config;
     },
     async redirects() {
+        if (process.env.NEXT_EXPORT || !process.env.VERCEL) return [];
         return [
             {
                 source: '/download/windows',
-                destination: 'https://github.com/mikekode/church-projector/releases/download/v2.1.29/Creenly.Setup.exe',
+                destination: 'https://github.com/mikekode/church-projector/releases/download/v2.1.30/Creenly.Setup.exe',
                 permanent: false,
             },
             {
                 source: '/download/mac',
-                destination: 'https://github.com/mikekode/church-projector/releases/download/v2.1.29/Creenly-Setup-arm64.dmg',
+                destination: 'https://github.com/mikekode/church-projector/releases/download/v2.1.30/Creenly-Setup-arm64.dmg',
                 permanent: false,
             },
         ]

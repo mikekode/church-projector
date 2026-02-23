@@ -21,25 +21,33 @@ type Status = 'idle' | 'loading' | 'ready' | 'recording' | 'transcribing' | 'err
 /**
  * OfflineSpeechRecognizer — 100% offline Whisper-base.en speech recognition
  *
- * Improvements over original:
- * - Upgraded model: whisper-tiny.en → whisper-base.en (much better accuracy)
- * - Voice Activity Detection (VAD): only sends audio when speech is detected
- * - Audio filtering: high-pass (400Hz) + low-pass (3500Hz) to isolate voice
- * - Reduced chunk size: 5s → 2s for lower latency
- * - Volume metering for UI feedback
+ * Key design decisions:
+ * - Raw audio pipeline: NO browser noiseSuppression/echoCancellation/filters/compressor.
+ *   Whisper was trained on raw audio and handles noise internally. Browser processing
+ *   destroys the spectral characteristics Whisper depends on.
+ * - Manual resampling: AudioContext runs at native rate (48kHz), audio is resampled
+ *   to 16kHz before sending to Whisper. This avoids browser bugs where requested
+ *   sample rates are silently ignored, which causes Whisper to hear slowed-down
+ *   gibberish (the root cause of *Inaudible* / [Music] / *clap* output).
+ * - VAD with pre-roll buffer captures word onsets before threshold triggers.
+ * - 5s chunk interval with 800ms silence flush for natural sentence boundaries.
  */
 export default function OfflineSpeechRecognizer({ isListening, onTranscript, onInterim, onStatusChange, onVolume }: Props) {
     const [status, setStatus] = useState<Status>('idle');
     const [loadPercent, setLoadPercent] = useState(0);
     const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-    // Initial status report
+    // Status → parent mapping. CRITICAL: 'error' must map to 'listening' (not 'idle')
+    // so the parent button stays in the "LISTENING" state and doesn't reset.
+    // 'transcribing' must also map to 'listening' for the same reason.
     useEffect(() => {
         const uiStatus =
             status === 'recording' ? 'listening' :
-                (status === 'loading' || status === 'ready') ? 'connecting' :
-                    'idle';
-        onStatusChange?.(uiStatus, errorMsg);
+            status === 'transcribing' ? 'listening' :
+            status === 'error' ? 'listening' :
+            (status === 'loading' || status === 'ready') ? 'connecting' :
+            'idle';
+        onStatusChange?.(uiStatus, status === 'error' ? errorMsg : null);
     }, [status, errorMsg, onStatusChange]);
 
     const workerRef = useRef<Worker | null>(null);
@@ -57,8 +65,12 @@ export default function OfflineSpeechRecognizer({ isListening, onTranscript, onI
     // Per-file byte tracking for accurate overall download progress
     const fileBytesRef = useRef(new Map<string, { loaded: number; total: number }>());
 
-    // Audio buffer for accumulating PCM samples
+    // Audio buffer for accumulating PCM samples (at native rate, resampled on flush)
     const audioBufferRef = useRef<Float32Array[]>([]);
+    // Ring buffer of recent "silent" frames so we capture word onsets
+    const preRollRef = useRef<Float32Array[]>([]);
+    // Track the actual sample rate of the AudioContext (may differ from requested)
+    const nativeRateRef = useRef(48000);
     const lastSpeechTimeRef = useRef<number>(0);
     const chunkTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
     const loadTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -70,18 +82,43 @@ export default function OfflineSpeechRecognizer({ isListening, onTranscript, onI
     useEffect(() => { statusRef.current = status; }, [status]);
 
     // ─── Constants ──────────────────────────────────────────────────────
-    const SAMPLE_RATE = 16000;
-    const CHUNK_INTERVAL_MS = 2000;     // Send every 2s (down from 5s)
-    const SILENCE_THRESHOLD = 0.015;    // RMS below this = silence (increased slightly)
-    const SILENCE_FLUSH_MS = 300;       // Flush 300ms after last speech
-    const MIN_AUDIO_SAMPLES = SAMPLE_RATE * 0.3; // Min 0.3s of audio to send
+    const TARGET_RATE = 16000;            // Whisper expects 16kHz
+    const CHUNK_INTERVAL_MS = 5000;       // Send every 5s — Whisper needs context
+    const SILENCE_THRESHOLD = 0.02;       // RMS below this = silence. Normal speech is 0.03-0.15.
+    const SILENCE_FLUSH_MS = 800;         // Wait 800ms of silence before flushing
+    const MIN_AUDIO_DURATION_S = 1.5;     // Min 1.5s of audio (short clips = bad accuracy)
+    const MIN_SPEECH_RMS = 0.03;          // Minimum average RMS to consider a buffer as speech
+    const PRE_ROLL_FRAMES = 2;            // Keep 2 frames of pre-speech audio
 
-    // Commonly mis-transcribed phrases by Whisper when given noise/silence
-    const WHISPER_HALLUCINATIONS = [
-        'Thanks for watching', 'Please subscribe', 'Thank you', 'Bye',
-        'Go it', 'You', 'Subtitles by', 'Translated by', 'Amara.org',
-        'Please share', 'Watching!', 'The end.', '[BLANK_AUDIO]'
-    ];
+    // Detect Whisper non-speech hallucinations / audio descriptions.
+    // Matches patterns like: *Cue the sound of...*, [Music], *clap*, etc.
+    const NON_SPEECH_RE = /(\*[^*]+\*|\[(?:music|laughter|applause|silence|noise|blank[_ ]?audio|unintelligible)[^\]]*\]|cue\s+the\s+sound)/i;
+
+    // Exact-match hallucinations (common Whisper artifacts for near-silence)
+    const HALLUCINATION_SET = new Set([
+        'thanks for watching', 'please subscribe', 'thank you', 'bye',
+        'go it', 'subtitles by', 'translated by', 'amara.org',
+        'please share', 'watching', 'the end', 'you', 'bye bye',
+        'so', 'okay', 'hmm', 'oh', 'uh', 'ah', 'um',
+    ]);
+
+    // ─── Resample to 16kHz ──────────────────────────────────────────────
+    // Linear interpolation resampler. Simple but sufficient for speech.
+    const resampleTo16kHz = useCallback((audio: Float32Array, fromRate: number): Float32Array => {
+        if (fromRate === TARGET_RATE) return audio;
+        const ratio = fromRate / TARGET_RATE;
+        const newLength = Math.round(audio.length / ratio);
+        const result = new Float32Array(newLength);
+        for (let i = 0; i < newLength; i++) {
+            const srcIdx = i * ratio;
+            const idx = Math.floor(srcIdx);
+            const frac = srcIdx - idx;
+            result[i] = idx + 1 < audio.length
+                ? audio[idx] * (1 - frac) + audio[idx + 1] * frac
+                : audio[idx];
+        }
+        return result;
+    }, []);
 
     // ─── Worker ─────────────────────────────────────────────────────────
     const ensureWorker = useCallback(() => {
@@ -104,7 +141,7 @@ export default function OfflineSpeechRecognizer({ isListening, onTranscript, onI
                             setErrorMsg("Offline AI took too long. Check your internet or refresh.");
                             setStatus('error');
                         }
-                    }, 30000); // 30s more from last progress
+                    }, 30000);
                 }
 
                 const d = msg.data;
@@ -136,15 +173,21 @@ export default function OfflineSpeechRecognizer({ isListening, onTranscript, onI
                 }
             } else if (msg.type === 'result') {
                 busyRef.current = false;
-                const text = (msg.text || '').trim().replace(/[.,!?]$/, "");
+                const raw = (msg.text || '').trim();
+                // Strip trailing punctuation for cleaner comparison
+                const text = raw.replace(/[.,!?]+$/, '').trim();
+                const lowerText = text.toLowerCase();
 
-                // Hallucination Filter: Ignore common Whisper artifacts during noise
-                const isHallucination = WHISPER_HALLUCINATIONS.some(h =>
-                    text.toLowerCase().includes(h.toLowerCase())
-                );
+                // Filter: exact hallucination OR non-speech audio description pattern
+                const isHallucination = HALLUCINATION_SET.has(lowerText)
+                    || NON_SPEECH_RE.test(lowerText)
+                    || text.length < 2;
 
                 if (text && !isHallucination) {
+                    console.log("[OfflineSTT] Transcribed:", text);
                     onTranscriptRef.current(text);
+                } else if (text) {
+                    console.log("[OfflineSTT] Filtered hallucination:", text);
                 }
                 if (onInterimRef.current) onInterimRef.current('');
                 if (isListeningRef.current) setStatus('recording');
@@ -153,6 +196,7 @@ export default function OfflineSpeechRecognizer({ isListening, onTranscript, onI
                 drainBuffer();
             } else if (msg.type === 'error') {
                 busyRef.current = false;
+                console.error("[OfflineSTT] Worker error:", msg.message);
                 setErrorMsg(msg.message);
                 setStatus('error');
             }
@@ -166,9 +210,15 @@ export default function OfflineSpeechRecognizer({ isListening, onTranscript, onI
     const sendBufferToWorker = useCallback(() => {
         if (!workerRef.current || audioBufferRef.current.length === 0) return;
 
-        // Concatenate all chunks into a single Float32Array
+        // Concatenate all chunks into a single Float32Array (at native rate)
         const totalLength = audioBufferRef.current.reduce((sum, chunk) => sum + chunk.length, 0);
-        if (totalLength < MIN_AUDIO_SAMPLES) return; // Too short
+        const nativeRate = nativeRateRef.current;
+        const minSamples = Math.round(MIN_AUDIO_DURATION_S * nativeRate);
+        if (totalLength < minSamples) {
+            // Too short — discard (don't accumulate forever)
+            audioBufferRef.current = [];
+            return;
+        }
 
         const combined = new Float32Array(totalLength);
         let offset = 0;
@@ -178,16 +228,33 @@ export default function OfflineSpeechRecognizer({ isListening, onTranscript, onI
         }
         audioBufferRef.current = [];
 
+        // Energy gate: compute average RMS of the whole buffer.
+        // If it's below MIN_SPEECH_RMS, it's just ambient noise — skip.
+        let energySum = 0;
+        for (let i = 0; i < combined.length; i++) {
+            energySum += combined[i] * combined[i];
+        }
+        const avgRms = Math.sqrt(energySum / combined.length);
+        if (avgRms < MIN_SPEECH_RMS) {
+            console.log(`[OfflineSTT] Skipped — avg RMS ${avgRms.toFixed(4)} below speech threshold ${MIN_SPEECH_RMS}`);
+            return;
+        }
+
+        // Resample from native rate to 16kHz for Whisper
+        const resampled = resampleTo16kHz(combined, nativeRate);
+        const durationS = (resampled.length / TARGET_RATE).toFixed(1);
+        console.log(`[OfflineSTT] Sending ${durationS}s of audio (RMS=${avgRms.toFixed(3)}) to Whisper`);
+
         busyRef.current = true;
         setStatus('transcribing');
         if (onInterimRef.current) onInterimRef.current('(transcribing...)');
 
         // Transfer buffer for zero-copy
         workerRef.current.postMessage(
-            { type: 'transcribe', audio: combined },
-            [combined.buffer]
+            { type: 'transcribe', audio: resampled },
+            [resampled.buffer]
         );
-    }, []);
+    }, [resampleTo16kHz]);
 
     const drainBuffer = useCallback(() => {
         if (busyRef.current || audioBufferRef.current.length === 0) return;
@@ -208,20 +275,31 @@ export default function OfflineSpeechRecognizer({ isListening, onTranscript, onI
 
             const stream = await navigator.mediaDevices.getUserMedia({
                 audio: {
-                    echoCancellation: true,
-                    noiseSuppression: true,
-                    autoGainControl: false, // Disable to prevent noise floor boosting
-                    sampleRate: SAMPLE_RATE,
+                    // CRITICAL: Disable all browser audio processing.
+                    // noiseSuppression and echoCancellation use WebRTC algorithms
+                    // that destroy spectral characteristics Whisper depends on.
+                    // Whisper was trained on raw, unprocessed audio.
+                    echoCancellation: false,
+                    noiseSuppression: false,
+                    autoGainControl: true, // Only AGC — normalizes volume without distortion
                     channelCount: 1,
                 }
             });
 
             clearTimeout(mediaTimeout);
-            console.log("[OfflineSTT] Microphone access granted ✓");
+            console.log("[OfflineSTT] Microphone access granted");
             streamRef.current = stream;
 
-            const audioContext = new AudioContext({ sampleRate: SAMPLE_RATE });
+            // Use DEFAULT sample rate (native hardware rate, usually 48kHz).
+            // DO NOT request 16kHz — some browsers/Electron silently ignore the
+            // request but report 16kHz, causing Whisper to receive 48kHz audio
+            // labeled as 16kHz. This makes speech sound 3x slowed down, which
+            // Whisper interprets as [Music] / *Inaudible* / *clap*.
+            // Instead, we capture at native rate and resample manually.
+            const audioContext = new AudioContext();
             audioContextRef.current = audioContext;
+            nativeRateRef.current = audioContext.sampleRate;
+            console.log(`[OfflineSTT] AudioContext sample rate: ${audioContext.sampleRate}Hz`);
 
             if (audioContext.state === 'suspended') {
                 await audioContext.resume();
@@ -229,73 +307,57 @@ export default function OfflineSpeechRecognizer({ isListening, onTranscript, onI
 
             const source = audioContext.createMediaStreamSource(stream);
 
-            // ── Voice Guard: Frequency Isolation ──
-            // High-pass: cut rumble but preserve voice (150Hz)
-            const highPass = audioContext.createBiquadFilter();
-            highPass.type = 'highpass';
-            highPass.frequency.setValueAtTime(150, audioContext.currentTime);
-            highPass.Q.setValueAtTime(0.7, audioContext.currentTime);
-
-            // Low-pass: cut extreme high hiss but keep clarity (8000Hz)
-            const lowPass = audioContext.createBiquadFilter();
-            lowPass.type = 'lowpass';
-            lowPass.frequency.setValueAtTime(8000, audioContext.currentTime);
-            lowPass.Q.setValueAtTime(0.7, audioContext.currentTime);
-
-            // Compressor: level out volume swings
-            const compressor = audioContext.createDynamicsCompressor();
-            compressor.threshold.setValueAtTime(-20, audioContext.currentTime);
-            compressor.knee.setValueAtTime(20, audioContext.currentTime);
-            compressor.ratio.setValueAtTime(16, audioContext.currentTime);
-            compressor.attack.setValueAtTime(0.005, audioContext.currentTime);
-            compressor.release.setValueAtTime(0.15, audioContext.currentTime);
-
-            // ScriptProcessor to capture raw PCM (4096 samples = 256ms at 16kHz)
-            // Increased from 1024 to be more resilient to jitter/lag
+            // Raw pipeline: source → processor → destination. No filters.
             const processor = audioContext.createScriptProcessor(4096, 1, 1);
             processorRef.current = processor;
 
             processor.onaudioprocess = (e) => {
                 const inputData = e.inputBuffer.getChannelData(0);
 
-                // ── Volume metering ──
+                // ── Volume metering (with noise floor so fans/AC don't animate) ──
                 let sum = 0;
                 for (let i = 0; i < inputData.length; i++) {
                     sum += inputData[i] * inputData[i];
                 }
                 const rms = Math.sqrt(sum / inputData.length);
-                const level = Math.min(1, rms * 8);
+                // Subtract noise floor before scaling — ambient noise below 0.015 RMS = zero visual
+                const adjusted = Math.max(0, rms - 0.015);
+                const level = Math.min(1, adjusted * 12);
 
                 if (processorRef.current) {
                     const lastLevel = (processorRef.current as any)._lastLevel ?? 0;
-                    if (Math.abs(level - lastLevel) > 0.01) {
+                    if (Math.abs(level - lastLevel) > 0.02) {
                         (processorRef.current as any)._lastLevel = level;
                         onVolumeRef.current?.(level);
                     }
                 }
 
                 // ── VAD: Only buffer when speech detected ──
+                const frame = new Float32Array(inputData);
                 if (rms > SILENCE_THRESHOLD) {
+                    // Speech detected — prepend pre-roll frames (captures word onset)
+                    if (audioBufferRef.current.length === 0 && preRollRef.current.length > 0) {
+                        audioBufferRef.current.push(...preRollRef.current);
+                        preRollRef.current = [];
+                    }
                     lastSpeechTimeRef.current = Date.now();
-                    // Copy the data (since the buffer is reused)
-                    audioBufferRef.current.push(new Float32Array(inputData));
+                    audioBufferRef.current.push(frame);
                 } else {
-                    // Keep buffering for SILENCE_FLUSH_MS after last speech
                     const timeSinceSpeech = Date.now() - lastSpeechTimeRef.current;
                     if (timeSinceSpeech < SILENCE_FLUSH_MS && lastSpeechTimeRef.current > 0) {
-                        audioBufferRef.current.push(new Float32Array(inputData));
+                        audioBufferRef.current.push(frame);
                     } else if (audioBufferRef.current.length > 0 && !busyRef.current) {
-                        // Silence detected after speech — flush immediately
                         sendBufferToWorker();
+                    }
+                    // Maintain rolling pre-roll buffer
+                    preRollRef.current.push(frame);
+                    if (preRollRef.current.length > PRE_ROLL_FRAMES) {
+                        preRollRef.current.shift();
                     }
                 }
             };
 
-            // Connect: source → highPass → lowPass → compressor → processor → destination
-            source.connect(highPass);
-            highPass.connect(lowPass);
-            lowPass.connect(compressor);
-            compressor.connect(processor);
+            source.connect(processor);
             processor.connect(audioContext.destination);
 
             // Periodic flush: force send every CHUNK_INTERVAL_MS even during continuous speech
@@ -339,6 +401,7 @@ export default function OfflineSpeechRecognizer({ isListening, onTranscript, onI
         }
 
         audioBufferRef.current = [];
+        preRollRef.current = [];
         lastSpeechTimeRef.current = 0;
         setStatus('idle');
 
@@ -357,7 +420,6 @@ export default function OfflineSpeechRecognizer({ isListening, onTranscript, onI
                 setErrorMsg(null);
                 console.log("[OfflineSTT] Sending 'load' command to worker...");
 
-                // Safety timeout for worker loading (60s initially)
                 if (loadTimeoutRef.current) clearTimeout(loadTimeoutRef.current);
                 loadTimeoutRef.current = setTimeout(() => {
                     if (statusRef.current === 'loading') {
@@ -369,7 +431,6 @@ export default function OfflineSpeechRecognizer({ isListening, onTranscript, onI
 
                 worker.postMessage({ type: 'load' });
             } else if (statusRef.current === 'ready' || statusRef.current === 'recording') {
-                // If already ready but recording stopped, restart it
                 if (statusRef.current !== 'recording') {
                     startRecording();
                 }
@@ -399,40 +460,31 @@ export default function OfflineSpeechRecognizer({ isListening, onTranscript, onI
     }, [stopRecording]);
 
     // ─── Render ─────────────────────────────────────────────────────────
-    // Model download happens silently in the background via useBibleOfflineSync.
-    // Only show UI when the user is actively trying to listen or when there's an error.
-
-    // Completely hidden when idle and not listening
-    if (status === 'idle' && !isListening) {
-        return null;
-    }
-
-    // Not listening and not in an active state — hide
-    if (!isListening && status !== 'error' && status !== 'loading') {
-        return null;
-    }
+    if (status === 'idle' && !isListening) return null;
+    if (!isListening && status !== 'error' && status !== 'loading') return null;
 
     return (
         <div className="flex items-center gap-3 p-3 rounded-xl bg-zinc-900 border border-zinc-800 shadow-inner">
             <div className="relative w-4 h-4 flex-shrink-0">
-                <div className={`absolute inset-0 rounded-full transition-all duration-100 ${status === 'recording' ? 'bg-amber-500 opacity-100 animate-pulse' :
+                <div className={`absolute inset-0 rounded-full transition-all duration-100 ${
+                    status === 'recording' ? 'bg-amber-500 opacity-100 animate-pulse' :
                     status === 'transcribing' ? 'bg-blue-500 opacity-100 animate-pulse' :
-                        'bg-red-500 opacity-100'
-                    }`} />
+                    status === 'loading' ? 'bg-yellow-500 opacity-100 animate-pulse' :
+                    status === 'ready' ? 'bg-green-500 opacity-100' :
+                    status === 'error' ? 'bg-red-500 opacity-100' :
+                    'bg-zinc-500 opacity-50'
+                }`} />
             </div>
 
             <div className="flex flex-col flex-1 min-w-0">
                 <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">
                     {status === 'recording' ? 'Listening (Offline)' :
-                        status === 'transcribing' ? 'Transcribing...' :
-                            'Error'}
+                     status === 'transcribing' ? 'Transcribing...' :
+                     status === 'loading' ? `Loading AI${loadPercent > 0 ? ` (${loadPercent}%)` : '...'}` :
+                     status === 'ready' ? 'Ready' :
+                     status === 'error' ? 'Error — Retrying...' :
+                     'Idle'}
                 </span>
-
-                {status === 'recording' && (
-                    <span className="text-[9px] text-amber-400 mt-0.5">
-                        Smart VAD · sends on silence · fully offline
-                    </span>
-                )}
 
                 {errorMsg && (
                     <span className="text-[9px] text-red-400 mt-0.5">{errorMsg}</span>

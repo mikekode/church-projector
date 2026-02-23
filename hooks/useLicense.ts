@@ -12,7 +12,8 @@ export function useLicense() {
     // Combined with suppressHydrationWarning in DashboardPage
     const initialLicense = typeof window !== 'undefined' ? getCachedLicense() : { status: 'demo' };
     const [license, setLicense] = useState<License>(initialLicense as License);
-    const [loading, setLoading] = useState(initialLicense.status === 'demo');
+    // Only show loading for demo/unknown state — active cache = instant unlock
+    const [loading, setLoading] = useState(initialLicense.status !== 'active');
 
     useEffect(() => {
         let resolved = false;

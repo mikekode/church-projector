@@ -29,7 +29,7 @@ module.exports = async function handler(req, res) {
     }
 
     try {
-        const { text, context, pastorHints, currentVerse, chapterContext } = req.body;
+        const { text, context, pastorHints, currentVerse, chapterContext, suggestions, history } = req.body;
 
         if (!text || text.trim().length < 3) {
             return res.status(200).json({
@@ -42,7 +42,7 @@ module.exports = async function handler(req, res) {
 
         if (context === 'extract_sermon_theme') {
             const themeResponse = await openai.chat.completions.create({
-                model: "gpt-4o-mini",
+                model: "gpt-4o",
                 messages: [
                     {
                         role: "system",
@@ -58,20 +58,20 @@ module.exports = async function handler(req, res) {
             return res.status(200).json(JSON.parse(themeContent));
         }
 
-        const systemPrompt = buildSystemPrompt(pastorHints, currentVerse, chapterContext);
+        const systemPrompt = buildSystemPrompt(pastorHints, currentVerse, chapterContext, suggestions, history);
 
         const response = await openai.chat.completions.create({
-            model: "gpt-4o-mini",
+            model: "gpt-4o",
             messages: [
                 { role: "system", content: systemPrompt },
                 {
                     role: "user",
-                    content: `Context: "${context || 'none'}"\n\nNew text: "${text}"\n\nAnalyze for scripture references and commands.`
+                    content: `TRANSCRIPT: "${text}"\n\nAnalyze for scriptures and commands.`
                 }
             ],
             response_format: { type: "json_object" },
             temperature: 0,
-            max_tokens: 300,
+            max_tokens: 400,
         });
 
         const content = response.choices[0]?.message?.content || '{}';
@@ -86,8 +86,17 @@ module.exports = async function handler(req, res) {
     }
 };
 
-function buildSystemPrompt(pastorHints, currentVerse, chapterContext) {
-    let prompt = `You are a real-time scripture detection system for a church projector. You analyze small text windows (5-15 words) from live sermon transcription.
+function buildSystemPrompt(pastorHints, currentVerse, chapterContext, suggestions, history) {
+    let prompt = `You are an ELITE scripture detection agent for a church projector. You analyze small windows from live speech transcripts.
+
+CORE INTELLECT:
+1. PHONETIC RECOVERY: Transcripts may be noisy/muddled. Treat words as phonetic clues.
+   - Example: "John tree 16" -> John 3:16
+   - Example: "Revelations tree 5" -> Revelation 3:5
+   - Example: "Isiah" -> Isaiah
+2. CONTEXTUAL REPAIR: Use current/recent verses to "repair" incomplete or broken commands.
+   - If the pastor is in "Psalm 23" and says "verse 4", infer Psalm 23:4.
+3. FUZZY ACCENTS: Handle heavy accents by looking for "sounds-like" biblically relevant matches.
 
 RESPOND with JSON:
 {
@@ -98,7 +107,7 @@ RESPOND with JSON:
       "verse": number,
       "confidence": number,
       "matchType": "exact" | "partial" | "paraphrase",
-      "reason": "string"
+      "reason": "Why did you pick this? (e.g. 'Phonetic repair of John tree')"
     }
   ],
   "commands": [],
@@ -107,39 +116,24 @@ RESPOND with JSON:
   "verseCount": 1
 }
 
-STRICT RULE: You MUST ALWAYS include "verseCount" (1, 2, or 3) in the JSON response whenever "scriptures" or "commands" are not empty. Default to 1 if only one verse is mentioned or implied.
+STRICT BIBLE RULES:
+- "Revelation" (Never "Revelations")
+- "Song of Solomon" (Never "Songs of Solomon")
+- "Psalms" is the book, "Psalm" is the singular reference.
 
-DETECTION TYPES:
-- "exact": Direct verse reference like "John 3:16" or "John chapter 3 verse 16"
-- "partial": Incomplete reference like "For God so loved..." (recognizable start of verse)
-- "paraphrase": Sermon paraphrase type
+NAVIGATION COMMANDS: "next verse", "previous verse", "clear", "jump to verse [number]", "next chapter".`;
 
-CONFIDENCE SCORING (0-100):
-- 90-100: Direct reference
-- 70-89: Strong match
-- 50-69: Likely match
-- Below 50: Don't include
+    if (history && history.length > 0) {
+        prompt += `\n\nRECENTLY DETECTED (History):\n${history.join(' -> ')}`;
+    }
 
-SIGNALS:
-- "SWITCH": High confidence (>=80)
-- "HOLD": Currently displaying correct verse
-- "WAIT": No detection
+    if (suggestions && suggestions.length > 0) {
+        prompt += `\n\nLOCAL SEMANTIC SUGGESTIONS (Top matches from database):\n${suggestions.map(s => `- ${s}`).join('\n')}\nUse these to guide your detection if the transcript is blurry.`;
+    }
 
-NAVIGATION COMMANDS:
-- "next verse" -> {"type": "next_verse"}
-- "previous verse" -> {"type": "prev_verse"}
-- "verse [number]" -> {"type": "jump_to_verse", "verse": number}
-- "next chapter" / "previous chapter"
-- "clear"
-
-RULES:
-- "three" -> 3
-- "Revelation" (singular)
-- "Song of Solomon"`;
-
-    if (pastorHints) prompt += `\n\nPASTOR CONTEXT:\n${pastorHints}`;
-    if (currentVerse) prompt += `\n\nCURRENTLY DISPLAYING: ${currentVerse}`;
-    if (chapterContext) prompt += `\n\nACTIVE CHAPTER CONTEXT: ${chapterContext}`;
+    if (pastorHints) prompt += `\n\nPASTOR CONTEXT / THEME:\n${pastorHints}`;
+    if (currentVerse) prompt += `\n\nCURRENTLY ON SCREEN: ${currentVerse}`;
+    if (chapterContext) prompt += `\n\nACTIVE CHAPTER ANCHOR: ${chapterContext}`;
 
     return prompt;
 }

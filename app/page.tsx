@@ -226,7 +226,7 @@ export default function Home() {
                         </div>
 
                         <p className="text-zinc-500 text-xs font-bold uppercase tracking-widest italic">
-                            Version 2.1.29 • 100% Virus Free • Certified Open Source Build
+                            Version 2.1.30 • 100% Virus Free • Certified Open Source Build
                         </p>
                         <div className="max-w-md mx-auto p-4 rounded-xl bg-indigo-500/5 border border-indigo-500/10">
                             <p className="text-[10px] text-indigo-400 font-bold uppercase tracking-widest mb-2 flex items-center justify-center gap-2">

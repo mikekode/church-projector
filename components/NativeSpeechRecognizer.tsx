@@ -6,6 +6,8 @@ type Props = {
     isListening: boolean;
     onTranscript: (text: string) => void;
     onInterim?: (text: string) => void;
+    onStatusChange?: (status: string, error?: string | null) => void;
+    onVolume?: (level: number) => void;
 };
 
 // Web Speech API types
@@ -40,6 +42,7 @@ interface SpeechRecognitionInstance extends EventTarget {
     lang: string;
     maxAlternatives: number;
     onstart: ((this: SpeechRecognitionInstance, ev: Event) => void) | null;
+    onaudiostart: ((this: SpeechRecognitionInstance, ev: Event) => void) | null;
     onresult: ((this: SpeechRecognitionInstance, ev: SpeechRecognitionEvent) => void) | null;
     onerror: ((this: SpeechRecognitionInstance, ev: SpeechRecognitionErrorEvent) => void) | null;
     onend: ((this: SpeechRecognitionInstance, ev: Event) => void) | null;
@@ -52,7 +55,6 @@ interface SpeechRecognitionConstructor {
     new(): SpeechRecognitionInstance;
 }
 
-// Extend window for SpeechRecognition
 declare global {
     interface Window {
         SpeechRecognition: SpeechRecognitionConstructor;
@@ -61,29 +63,90 @@ declare global {
 }
 
 /**
- * NativeSpeechRecognizer - ZERO LAG speech-to-text
+ * NativeSpeechRecognizer — Free speech-to-text via Chrome's Web Speech API
  *
- * Uses the browser's native Web Speech API with interimResults enabled.
- * Words appear on screen AS you speak them - no network latency.
+ * Uses webkitSpeechRecognition (built into Chrome/Electron).
+ * Streams audio to Google's servers — requires internet, but no API key.
+ * Shows interim results as you speak (zero perceived lag).
  *
- * Requires Chrome or Edge for best results.
+ * Also captures mic audio for volume metering so the VoiceWave
+ * component stays responsive.
  */
-export default function NativeSpeechRecognizer({ isListening, onTranscript, onInterim }: Props) {
+export default function NativeSpeechRecognizer({ isListening, onTranscript, onInterim, onStatusChange, onVolume }: Props) {
     const [status, setStatus] = useState<"idle" | "listening" | "error">("idle");
     const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
     const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
     const onTranscriptRef = useRef(onTranscript);
     const onInterimRef = useRef(onInterim);
+    const onStatusChangeRef = useRef(onStatusChange);
+    const onVolumeRef = useRef(onVolume);
     const isListeningRef = useRef(isListening);
 
-    // Keep refs updated
+    // Volume metering refs
+    const audioContextRef = useRef<AudioContext | null>(null);
+    const streamRef = useRef<MediaStream | null>(null);
+    const processorRef = useRef<ScriptProcessorNode | null>(null);
+
     useEffect(() => {
         onTranscriptRef.current = onTranscript;
         onInterimRef.current = onInterim;
+        onStatusChangeRef.current = onStatusChange;
+        onVolumeRef.current = onVolume;
         isListeningRef.current = isListening;
-    }, [onTranscript, onInterim, isListening]);
+    }, [onTranscript, onInterim, onStatusChange, onVolume, isListening]);
 
+    // Report status to parent
+    useEffect(() => {
+        onStatusChangeRef.current?.(status === 'listening' ? 'listening' : status === 'error' ? 'error' : 'idle', errorMsg);
+    }, [status, errorMsg]);
+
+    // ─── Volume Metering ────────────────────────────────────────────────
+    const startVolumeMeter = useCallback(async () => {
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({
+                audio: { echoCancellation: true, noiseSuppression: true },
+            });
+            streamRef.current = stream;
+            const audioContext = new AudioContext();
+            audioContextRef.current = audioContext;
+            const source = audioContext.createMediaStreamSource(stream);
+            const processor = audioContext.createScriptProcessor(2048, 1, 1);
+            processorRef.current = processor;
+
+            processor.onaudioprocess = (e) => {
+                const data = e.inputBuffer.getChannelData(0);
+                let sum = 0;
+                for (let i = 0; i < data.length; i++) sum += data[i] * data[i];
+                const rms = Math.sqrt(sum / data.length);
+                const level = Math.min(1, rms * 8);
+                if (processorRef.current) {
+                    const last = (processorRef.current as any)._lastLevel ?? 0;
+                    if (Math.abs(level - last) > 0.01) {
+                        (processorRef.current as any)._lastLevel = level;
+                        onVolumeRef.current?.(level);
+                    }
+                }
+            };
+
+            source.connect(processor);
+            processor.connect(audioContext.destination);
+        } catch {
+            // Volume metering is optional — don't block recognition
+        }
+    }, []);
+
+    const stopVolumeMeter = useCallback(() => {
+        processorRef.current?.disconnect();
+        processorRef.current = null;
+        audioContextRef.current?.close();
+        audioContextRef.current = null;
+        streamRef.current?.getTracks().forEach(t => t.stop());
+        streamRef.current = null;
+        onVolumeRef.current?.(0);
+    }, []);
+
+    // ─── Speech Recognition ─────────────────────────────────────────────
     const initRecognition = useCallback(() => {
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 
@@ -94,10 +157,8 @@ export default function NativeSpeechRecognizer({ isListening, onTranscript, onIn
         }
 
         const recognition = new SpeechRecognition();
-
-        // KEY SETTINGS FOR ZERO LAG
-        recognition.continuous = true;          // Don't stop after one phrase
-        recognition.interimResults = true;      // THIS IS THE KEY - shows words as you speak
+        recognition.continuous = true;
+        recognition.interimResults = true;
         recognition.lang = 'en-US';
         recognition.maxAlternatives = 1;
 
@@ -110,10 +171,8 @@ export default function NativeSpeechRecognizer({ isListening, onTranscript, onIn
             let interimTranscript = '';
             let finalTranscript = '';
 
-            // Process all results
             for (let i = event.resultIndex; i < event.results.length; i++) {
                 const transcript = event.results[i][0].transcript;
-
                 if (event.results[i].isFinal) {
                     finalTranscript += transcript;
                 } else {
@@ -121,49 +180,40 @@ export default function NativeSpeechRecognizer({ isListening, onTranscript, onIn
                 }
             }
 
-            // IMMEDIATELY show interim results - this creates the zero-lag feel
             if (interimTranscript && onInterimRef.current) {
                 onInterimRef.current(interimTranscript);
             }
 
-            // Send finalized text for verse detection
             if (finalTranscript) {
                 onTranscriptRef.current(finalTranscript);
-                // Clear interim when we get final
-                if (onInterimRef.current) {
-                    onInterimRef.current('');
-                }
+                if (onInterimRef.current) onInterimRef.current('');
             }
         };
 
         recognition.onerror = (event) => {
-            console.error('Speech recognition error:', event.error);
+            console.error('[NativeSTT] Error:', event.error);
 
             if (event.error === 'not-allowed') {
                 setErrorMsg("Microphone blocked. Allow access and reload.");
                 setStatus("error");
-                // Stop retrying — user must fix permissions
                 isListeningRef.current = false;
             } else if (event.error === 'no-speech') {
-                // Normal - user paused, just continue
+                // Normal pause — continue
             } else if (event.error === 'network') {
-                // Chrome's Web Speech API requires internet — it's cloud-based even in Electron
-                setErrorMsg("Voice recognition requires internet. Connect and restart.");
+                setErrorMsg("Voice recognition requires internet.");
                 setStatus("error");
-                // Stop retrying to avoid infinite loop
                 isListeningRef.current = false;
             } else if (event.error === 'aborted') {
-                // User stopped - normal
+                // User stopped — normal
             }
         };
 
         recognition.onend = () => {
-            // Auto-restart if we're still supposed to be listening (and not in an error state)
             if (isListeningRef.current && recognitionRef.current) {
                 try {
                     recognitionRef.current.start();
-                } catch (e) {
-                    // Already started or other issue - ignore
+                } catch {
+                    // Already started
                 }
             } else {
                 setStatus("idle");
@@ -177,63 +227,37 @@ export default function NativeSpeechRecognizer({ isListening, onTranscript, onIn
         if (!recognitionRef.current) {
             recognitionRef.current = initRecognition();
         }
-
         if (recognitionRef.current) {
             try {
                 recognitionRef.current.start();
-            } catch (e) {
+            } catch {
                 // May already be started
             }
         }
-    }, [initRecognition]);
+        startVolumeMeter();
+    }, [initRecognition, startVolumeMeter]);
 
     const stopListening = useCallback(() => {
         if (recognitionRef.current) {
             try {
                 recognitionRef.current.stop();
-            } catch (e) {
+            } catch {
                 // May already be stopped
             }
         }
+        stopVolumeMeter();
         setStatus("idle");
-    }, []);
+    }, [stopVolumeMeter]);
 
-    // Handle listening state changes
     useEffect(() => {
         if (isListening) {
             startListening();
         } else {
             stopListening();
         }
-
-        return () => {
-            stopListening();
-        };
+        return () => stopListening();
     }, [isListening, startListening, stopListening]);
 
-    return (
-        <div className="flex items-center gap-3 p-3 rounded-xl bg-zinc-900 border border-zinc-800 shadow-inner">
-            <div className="relative w-4 h-4 flex items-center justify-center">
-                <div className={`absolute inset-0 rounded-full transition-all duration-100 ${
-                    status === 'listening'
-                        ? 'bg-green-500 opacity-100 animate-pulse'
-                        : status === 'error'
-                            ? 'bg-red-500 opacity-100'
-                            : 'bg-zinc-600 opacity-20'
-                }`} />
-            </div>
-
-            <div className="flex flex-col">
-                <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">
-                    {status === 'listening' ? 'LIVE' : status === 'error' ? 'ERROR' : 'Mic Off'}
-                </span>
-                {errorMsg && (
-                    <span className="text-[9px] text-red-400 mt-0.5">{errorMsg}</span>
-                )}
-                {status === 'listening' && (
-                    <span className="text-[9px] text-green-400 mt-0.5">Words appear as you speak</span>
-                )}
-            </div>
-        </div>
-    );
+    // No visible UI — TranscriptMonitor handles all display
+    return null;
 }

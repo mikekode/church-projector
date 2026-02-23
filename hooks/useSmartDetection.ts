@@ -1,5 +1,5 @@
 import { useRef, useCallback, useEffect } from 'react';
-import { lookupVerse, lookupVerseAsync, detectVersesInText, getChapterVerseCount } from '@/utils/bible';
+import { lookupVerse, lookupVerseAsync, lookupVerseRange, detectVersesInText, getChapterVerseCount } from '@/utils/bible';
 import { getResources, ResourceItem } from '@/utils/resourceLibrary';
 import {
     loadPastorProfile,
@@ -210,6 +210,8 @@ export function useSmartDetection(
     const pendingRetryRef = useRef<boolean>(false);
     const processWindowRef = useRef<() => Promise<void>>();
     const songLibraryRef = useRef<ResourceItem[]>([]);
+    const lastExactMatchTimeRef = useRef<number>(0);
+    const detectionHistoryRef = useRef<string[]>([]); // Tracks last 3 detected verses
 
     // Embeddings worker for local semantic search (Priority 3)
     const embeddingsWorkerRef = useRef<Worker | null>(null);
@@ -707,21 +709,38 @@ export function useSmartDetection(
                     onDetect(fastScriptures, [], 'SWITCH', 1);
                     // CRITICAL: Clear buffer to prevent "Switching Back" or re-detecting old verses
                     wordBufferRef.current = [];
+                    lastExactMatchTimeRef.current = Date.now(); // Mark time for override protection
                     processingRef.current = false;
                     return;
                 }
             }
 
-            // PRIORITY 3: LOCAL SEMANTIC SEARCH — paraphrase detection via embeddings worker
-            // Only runs if: worker is ready, index is loaded, and text is long enough
+            // Perform a quick local semantic search to ground the LLM
+            let localSuggestions: string[] = [];
+            const timeSinceExact = Date.now() - lastExactMatchTimeRef.current;
             if (
                 embeddingsWorkerRef.current &&
                 embeddingsReadyRef.current &&
                 embeddingsIndexReadyRef.current &&
-                textWindow.length >= 20
+                textWindow.length >= 10 // Grounding only needs a bit of text
             ) {
                 try {
-                    const semanticResults = await semanticSearchLocal(embeddingsWorkerRef.current, textWindow);
+                    const results = await semanticSearchLocal(embeddingsWorkerRef.current, textWindow, 0.4);
+                    localSuggestions = results.map(r => r.ref);
+                } catch (e) { }
+            }
+
+            // PRIORITY 3: LOCAL SEMANTIC SEARCH — direct match path
+            if (
+                embeddingsWorkerRef.current &&
+                localSuggestions.length > 0 &&
+                textWindow.length >= 20 &&
+                timeSinceExact > 3000
+            ) {
+                try {
+                    // Sync with user's confidence threshold
+                    const apiThreshold = confidenceThreshold / 100;
+                    const semanticResults = await semanticSearchLocal(embeddingsWorkerRef.current, textWindow, apiThreshold);
                     if (semanticResults.length > 0) {
                         const semanticScriptures: DetectedScripture[] = [];
 
@@ -791,6 +810,8 @@ export function useSmartDetection(
                     pastorHints: hints || undefined,
                     currentVerse: currentVerseRef.current,
                     chapterContext: chapterContextRef.current,
+                    suggestions: localSuggestions,
+                    history: detectionHistoryRef.current,
                 });
 
                 if (data.error) throw new Error(data.error);
@@ -807,6 +828,8 @@ export function useSmartDetection(
                         pastorHints: hints || undefined,
                         currentVerse: currentVerseRef.current,
                         chapterContext: chapterContextRef.current,
+                        suggestions: localSuggestions,
+                        history: detectionHistoryRef.current,
                     }),
                 });
 
@@ -935,6 +958,9 @@ export function useSmartDetection(
                 onDetect(scriptures, commands, data.signal, data.verseCount);
                 if (scriptures.length > 0) {
                     wordBufferRef.current = [];
+                    // Update detection history
+                    const latest = scriptures[0].reference;
+                    detectionHistoryRef.current = [latest, ...detectionHistoryRef.current].slice(0, 3);
                 }
             }
 
@@ -969,7 +995,7 @@ export function useSmartDetection(
      * Add text from transcription
      * Handles cumulative interim results from Deepgram correctly.
      */
-    const addText = useCallback((text: string, isFinal: boolean = false) => {
+    const addText = useCallback(async (text: string, isFinal: boolean = false) => {
         if (!text.trim()) return;
 
         // Strip previous context if this is a continuation of an interim segment
@@ -1212,27 +1238,39 @@ export function useSmartDetection(
         // 3. EXPLICIT FULL REFERENCES ("John 3:16")
         const fastDetections = detectVersesInText(lowerFullText);
         if (fastDetections.length > 0) {
-            // Check if this is a "New" detection (not recently fired)
-            const d = fastDetections[0]; // Take primary match
-            const key = `${d.book}-${d.chapter}-${d.verse}`;
-            const lastDetected = recentDetectionsRef.current.get(key);
+            const scripts: DetectedScripture[] = [];
+            let maxVerseCount = 1;
 
-            // If it's a new, unique detection, fire immediately
-            if (!lastDetected || Date.now() - lastDetected > 3000) {
-                console.log('[SmartDetect] ⚡ ZERO LATENCY MATCH:', d.reference);
+            for (const d of fastDetections) {
+                // Check if this is a "New" detection (not recently fired)
+                const key = `${d.book}-${d.chapter}-${d.verse}`;
+                const lastDetected = recentDetectionsRef.current.get(key);
 
-                const processFastMatch = async () => {
-                    let text = d.text;
+                // If it's a new, unique detection, fire immediately
+                if (!lastDetected || Date.now() - lastDetected > 3000) {
+                    console.log('[SmartDetect] ⚡ ZERO LATENCY MATCH:', d.reference);
+
                     const currentVersion = options.version || 'KJV';
+                    let text = d.text;
 
                     // If local regex didn't find text (e.g. version mismatch or range), fetch it
                     if (!text || (currentVersion !== 'KJV')) {
-                        const fetched = await lookupVerseAsync(d.book, d.chapter, d.verse, currentVersion);
-                        if (fetched) text = fetched;
+                        // Use local lookup for KJV ranges or single verses
+                        const local = d.verseEnd ? lookupVerseRange(d.book, d.chapter, d.verse, d.verseEnd) : lookupVerse(d.book, d.chapter, d.verse);
+                        if (local) {
+                            text = local;
+                        } else {
+                            // Fetch async if local fails
+                            const fetched = await lookupVerseAsync(d.book, d.chapter, d.verse, currentVersion);
+                            if (fetched) text = fetched;
+                        }
                     }
 
                     if (text) {
-                        const script: DetectedScripture = {
+                        const count = d.verseEnd ? Math.min(d.verseEnd - d.verse + 1, 3) : 1;
+                        maxVerseCount = Math.max(maxVerseCount, count);
+
+                        scripts.push({
                             book: d.book,
                             chapter: d.chapter,
                             verse: d.verse,
@@ -1241,33 +1279,31 @@ export function useSmartDetection(
                             reference: d.reference,
                             confidence: 100,
                             matchType: 'exact'
-                        };
+                        });
 
-                        onDetect([script], [], 'SWITCH', 1);
                         recentDetectionsRef.current.set(key, Date.now());
                         chapterContextRef.current = `${d.book} ${d.chapter}`;
-
-                        // Clear buffer and cancel debounce to prevent double-processing
-                        wordBufferRef.current = [];
-                        if (timeoutRef.current) clearTimeout(timeoutRef.current);
-
-                        // --- PREDICTIVE FETCHING ---
-                        // Background fetch the rest of the chapter
-                        const count = getChapterVerseCount(d.book, d.chapter);
-                        if (count > 0 && currentVersion !== 'KJV') {
-                            console.log(`[SmartDetect] 🔮 Prefetching ${d.book} ${d.chapter} (${count} verses)...`);
-                            // Fetch in chunks or parallel to avoid jamming
-                            for (let v = 1; v <= count; v++) {
-                                if (v === d.verse) continue;
-                                // Fire and forget (don't await)
-                                lookupVerseAsync(d.book, d.chapter, v, currentVersion);
-                            }
-                        }
                     }
-                };
+                }
+            }
 
-                processFastMatch();
-                return; // Skip the debounce logic entirely
+            if (scripts.length > 0) {
+                onDetect(scripts, [], 'SWITCH', maxVerseCount as 1 | 2 | 3);
+                // Clear buffer and cancel debounce to prevent double-processing
+                wordBufferRef.current = [];
+                lastExactMatchTimeRef.current = Date.now();
+                if (timeoutRef.current) clearTimeout(timeoutRef.current);
+
+                // --- PREDICTIVE FETCHING (for the first match) ---
+                const d = scripts[0];
+                const count = getChapterVerseCount(d.book, d.chapter);
+                if (count > 0 && options.version !== 'KJV') {
+                    for (let v = 1; v <= count; v++) {
+                        if (v === d.verse) continue;
+                        lookupVerseAsync(d.book, d.chapter, v, options.version || 'KJV');
+                    }
+                }
+                return;
             }
         }
 

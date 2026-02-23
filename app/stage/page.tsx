@@ -98,7 +98,7 @@ interface StageContent {
 }
 
 export default function StageDisplayPage() {
-    const { isDemo, loading } = useLicense();
+    const { isDemo, isExpired, loading } = useLicense();
     const [content, setContent] = useState<StageContent | null>(null);
     const [currentTime, setCurrentTime] = useState<Date | null>(null);
     const [timerMode, setTimerMode] = useState<'countup' | 'countdown'>('countup');
@@ -588,11 +588,12 @@ export default function StageDisplayPage() {
                                                     <div key={idx}
                                                         className="transition-all duration-300"
                                                         style={{ fontSize: `${fontScale}em`, textAlign: activeTheme.styles.textAlign || 'center' }}
-                                                        dangerouslySetInnerHTML={{ __html:
-                                                            (activeTheme.layout?.showVerseNumbers !== false
-                                                                ? `<span style="opacity:0.5;font-size:${vnScale}%;color:${vnColor};margin-right:0.2em;vertical-align:super;font-weight:bold">${v.verseNum}</span>`
-                                                                : '')
-                                                            + renderFormattedText(v.text)
+                                                        dangerouslySetInnerHTML={{
+                                                            __html:
+                                                                (activeTheme.layout?.showVerseNumbers !== false
+                                                                    ? `<span style="opacity:0.5;font-size:${vnScale}%;color:${vnColor};margin-right:0.2em;vertical-align:super;font-weight:bold">${v.verseNum}</span>`
+                                                                    : '')
+                                                                + renderFormattedText(v.text)
                                                         }}
                                                     />
                                                 ))}
@@ -609,11 +610,12 @@ export default function StageDisplayPage() {
                                             <div
                                                 className="transition-all duration-300"
                                                 style={{ fontSize: `${fontScale}em`, textAlign: activeTheme.styles.textAlign || 'center' }}
-                                                dangerouslySetInnerHTML={{ __html:
-                                                    (activeTheme.layout?.showVerseNumbers !== false && singleVerseNum
-                                                        ? `<span style="opacity:0.5;font-size:${vnScale}%;color:${vnColor};margin-right:0.2em;vertical-align:super;font-weight:bold">${singleVerseNum}</span>`
-                                                        : '')
-                                                    + renderFormattedText(content.text)
+                                                dangerouslySetInnerHTML={{
+                                                    __html:
+                                                        (activeTheme.layout?.showVerseNumbers !== false && singleVerseNum
+                                                            ? `<span style="opacity:0.5;font-size:${vnScale}%;color:${vnColor};margin-right:0.2em;vertical-align:super;font-weight:bold">${singleVerseNum}</span>`
+                                                            : '')
+                                                        + renderFormattedText(content.text)
                                                 }}
                                             />
                                         );
@@ -703,7 +705,7 @@ export default function StageDisplayPage() {
                 Double-click to toggle fullscreen • Stage Display
             </div>
 
-            {isDemo && !loading && <DemoWatermark />}
+            {(isDemo || isExpired) && !loading && <DemoWatermark />}
 
             {/* Scrolling Announcement Ticker */}
             {(() => {
